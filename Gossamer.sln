@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.002.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Gossamer", "Gossamer\Gossamer.csproj", "{2A815394-380F-467B-B54F-7A8D68C4807F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gossamer.Benchmark", "Gossamer.Benchmark\Gossamer.Benchmark.csproj", "{501C88A5-E01C-4AD8-9F01-6F4724226D51}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2A815394-380F-467B-B54F-7A8D68C4807F}.Debug|x64.ActiveCfg = Debug|x64
+		{2A815394-380F-467B-B54F-7A8D68C4807F}.Debug|x64.Build.0 = Debug|x64
+		{2A815394-380F-467B-B54F-7A8D68C4807F}.Release|x64.ActiveCfg = Release|x64
+		{2A815394-380F-467B-B54F-7A8D68C4807F}.Release|x64.Build.0 = Release|x64
+		{501C88A5-E01C-4AD8-9F01-6F4724226D51}.Debug|x64.ActiveCfg = Debug|x64
+		{501C88A5-E01C-4AD8-9F01-6F4724226D51}.Debug|x64.Build.0 = Debug|x64
+		{501C88A5-E01C-4AD8-9F01-6F4724226D51}.Release|x64.ActiveCfg = Release|x64
+		{501C88A5-E01C-4AD8-9F01-6F4724226D51}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {394CC0C8-42F0-41C5-B4D6-DD17088C0184}
+	EndGlobalSection
+EndGlobal

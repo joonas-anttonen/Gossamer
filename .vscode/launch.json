@@ -1,0 +1,10 @@
+{
+    "configurations": [
+    {
+        "name": "Gossamer.Benchmark",
+        "type": "dotnet",
+        "request": "launch",
+        "projectPath": "${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj"
+    }
+    ]
+}
