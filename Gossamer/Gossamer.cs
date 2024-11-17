@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-using Gossamer.BackEnd;
-using Gossamer.FrontEnd;
+using Gossamer.Backend;
+using Gossamer.Frontend;
 
 using static Gossamer.Utilities.ExceptionUtilities;
 
@@ -10,6 +10,9 @@ namespace Gossamer;
 
 public sealed class Gossamer : IDisposable
 {
+    readonly GossamerLog log;
+    readonly Logger logger;
+
     bool isDisposed;
 
     readonly FrontToBackMessageQueue frontToBackMessageQueue = new();
@@ -18,9 +21,36 @@ public sealed class Gossamer : IDisposable
 
     Thread? backEndThread;
 
-    public Gossamer(GossamerParameters parameters)
+    static Gossamer? instance;
+
+    /// <summary>
+    /// The singleton instance of <see cref="Gossamer"/>. Safe to use only after an instance has been created.
+    /// </summary>
+    public static Gossamer Instance
     {
+        get => instance ?? throw new InvalidOperationException("Gossamer has not been initialized.");
+    }
+
+    /// <summary>
+    /// The <see cref="GossamerLog"/> instance used by the <see cref="Gossamer"/> instance.
+    /// </summary>
+    public GossamerLog Log
+    {
+        get => log;
+    }
+
+    public Gossamer(GossamerLog log, GossamerParameters parameters)
+    {
+        if (instance != null)
+        {
+            throw new InvalidOperationException("Gossamer has already been initialized.");
+        }
+        instance = this;
+
         this.parameters = parameters;
+        this.log = log;
+
+        logger = log.GetLogger("Gossamer", false, false);
 
         NativeLibrary.SetDllImportResolver(typeof(Gossamer).Assembly, DllImportResolver);
     }
@@ -77,33 +107,38 @@ public sealed class Gossamer : IDisposable
         // Set the current directory to the directory of the executable
         Directory.SetCurrentDirectory(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location!)!);
 
-        // Print the runtime information
-        Debug.WriteLine($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
+        logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
+        logger.Debug($"OS: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
+        logger.Debug($"Working directory: {Directory.GetCurrentDirectory()}");
 
         // Run the backend in a separate thread
-        backEndThread = new(RunBackEnd);
+        backEndThread = new(RunBackend);
         backEndThread.Start();
 
-        using BackEndGfx backEndGfx = new();
-        backEndGfx.Create();
+        using Gfx gfx = new();
+        gfx.Create(new GfxParameters(
+            EnableValidation: true,
+            EnableDebugging: true,
+            EnableSwapchain: true
+        ));
 
-        using FrontEndGui frontEndGui = new(frontToBackMessageQueue);
-        RunFrontEnd(frontEndGui);
+        using Gui gui = new(frontToBackMessageQueue);
+        RunFrontend(gui);
     }
 
-    public void RunFrontEnd(FrontEndGui frontEndGui)
+    public void RunFrontend(Gui gui)
     {
-        frontEndGui.Create();
+        gui.Create();
 
-        while (!frontEndGui.IsClosing)
+        while (!gui.IsClosing)
         {
-            frontEndGui.WaitForEvents();
+            gui.WaitForEvents();
         }
 
-        Debug.WriteLine("FrontEnd is closing.");
+        logger.Debug("Frontend is closing.");
     }
 
-    public void RunBackEnd()
+    public void RunBackend()
     {
         bool keepRunning = true;
         while (keepRunning)
@@ -129,9 +164,10 @@ public sealed class Gossamer : IDisposable
                 }
             }
 
+            // FIXME: This is a temporary solution to prevent the backend from spinning too fast
             Thread.Sleep(10);
         }
 
-        Debug.WriteLine("BackEnd is closing.");
+        logger.Debug("Backend is closing.");
     }
 }

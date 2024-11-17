@@ -1,6 +1,6 @@
-using Gossamer.BackEnd;
+using Gossamer.Backend;
 
-namespace Gossamer.FrontEnd;
+namespace Gossamer.Frontend;
 
 using static Utilities.ExceptionUtilities;
 

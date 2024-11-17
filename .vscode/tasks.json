@@ -1,0 +1,20 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "dotnet",
+			"task": "build d:/Projects/Gossamer/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
+			"file": "d:/Projects/Gossamer/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
+			"group": "build",
+			"label": "dotnet: build d:/Projects/Gossamer/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": false,
+				"clear": true
+			}
+		}
+	]
+}

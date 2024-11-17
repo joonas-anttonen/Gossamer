@@ -6,23 +6,162 @@ namespace Gossamer;
 
 public interface ILogListener
 {
-    void Append(Log.Event logEvent);
+    void Append(GossamerLog.Event logEvent);
+    void Flush();
+}
+
+public sealed class ConsoleLogListener : ILogListener
+{
+    public void Append(GossamerLog.Event logEvent)
+    {
+        Console.WriteLine(logEvent);
+    }
+
+    void ILogListener.Flush()
+    {
+    }
+}
+
+public sealed class DebugLogListener : ILogListener
+{
+    public void Append(GossamerLog.Event logEvent)
+    {
+        System.Diagnostics.Debug.WriteLine(logEvent);
+    }
+
+    void ILogListener.Flush()
+    {
+    }
+}
+
+public class FileLogListener : ILogListener
+{
+    readonly Timer saveToFileTimer;
+
+    public long MaximumFileSize { get; set; } = 10 * 1024 * 1024 /* 10 MB */;
+
+    public string Path { get; } = string.Empty;
+
+    void ILogListener.Flush()
+    {
+        SaveToFile();
+    }
+
+    readonly ConcurrentQueue<GossamerLog.Event> events = [];
+
+    /// <summary>
+    /// Creates a new instance of <see cref="GossamerLog"/> with the specified output path.
+    /// If <paramref name="path"/> points to a directory that does not exist, it will be created.
+    /// If <paramref name="path"/> has no extension, .log will be appended to it.
+    /// </summary>
+    /// <param name="path">The output path.</param>
+    /// <exception cref="ArgumentNullException"></exception>
+    /// <exception cref="ArgumentException"></exception>
+    public FileLogListener(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            throw new ArgumentNullException(nameof(path));
+        }
+
+        Path = path;
+        Path = System.IO.Path.GetFullPath(Path);
+
+        string pathExtension = System.IO.Path.GetExtension(Path) ?? string.Empty;
+        string pathFileName = System.IO.Path.GetFileName(Path) ?? string.Empty;
+        string pathDirectory = System.IO.Path.GetDirectoryName(Path) ?? string.Empty;
+
+        // Ensure the file name is not empty
+        if (string.IsNullOrEmpty(pathFileName))
+        {
+            throw new ArgumentException("Path must contain a file name.", nameof(path));
+        }
+
+        // Ensure the path has an extension
+        if (string.IsNullOrEmpty(pathExtension))
+        {
+            Path += ".log";
+        }
+
+        // Ensure the directory exists
+        if (!Directory.Exists(pathDirectory))
+        {
+            Directory.CreateDirectory(pathDirectory);
+        }
+
+        saveToFileTimer = new Timer(SaveToFileTimer, default, Timeout.Infinite, Timeout.Infinite);
+    }
+
+    public void SaveToFile()
+    {
+        lock (events)
+        {
+            if (events.IsEmpty)
+                return;
+
+            try
+            {
+                try
+                {
+                    // Limit log file size
+                    if (File.Exists(Path) && new FileInfo(Path).Length > MaximumFileSize)
+                    {
+                        File.Copy(Path, Path + ".old", true);
+                        File.Delete(Path);
+                    }
+                }
+                catch { }
+
+                using StreamWriter? file = new(Path, true);
+
+                while (!events.IsEmpty)
+                {
+                    if (events.TryDequeue(out GossamerLog.Event? ev) && ev != null)
+                    {
+                        file.WriteLine(ev);
+                    }
+                }
+            }
+            catch { }
+        }
+    }
+
+    void SaveToFileTimer(object? state)
+    {
+        SaveToFile();
+    }
+
+    void ILogListener.Append(GossamerLog.Event logEvent)
+    {
+        events.Enqueue(logEvent);
+
+        // Since every log event restarts the save timer, log might never be saved to disk
+        // Force an immediate save if event count exceeds some constant
+        if (events.Count <= 10)
+        {
+            saveToFileTimer.Change(200, Timeout.Infinite);
+        }
+        else
+        {
+            SaveToFile();
+        }
+    }
 }
 
 /// <summary>
 /// Logging system for Gossamer.
 /// </summary>
-public sealed class Log : IDisposable
+public sealed class GossamerLog : IDisposable
 {
     /// <summary>
     /// Log levels.
     /// </summary>
-    public enum Level 
-    { 
-        Error, 
-        Warning, 
-        Information, 
-        Debug 
+    public enum Level
+    {
+        Error,
+        Warning,
+        Information,
+        Debug
     }
 
     /// <summary>
@@ -57,83 +196,48 @@ public sealed class Log : IDisposable
     /// <param name="logEvent">Log event.</param>
     public delegate void LogEventHandler(Event logEvent);
 
-    bool isDisposed;
+    readonly ConcurrentBag<ILogListener> listeners = [];
 
-    readonly object eventsSyncRoot = new();
-    readonly Dictionary<string, Logger> loggers = [];
-    readonly ConcurrentQueue<Event> events = [];
-    readonly Timer saveToFileTimer;
-
-    readonly bool enableFileOutput = true;
-    readonly bool enableConsoleOutput = true;
-    readonly bool enableDebugOutput = true;
-
-    public event LogEventHandler? Appended;
-
-    public long MaximumFileSize { get; set; } = 10 * 1024 * 1024 /* 10 MB */;
+    readonly ConcurrentDictionary<string, Logger> loggers = [];
 
     public IReadOnlyDictionary<string, Logger> Loggers => loggers;
 
-    public string Path { get; } = string.Empty;
-
-    /// <summary>
-    /// Creates a new instance of <see cref="Log"/> with the specified output path.
-    /// If <paramref name="path"/> points to a directory that does not exist, it will be created.
-    /// If <paramref name="path"/> has no extension, .log will be appended to it.
-    /// </summary>
-    /// <param name="path">The output path.</param>
-    /// <exception cref="ArgumentException"></exception>
-    public Log(string path, bool enableFileOutput = true, bool enableConsoleOutput = true, bool enableDebugOutput = false)
+    public GossamerLog()
     {
-        this.enableFileOutput = enableFileOutput;
-        this.enableConsoleOutput = enableConsoleOutput;
-        this.enableDebugOutput = enableDebugOutput;
+    }
 
-        if (string.IsNullOrEmpty(path))
-        {
-            throw new ArgumentNullException(nameof(path));
-        }
+    public ILogListener AddConsoleListener()
+    {
+        ILogListener listener = new ConsoleLogListener();
+        listeners.Add(listener);
+        return listener;
+    }
 
-        Path = path;
-        Path = System.IO.Path.GetFullPath(Path);
+    public ILogListener AddDebugListener()
+    {
+        ILogListener listener = new DebugLogListener();
+        listeners.Add(listener);
+        return listener;
+    }
 
-        string pathExtension = System.IO.Path.GetExtension(Path) ?? string.Empty;
-        string pathFileName = System.IO.Path.GetFileName(Path) ?? string.Empty;
-        string pathDirectory = System.IO.Path.GetDirectoryName(Path) ?? string.Empty;
+    public ILogListener AddFileListener(string path)
+    {
+        ILogListener listener = new FileLogListener(path);
+        listeners.Add(listener);
+        return listener;
+    }
 
-        // Ensure the file name is not empty
-        if(string.IsNullOrEmpty(pathFileName))
-        {
-            throw new ArgumentException("Path must contain a file name.", nameof(path));
-        }
-
-        // Ensure the path has an extension
-        if (string.IsNullOrEmpty(pathExtension))
-        {
-            Path += ".log";
-        }
-
-        // Ensure the directory exists
-        if (!Directory.Exists(pathDirectory))
-        {
-            Directory.CreateDirectory(pathDirectory);
-        }
-
-        saveToFileTimer = new Timer(SaveToFileTimer, default, Timeout.Infinite, Timeout.Infinite);
+    public void AddListener(ILogListener listener)
+    {
+        listeners.Add(listener);
     }
 
     public void Dispose()
     {
-        if (!isDisposed)
+        foreach (ILogListener listener in listeners)
         {
-            SaveToFile();
-            isDisposed = true;
+            listener.Flush();
         }
-    }
-
-    void SaveToFileTimer(object? state)
-    {
-        SaveToFile();
     }
 
     public Logger GetLogger(string name, bool enableTypeName, bool enableCallerName)
@@ -144,42 +248,8 @@ public sealed class Log : IDisposable
         }
 
         logger = new Logger(this, name, enableTypeName, enableCallerName);
-        loggers.Add(name, logger);
+        loggers.TryAdd(name, logger);
         return logger;
-    }
-
-    public void SaveToFile()
-    {
-        lock (eventsSyncRoot)
-        {
-            if (events.IsEmpty)
-                return;
-
-            try
-            {
-                try
-                {
-                    // Limit log file size
-                    if (File.Exists(Path) && new FileInfo(Path).Length > MaximumFileSize)
-                    {
-                        File.Copy(Path, Path + ".old", true);
-                        File.Delete(Path);
-                    }
-                }
-                catch { }
-
-                using StreamWriter? file = new(Path, true);
-
-                while (!events.IsEmpty)
-                {
-                    if (events.TryDequeue(out Event? ev) && ev != null)
-                    {
-                        file.WriteLine(ev);
-                    }
-                }
-            }
-            catch { }
-        }
     }
 
     /// <summary>
@@ -220,38 +290,23 @@ public sealed class Log : IDisposable
 
         logEvent = new Event(level, logMsg, timestamp);
 
-        Console.WriteLine(logMsg);
-
-        lock (eventsSyncRoot)
-        {
-            events.Enqueue(logEvent);
-
-            // Since every log event restarts the save timer, log might never be saved to disk
-            // Force an immediate save if event count exceeds some constant
-            if (events.Count <= 10)
-            {
-                saveToFileTimer.Change(200, Timeout.Infinite);
-            }
-            else
-            {
-                SaveToFile();
-            }
-        }
-
         try
         {
-            Appended?.Invoke(logEvent);
+            foreach (ILogListener listener in listeners)
+            {
+                listener.Append(logEvent);
+            }
         }
         catch (Exception e)
         {
-            Console.WriteLine(string.Format(CultureInfo.InvariantCulture, TypedCallerFormat, nameof(Log), nameof(Append), e.Message));
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture, TypedCallerFormat, nameof(GossamerLog), nameof(Append), e.Message));
         }
     }
 }
 
-public class Logger(Log applicationLog, string name, bool enableTypeName = true, bool enableCallerName = true)
+public class Logger(GossamerLog applicationLog, string name, bool enableTypeName = true, bool enableCallerName = true)
 {
-    readonly Log log = applicationLog;
+    readonly GossamerLog log = applicationLog;
     readonly string name = name;
 
     public bool EnableName { get; } = enableTypeName;
@@ -265,7 +320,7 @@ public class Logger(Log applicationLog, string name, bool enableTypeName = true,
     /// <param name="callerName"></param>
     public void Error(string message = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Error, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
+        log.Append(GossamerLog.Level.Error, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
     }
 
     /// <summary>
@@ -275,7 +330,7 @@ public class Logger(Log applicationLog, string name, bool enableTypeName = true,
     /// <param name="callerName"></param>
     public void Warning(string message = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Warning, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
+        log.Append(GossamerLog.Level.Warning, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
     }
 
     /// <summary>
@@ -285,7 +340,7 @@ public class Logger(Log applicationLog, string name, bool enableTypeName = true,
     /// <param name="callerName"></param>
     public void Information(string message = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Information, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
+        log.Append(GossamerLog.Level.Information, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
     }
 
     /// <summary>
@@ -295,6 +350,6 @@ public class Logger(Log applicationLog, string name, bool enableTypeName = true,
     /// <param name="callerName"></param>
     public void Debug(string message = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Debug, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
+        log.Append(GossamerLog.Level.Debug, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
     }
 }

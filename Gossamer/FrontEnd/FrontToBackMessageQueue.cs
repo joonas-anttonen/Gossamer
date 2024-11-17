@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 
-using Gossamer.BackEnd;
+using Gossamer.Backend;
 using Gossamer.Collections;
 
-namespace Gossamer.FrontEnd;
+namespace Gossamer.Frontend;
 
 class FrontToBackMessageQueue(int initialCapacity = 4)
 {

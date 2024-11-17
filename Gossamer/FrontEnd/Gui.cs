@@ -1,16 +1,16 @@
 using System.Runtime.InteropServices;
 using System.Security;
 
-using Gossamer.BackEnd;
+using Gossamer.Backend;
 using Gossamer.Collections;
 using Gossamer.External.Glfw;
 
 using static Gossamer.External.Glfw.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.FrontEnd
+namespace Gossamer.Frontend
 {
-    public class FrontEndGui : IDisposable
+    public class Gui : IDisposable
     {
         [UnmanagedFunctionPointer(CallingConvention.Cdecl), SuppressUnmanagedCodeSecurity]
         public delegate long WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
@@ -38,7 +38,7 @@ namespace Gossamer.FrontEnd
             get => glfwWindowShouldClose(glfwWindow) == 1;
         }
 
-        internal FrontEndGui(FrontToBackMessageQueue messageQueue)
+        internal Gui(FrontToBackMessageQueue messageQueue)
         {
             this.messageQueue = messageQueue;
 

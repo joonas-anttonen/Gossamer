@@ -1,4 +1,4 @@
-﻿using Gossamer.FrontEnd;
+﻿using Gossamer.Frontend;
 using Gossamer.Utilities;
 
 namespace Gossamer.Benchmark
@@ -7,8 +7,20 @@ namespace Gossamer.Benchmark
     {
         public static int Main(string[] args)
         {
-            Gossamer gossamer = new(new GossamerParameters());
-            gossamer.Run();
+            using GossamerLog log = new();
+            log.AddDebugListener();
+
+            using Gossamer gossamer = new(log, new GossamerParameters());
+
+            try
+            {
+                gossamer.Run();
+            }
+            catch (Exception ex)
+            {
+                log.Append(GossamerLog.Level.Error, ex.ToString(), DateTime.Now);
+                return 1;
+            }
 
             return 0;
         }

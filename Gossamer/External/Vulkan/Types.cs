@@ -52,7 +52,7 @@ unsafe delegate void PFN_vkSetDebugUtilsObjectNameEXT(
     VkDevice device,
     ref DebugUtilsObjectNameInfoEXT pNameInfo);
 
-unsafe struct DebugUtilsObjectNameInfoEXT(nint next = default)
+unsafe struct DebugUtilsObjectNameInfoEXT(nint next)
 {
     public const uint DEBUG_UTILS_OBJECT_NAME_INFO_EXT = 1000128000;
 
@@ -63,7 +63,7 @@ unsafe struct DebugUtilsObjectNameInfoEXT(nint next = default)
     public nint ObjectName;
 }
 
-unsafe struct VkDebugUtilsMessengerCreateInfoEXT(nint next = default)
+unsafe struct VkDebugUtilsMessengerCreateInfoEXT(nint next)
 {
     public const uint VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT = 1000128004;
 

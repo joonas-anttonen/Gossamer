@@ -1,14 +1,29 @@
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 
 using Gossamer.External.Vulkan;
 
 using static Gossamer.External.Vulkan.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.BackEnd;
+namespace Gossamer.Backend;
 
-unsafe class BackEndGfx : IDisposable
+public record class GfxParameters(
+    bool EnableValidation,
+    bool EnableDebugging,
+    bool EnableSwapchain
+);
+
+public record class GfxCapabilities(
+    bool CanValidate,
+    bool CanDebug,
+    bool CanSwap
+);
+
+unsafe class Gfx : IDisposable
 {
+    readonly Logger logger = Gossamer.Instance.Log.GetLogger(nameof(Gfx), true, true);
+
     bool isDisposed;
 
     PFN_vkDebugUtilsMessengerCallbackEXT? VulkanDebugMessengerCallback;
@@ -18,9 +33,23 @@ unsafe class BackEndGfx : IDisposable
 
     VkInstance instance;
 
-    public void Create()
+    GfxParameters parameters = new(
+        EnableValidation: true,
+        EnableDebugging: true,
+        EnableSwapchain: true
+    );
+
+    GfxCapabilities capabilities = new(
+        CanValidate: false,
+        CanDebug: false,
+        CanSwap: false
+    );
+
+    public void Create(GfxParameters parameters)
     {
-        InitializeVulkanInstance(enableValidation: true, enableDebugging: true);
+        this.parameters = parameters;
+
+        InitializeVulkanInstance();
     }
 
     public void Dispose()
@@ -35,7 +64,8 @@ unsafe class BackEndGfx : IDisposable
 
         if (debugUtilsMessenger.HasValue)
         {
-            var vkDestroyDebugUtilsMessengerEXT = Marshal.GetDelegateForFunctionPointer<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
+            var vkDestroyDebugUtilsMessengerEXT = (delegate*<VkInstance, VkDebugUtilsMessengerEXT, nint, void>)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+
             vkDestroyDebugUtilsMessengerEXT(instance, debugUtilsMessenger, default);
             debugUtilsMessenger = default;
         }
@@ -43,20 +73,20 @@ unsafe class BackEndGfx : IDisposable
 
     uint VulkanDebugMessageCallback(VkDebugUtilsMessageSeverityEXT severity, VkDebugUtilsMessageTypeEXT type, VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, nint pUserData)
     {
-        //Log.Level level = a switch
-        //{
-        //    VK_DEBUG_UTILS_MESSAGE_SEVERITY.VERBOSE => Log.Level.Debug,
-        //    VK_DEBUG_UTILS_MESSAGE_SEVERITY.INFO => Log.Level.Information,
-        //    VK_DEBUG_UTILS_MESSAGE_SEVERITY.WARNING => Log.Level.Warning,
-        //    VK_DEBUG_UTILS_MESSAGE_SEVERITY.ERROR => Log.Level.Error,
-        //    _ => Log.Level.Debug
-        //};
-        //
-        //Application.Current.Log.Append(level, Utf8StringMarshaller.ConvertToManaged((byte*)c->pMessage) ?? "", DateTime.Now, "Vulkan", "Validation");
+        GossamerLog.Level level = severity switch
+        {
+            VkDebugUtilsMessageSeverityEXT.VERBOSE => GossamerLog.Level.Debug,
+            VkDebugUtilsMessageSeverityEXT.INFO => GossamerLog.Level.Information,
+            VkDebugUtilsMessageSeverityEXT.WARNING => GossamerLog.Level.Warning,
+            VkDebugUtilsMessageSeverityEXT.ERROR => GossamerLog.Level.Error,
+            _ => GossamerLog.Level.Debug
+        };
+
+        Gossamer.Instance.Log.Append(level, Utf8StringMarshaller.ConvertToManaged((byte*)pCallbackData->pMessage) ?? "", DateTime.Now, "Vulkan", "Validation");
         return 0;
     }
 
-    void InitializeVulkanInstance(bool enableValidation, bool enableDebugging)
+    void InitializeVulkanInstance()
     {
         HashSet<string> availableInstanceLayers = [];
         HashSet<string> availableInstanceExtensions = [];
@@ -105,29 +135,55 @@ unsafe class BackEndGfx : IDisposable
 
             enabledExtensionNames.Add(VK_KHR_surface);
 
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (parameters.EnableSwapchain)
             {
-                const string VK_KHR_win32_surface = "VK_KHR_win32_surface";
-                ThrowIf(!availableInstanceExtensions.Contains(VK_KHR_win32_surface), $"Vulkan: Required feature {VK_KHR_win32_surface} not available.");
+                // FIXME: Add support for other platforms
 
-                enabledExtensionNames.Add(VK_KHR_win32_surface);
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    const string VK_KHR_win32_surface = "VK_KHR_win32_surface";
+
+                    if (availableInstanceExtensions.Contains(VK_KHR_win32_surface))
+                    {
+                        enabledExtensionNames.Add(VK_KHR_win32_surface);
+                        capabilities = capabilities with { CanSwap = true };
+                    }
+                    else
+                    {
+                        logger.Warning($"Vulkan: Swapchain is enabled but {VK_KHR_win32_surface} is not available.");
+                    }
+                }
+                else
+                {
+                    logger.Warning("Vulkan: Swapchain is enabled but platform is not supported for it.");
+                }
             }
 
-            if (enableValidation)
+            if (parameters.EnableValidation)
             {
                 const string VK_LAYER_KHRONOS_validation = "VK_LAYER_KHRONOS_validation";
                 if (availableInstanceLayers.Contains(VK_LAYER_KHRONOS_validation))
                 {
                     enabledLayerNames.Add(VK_LAYER_KHRONOS_validation);
+                    capabilities = capabilities with { CanValidate = true };
+                }
+                else
+                {
+                    logger.Warning($"Vulkan: Validation is enabled but {VK_LAYER_KHRONOS_validation} is not available.");
                 }
             }
 
-            if (enableDebugging)
+            if (parameters.EnableDebugging)
             {
                 const string VK_EXT_debug_utils = "VK_EXT_debug_utils";
                 if (availableInstanceExtensions.Contains(VK_EXT_debug_utils))
                 {
                     enabledExtensionNames.Add(VK_EXT_debug_utils);
+                    capabilities = capabilities with { CanDebug = true };
+                }
+                else
+                {
+                    logger.Warning($"Vulkan: Debugging is enabled but {VK_EXT_debug_utils} is not available.");
                 }
             }
         }
@@ -161,34 +217,51 @@ unsafe class BackEndGfx : IDisposable
         ThrowIfFailed(vkCreateInstance(&instanceCreateInfo, default, &instance), "Vulkan: Failed to create instance.");
         this.instance = instance;
 
-        if (enableDebugging)
+        if (parameters.EnableDebugging && capabilities.CanDebug)
         {
             const string STR_vkCreateDebugUtilsMessengerEXT = "vkCreateDebugUtilsMessengerEXT";
             const string STR_vkDestroyDebugUtilsMessengerEXT = "vkDestroyDebugUtilsMessengerEXT";
             const string STR_vkSetDebugUtilsObjectNameEXT = "vkSetDebugUtilsObjectNameEXT";
 
             nint debugCreateUtilsMessengerPfn = vkGetInstanceProcAddr(instance, STR_vkCreateDebugUtilsMessengerEXT);
-            ThrowIf(debugCreateUtilsMessengerPfn == nint.Zero, "Vulkan: Failed to get debug utils create messenger function pointer.");
-            nint debugDestroyUtilsMessengerPfn = vkGetInstanceProcAddr(instance, STR_vkDestroyDebugUtilsMessengerEXT);
-            ThrowIf(debugDestroyUtilsMessengerPfn == nint.Zero, "Vulkan: Failed to get debug utils destroy messenger function pointer.");
-            nint debugUtilsObjectNamePfn = vkGetInstanceProcAddr(instance, STR_vkSetDebugUtilsObjectNameEXT);
-            ThrowIf(debugUtilsObjectNamePfn == nint.Zero, "Vulkan: Failed to get debug utils object name function pointer.");
-
-            VulkanDebugMessengerCallback = VulkanDebugMessageCallback;
-            VulkanDebugSetObjectName = Marshal.GetDelegateForFunctionPointer<PFN_vkSetDebugUtilsObjectNameEXT>(debugUtilsObjectNamePfn);
-
-            VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = new(default)
+            if (debugCreateUtilsMessengerPfn == nint.Zero)
             {
-                MessageSeverity = VkDebugUtilsMessageSeverityEXT.ERROR | VkDebugUtilsMessageSeverityEXT.WARNING,
-                MessageType = VkDebugUtilsMessageTypeEXT.GENERAL | VkDebugUtilsMessageTypeEXT.VALIDATION,
-                UserCallback = Marshal.GetFunctionPointerForDelegate(VulkanDebugMessengerCallback),
-            };
+                logger.Warning($"Vulkan: Debugging is enabled but {STR_vkCreateDebugUtilsMessengerEXT} is not available.");
+            }
+            nint debugDestroyUtilsMessengerPfn = vkGetInstanceProcAddr(instance, STR_vkDestroyDebugUtilsMessengerEXT);
+            if (debugDestroyUtilsMessengerPfn == nint.Zero)
+            {
+                logger.Warning($"Vulkan: Debugging is enabled but {STR_vkDestroyDebugUtilsMessengerEXT} is not available.");
+            }
+            nint debugUtilsObjectNamePfn = vkGetInstanceProcAddr(instance, STR_vkSetDebugUtilsObjectNameEXT);
+            if (debugUtilsObjectNamePfn == nint.Zero)
+            {
+                logger.Warning($"Vulkan: Debugging is enabled but {STR_vkSetDebugUtilsObjectNameEXT} is not available.");
+            }
 
-            var vkCreateDebugUtilsMessengerEXT = Marshal.GetDelegateForFunctionPointer<PFN_vkCreateDebugUtilsMessengerEXT>(debugCreateUtilsMessengerPfn);
+            bool debugFunctionsOk = debugCreateUtilsMessengerPfn != nint.Zero && debugDestroyUtilsMessengerPfn != nint.Zero && debugUtilsObjectNamePfn != nint.Zero;
+            if (debugFunctionsOk)
+            {
+                VulkanDebugMessengerCallback = VulkanDebugMessageCallback;
+                VulkanDebugSetObjectName = Marshal.GetDelegateForFunctionPointer<PFN_vkSetDebugUtilsObjectNameEXT>(debugUtilsObjectNamePfn);
 
-            VkDebugUtilsMessengerEXT debugUtilsMessenger = default;
-            ThrowIfFailed(vkCreateDebugUtilsMessengerEXT(instance, &debugUtilsMessengerCreateInfo, default, &debugUtilsMessenger), "Vulkan: Failed to create debug utils messenger.");
-            this.debugUtilsMessenger = debugUtilsMessenger;
+                VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = new(default)
+                {
+                    MessageSeverity = VkDebugUtilsMessageSeverityEXT.ERROR | VkDebugUtilsMessageSeverityEXT.WARNING,
+                    MessageType = VkDebugUtilsMessageTypeEXT.GENERAL | VkDebugUtilsMessageTypeEXT.VALIDATION,
+                    UserCallback = Marshal.GetFunctionPointerForDelegate(VulkanDebugMessengerCallback),
+                };
+
+                var vkCreateDebugUtilsMessengerEXT = (delegate*<VkInstance, VkDebugUtilsMessengerCreateInfoEXT*, nint, VkDebugUtilsMessengerEXT*, VkResult>)debugCreateUtilsMessengerPfn;
+
+                VkDebugUtilsMessengerEXT debugUtilsMessenger = default;
+                ThrowIfFailed(vkCreateDebugUtilsMessengerEXT(instance, &debugUtilsMessengerCreateInfo, default, &debugUtilsMessenger), "Vulkan: Failed to create debug utils messenger.");
+                this.debugUtilsMessenger = debugUtilsMessenger;
+            }
+            else
+            {
+                capabilities = capabilities with { CanDebug = false };
+            }
         }
     }
 }

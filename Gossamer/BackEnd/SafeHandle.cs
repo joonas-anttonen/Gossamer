@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Gossamer.BackEnd;
+namespace Gossamer.Backend;
 
 /// <summary>
 /// Encapsulates a 'safe' handle to a native resource.
