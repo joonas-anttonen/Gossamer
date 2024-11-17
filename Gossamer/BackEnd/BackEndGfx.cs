@@ -7,104 +7,6 @@ using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.BackEnd;
 
-abstract class SafeHandle : IDisposable
-{
-    public bool IsInvalid => handle == IntPtr.Zero;
-
-    protected nint handle;
-
-    public nint DangerousGetHandle() => handle;
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            ReleaseHandle();
-        }
-    }
-
-    protected abstract void ReleaseHandle();
-
-    ~SafeHandle()
-    {
-        Dispose(false);
-    }
-}
-
-sealed class SafeNativeStringArray : SafeHandle
-{
-    readonly SafeNativeString[] strings;
-
-    public int Capacity { get; }
-
-    public int Count { get; private set; }
-
-    public nint this[int index]
-    {
-        get
-        {
-            if (index < 0 || index >= Capacity)
-            {
-                throw new ArgumentOutOfRangeException(nameof(index));
-            }
-
-            return Marshal.ReadIntPtr(handle, index * nint.Size);
-        }
-        set
-        {
-            if (index < 0 || index >= Capacity)
-            {
-                throw new ArgumentOutOfRangeException(nameof(index));
-            }
-
-            Marshal.WriteIntPtr(handle, index * nint.Size, value);
-        }
-    }
-
-    public SafeNativeStringArray(int capacity)
-    {
-        strings = new SafeNativeString[capacity];
-        handle = Marshal.AllocHGlobal(capacity * nint.Size);
-        Capacity = capacity;
-    }
-
-    protected override void ReleaseHandle()
-    {
-        Marshal.FreeHGlobal(handle);
-    }
-
-    public void Add(string str)
-    {
-        if (Count >= Capacity)
-        {
-            throw new InvalidOperationException("Array is full.");
-        }
-
-        strings[Count] = new SafeNativeString(str);
-        this[Count] = strings[Count].DangerousGetHandle();
-        Count++;
-    }
-}
-
-sealed class SafeNativeString : SafeHandle
-{
-    public SafeNativeString(string str)
-    {
-        handle = Marshal.StringToHGlobalAnsi(str);
-    }
-
-    protected override void ReleaseHandle()
-    {
-        Marshal.FreeHGlobal(handle);
-    }
-}
-
 unsafe class BackEndGfx : IDisposable
 {
     bool isDisposed;
@@ -130,7 +32,7 @@ unsafe class BackEndGfx : IDisposable
 
         GC.SuppressFinalize(this);
         isDisposed = true;
-        
+
         if (debugUtilsMessenger.HasValue)
         {
             var vkDestroyDebugUtilsMessengerEXT = Marshal.GetDelegateForFunctionPointer<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
