@@ -8,7 +8,7 @@ namespace Gossamer.External.Vulkan;
 [SuppressUnmanagedCodeSecurity]
 unsafe static class Api
 {
-    const string VulkanLibrary = "vulkan-1";
+    public const string BinaryName = "vulkan-1";
     const CallingConvention CallConvention = CallingConvention.Winapi;
 
     public static class Constants
@@ -35,23 +35,23 @@ unsafe static class Api
             (int)((version & 0x003FF000) >> 12),
             (int)((version & 0x00000FFF) >> 0));
 
-    [DllImport(VulkanLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkEnumerateInstanceVersion(uint* pApiVersion);
-    [DllImport(VulkanLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkEnumerateInstanceLayerProperties(uint* pPropertyCount, VkLayerProperties* pProperties);
 
-    [DllImport(VulkanLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkEnumerateInstanceExtensionProperties([MarshalAs(UnmanagedType.LPUTF8Str)] string? pLayerName, uint* pPropertyCount, VkExtensionProperties* pProperties = default);
 
-    [DllImport(VulkanLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkCreateInstance(VkInstanceCreateInfo* pCreateInfo, VkAllocationCallbacks* pAllocator, VkInstance* pInstance);
 
-    [DllImport(VulkanLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void vkDestroyInstance(VkInstance instance, VkAllocationCallbacks* pAllocator = default);
 
-    [DllImport(VulkanLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint vkGetInstanceProcAddr(VkInstance instance, [MarshalAs(UnmanagedType.LPUTF8Str)] string pName);
 
-    [DllImport(VulkanLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint vkGetDeviceProcAddr(VkDevice device, [MarshalAs(UnmanagedType.LPUTF8Str)] string pName);
 }

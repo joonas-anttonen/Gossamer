@@ -4,9 +4,9 @@ using System.Runtime.InteropServices;
 using Gossamer.BackEnd;
 using Gossamer.FrontEnd;
 
-namespace Gossamer;
+using static Gossamer.Utilities.ExceptionUtilities;
 
-using static Utilities.ExceptionUtilities;
+namespace Gossamer;
 
 public sealed class Gossamer : IDisposable
 {
@@ -22,19 +22,40 @@ public sealed class Gossamer : IDisposable
     {
         this.parameters = parameters;
 
-        //NativeLibrary.SetDllImportResolver(typeof(Gossamer).Assembly, (libraryName, assembly, searchPath) =>
-        //{
-        //    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        //    {
-        //        return NativeLibrary.Load($"{libraryName}.dll");
-        //    }
-        //    if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        //    {
-        //        return NativeLibrary.Load($"{libraryName}.so");
-        //    }
-//
-        //    return IntPtr.Zero;
-        //});
+        NativeLibrary.SetDllImportResolver(typeof(Gossamer).Assembly, DllImportResolver);
+    }
+
+    /// <summary>
+    /// Custom DllImportResolver to load external libraries from the correct location based on the OS.
+    /// </summary>
+    static nint DllImportResolver(string libraryName, System.Reflection.Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        switch (libraryName)
+        {
+            case External.Vulkan.Api.BinaryName:
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    return NativeLibrary.Load("vulkan-1.dll");
+                }
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    return NativeLibrary.Load("libvulkan.so.1");
+                }
+                break;
+
+            case External.Glfw.Api.BinaryName:
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    return NativeLibrary.Load($"Gossamer.glfw.dll", assembly, DllImportSearchPath.AssemblyDirectory);
+                }
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    return NativeLibrary.Load($"Gossamer.glfw.so", assembly, DllImportSearchPath.AssemblyDirectory);
+                }
+                break;
+        }
+
+        return nint.Zero;
     }
 
     public void Dispose()
@@ -53,6 +74,12 @@ public sealed class Gossamer : IDisposable
 
     public void Run()
     {
+        // Set the current directory to the directory of the executable
+        Directory.SetCurrentDirectory(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location!)!);
+
+        // Print the runtime information
+        Debug.WriteLine($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
+
         // Run the backend in a separate thread
         backEndThread = new(RunBackEnd);
         backEndThread.Start();

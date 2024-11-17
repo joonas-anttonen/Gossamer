@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using Gossamer.External.Vulkan;
 
 using static Gossamer.External.Vulkan.Api;
-
 using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.BackEnd;
@@ -236,6 +235,8 @@ unsafe class BackEndGfx : IDisposable
 
         VkApplicationInfo applicationInfo = new(default)
         {
+            ApiVersion = MAKE_API_VERSION(0, 1, 2, 0),
+
             ApplicationName = applicationName.DangerousGetHandle(),
             ApplicationVersion = MAKE_API_VERSION(0, 0, 1, 0),
 
