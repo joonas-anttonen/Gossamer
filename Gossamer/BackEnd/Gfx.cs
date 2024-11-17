@@ -8,6 +8,10 @@ using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Backend;
 
+public record class GfxPresentation(Color ClearColor);
+public record class GfxSwapChainPresentation(Color ClearColor, nint Handle, bool EnableVerticalSync) : GfxPresentation(ClearColor);
+public record class GfxDirectXPresentation(Color ClearColor, nint Handle, Format Format, uint Width, uint Height) : GfxPresentation(ClearColor);
+
 public record class GfxParameters(
     Gossamer.AppInfo AppInfo,
     bool EnableValidation,
