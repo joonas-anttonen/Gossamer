@@ -10,6 +10,21 @@ namespace Gossamer;
 
 public sealed class Gossamer : IDisposable
 {
+    public record class AppInfo(string Name, Version Version)
+    {
+        /// <summary>
+        /// Reads the name and version of the calling assembly using <see cref="System.Reflection.Assembly.GetCallingAssembly"/>.
+        /// </summary>
+        /// <returns></returns>
+        public static AppInfo FromCallingAssembly()
+        {
+            var assembly = System.Reflection.Assembly.GetCallingAssembly();
+            var name = assembly.GetName();
+            return new AppInfo(name.Name!, name.Version!);
+        }
+    }
+    public record class Parameters(AppInfo AppInfo);
+
     readonly GossamerLog log;
     readonly Logger logger;
 
@@ -17,7 +32,7 @@ public sealed class Gossamer : IDisposable
 
     readonly FrontToBackMessageQueue frontToBackMessageQueue = new();
 
-    readonly GossamerParameters parameters;
+    readonly Parameters parameters;
 
     Thread? backEndThread;
 
@@ -39,7 +54,7 @@ public sealed class Gossamer : IDisposable
         get => log;
     }
 
-    public Gossamer(GossamerLog log, GossamerParameters parameters)
+    public Gossamer(GossamerLog log, Parameters parameters)
     {
         if (instance != null)
         {
@@ -117,6 +132,7 @@ public sealed class Gossamer : IDisposable
 
         using Gfx gfx = new();
         gfx.Create(new GfxParameters(
+            parameters.AppInfo,
             EnableValidation: true,
             EnableDebugging: true,
             EnableSwapchain: true

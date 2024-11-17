@@ -7,10 +7,12 @@ namespace Gossamer.Benchmark
     {
         public static int Main(string[] args)
         {
+            // Get application
+
             using GossamerLog log = new();
             log.AddDebugListener();
 
-            using Gossamer gossamer = new(log, new GossamerParameters());
+            using Gossamer gossamer = new(log, new Gossamer.Parameters(Gossamer.AppInfo.FromCallingAssembly()));
 
             try
             {

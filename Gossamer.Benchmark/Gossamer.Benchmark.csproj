@@ -8,6 +8,8 @@
     <Platforms>x64</Platforms>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <Configurations>Debug;Release</Configurations>
+    <PackageId>Gossamer.Benchmark</PackageId>
+    <Version>0.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
