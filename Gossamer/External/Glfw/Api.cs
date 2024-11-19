@@ -318,6 +318,12 @@ unsafe static class Api
     public static extern void glfwWaitEvents();
 
     /// <summary>
+    /// Posts an empty event to the event queue.
+    /// </summary>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwPostEmptyEvent();
+
+    /// <summary>
     /// Sets the specified window hint to the desired value.
     /// </summary>
     /// <param name="hint">The window hint to set.</param>

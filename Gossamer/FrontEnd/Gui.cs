@@ -15,10 +15,12 @@ namespace Gossamer.Frontend
         [UnmanagedFunctionPointer(CallingConvention.Cdecl), SuppressUnmanagedCodeSecurity]
         public delegate long WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
 
+        readonly Logger logger = Gossamer.Instance.Log.GetLogger(nameof(Gui), true, true);
+
         bool isDisposed;
         bool isCreated;
 
-        readonly FrontToBackMessageQueue messageQueue = new();
+        readonly BackendMessageQueue messageQueue = new();
 
         GLFWwindow glfwWindow;
         readonly WndProcDelegate glfwCallbackWindowProc;
@@ -38,7 +40,7 @@ namespace Gossamer.Frontend
             get => glfwWindowShouldClose(glfwWindow) == 1;
         }
 
-        internal Gui(FrontToBackMessageQueue messageQueue)
+        internal Gui(BackendMessageQueue messageQueue)
         {
             this.messageQueue = messageQueue;
 
@@ -99,7 +101,12 @@ namespace Gossamer.Frontend
             isCreated = true;
         }
 
-        public void WaitForEvents()
+        public static void PostEmptyEvent()
+        {
+            glfwPostEmptyEvent();
+        }
+
+        public static void WaitForEvents()
         {
             glfwWaitEvents();
         }

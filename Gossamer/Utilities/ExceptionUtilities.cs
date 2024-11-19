@@ -10,7 +10,7 @@ public static class ExceptionUtilities
 {
     /// <inheritdoc cref="Debug.Assert(bool, string?)"/>
     [Conditional("DEBUG")]
-    public static void Assert(bool condition, string? message = default)
+    public static void Assert([DoesNotReturnIf(false)] bool condition, string? message = default)
     {
         Debug.Assert(condition, message);
     }
@@ -83,6 +83,21 @@ public static class ExceptionUtilities
     public static void ThrowInvalidOperationIf(bool condition, string? message = default)
     {
         if (condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+
+    /// <summary>
+    /// Throws an <see cref="InvalidOperationException"/> if the value is null.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="value"></param>
+    /// <param name="message"></param>
+    /// <exception cref="InvalidOperationException"></exception>
+    public static void ThrowInvalidOperationIfNull<T>([NotNull] T? value, string? message = default) where T : class
+    {
+        if (value == null)
         {
             throw new InvalidOperationException(message);
         }

@@ -4,7 +4,7 @@ namespace Gossamer.Frontend;
 
 using static Utilities.ExceptionUtilities;
 
-enum FrontToBackMessageType
+enum BackendMessageType
 {
     Quit,
     SurfaceDamaged,
@@ -16,9 +16,9 @@ enum FrontToBackMessageType
     KeyboardChar,
 }
 
-class FrontToBackMessage
+class BackendMessage
 {
-    public FrontToBackMessageType Type { get; private set; }
+    public BackendMessageType Type { get; private set; }
 
     int field0;
     int field1;
@@ -27,14 +27,14 @@ class FrontToBackMessage
 
     public void GetMouseXY(out int x, out int y)
     {
-        Assert(Type == FrontToBackMessageType.MouseXY);
+        Assert(Type == BackendMessageType.MouseXY);
         x = field0;
         y = field1;
     }
 
     public void GetMouseButton(out InputButton button, out InputAction action, out InputMod mods)
     {
-        Assert(Type == FrontToBackMessageType.MouseButton);
+        Assert(Type == BackendMessageType.MouseButton);
         button = (InputButton)field0;
         action = (InputAction)field1;
         mods = (InputMod)field2;
@@ -42,14 +42,14 @@ class FrontToBackMessage
 
     public void GetMouseWheel(out int x, out int y)
     {
-        Assert(Type == FrontToBackMessageType.MouseWheel);
+        Assert(Type == BackendMessageType.MouseWheel);
         x = field0;
         y = field1;
     }
 
     public void GetKeyboardKey(out InputKey key, out int scancode, out InputAction action, out InputMod mods)
     {
-        Assert(Type == FrontToBackMessageType.KeyboardKey);
+        Assert(Type == BackendMessageType.KeyboardKey);
         key = (InputKey)field0;
         scancode = field1;
         action = (InputAction)field2;
@@ -58,36 +58,36 @@ class FrontToBackMessage
 
     public void GetKeyboardChar(out int codepoint, out InputMod mods)
     {
-        Assert(Type == FrontToBackMessageType.KeyboardChar);
+        Assert(Type == BackendMessageType.KeyboardChar);
         codepoint = field0;
         mods = (InputMod)field1;
     }
 
     public void SetQuit()
     {
-        Type = FrontToBackMessageType.Quit;
+        Type = BackendMessageType.Quit;
     }
 
     public void SetSurfaceDamaged()
     {
-        Type = FrontToBackMessageType.SurfaceDamaged;
+        Type = BackendMessageType.SurfaceDamaged;
     }
 
     public void SetSurfaceLost()
     {
-        Type = FrontToBackMessageType.SurfaceLost;
+        Type = BackendMessageType.SurfaceLost;
     }
 
     public void SetMouseXY(int x, int y)
     {
-        Type = FrontToBackMessageType.MouseXY;
+        Type = BackendMessageType.MouseXY;
         field0 = x;
         field1 = y;
     }
 
     public void SetMouseButton(InputButton button, InputAction action, InputMod mods)
     {
-        Type = FrontToBackMessageType.MouseButton;
+        Type = BackendMessageType.MouseButton;
         field0 = (int)button;
         field1 = (int)action;
         field2 = (int)mods;
@@ -95,14 +95,14 @@ class FrontToBackMessage
 
     public void SetMouseWheel(int x, int y)
     {
-        Type = FrontToBackMessageType.MouseWheel;
+        Type = BackendMessageType.MouseWheel;
         field0 = x;
         field1 = y;
     }
 
     public void SetKeyboardKey(InputKey key, int scancode, InputAction action, InputMod mods)
     {
-        Type = FrontToBackMessageType.KeyboardKey;
+        Type = BackendMessageType.KeyboardKey;
         field0 = (int)key;
         field1 = scancode;
         field2 = (int)action;
@@ -111,7 +111,7 @@ class FrontToBackMessage
 
     public void SetKeyboardChar(int codepoint, InputMod mods)
     {
-        Type = FrontToBackMessageType.KeyboardChar;
+        Type = BackendMessageType.KeyboardChar;
         field0 = codepoint;
         field1 = (int)mods;
     }

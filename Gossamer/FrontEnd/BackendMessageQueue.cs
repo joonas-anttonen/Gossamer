@@ -5,17 +5,17 @@ using Gossamer.Collections;
 
 namespace Gossamer.Frontend;
 
-class FrontToBackMessageQueue(int initialCapacity = 4)
+class BackendMessageQueue(int initialCapacity = 4)
 {
-    readonly ConcurrentObjectPool<FrontToBackMessage> messagePool = new(initialCapacity: initialCapacity);
-    readonly ConcurrentQueue<FrontToBackMessage> messageQueue = new();
+    readonly ConcurrentObjectPool<BackendMessage> messagePool = new(initialCapacity: initialCapacity);
+    readonly ConcurrentQueue<BackendMessage> messageQueue = new();
 
-    public bool TryDequeue(out FrontToBackMessage? message)
+    public bool TryDequeue(out BackendMessage? message)
     {
         return messageQueue.TryDequeue(out message);
     }
 
-    public void Return(FrontToBackMessage message)
+    public void Return(BackendMessage message)
     {
         messagePool.Return(message);
     }
