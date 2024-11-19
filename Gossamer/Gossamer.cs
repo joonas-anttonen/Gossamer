@@ -149,12 +149,14 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         // Backend
         backendThread.Start();
 
-        using Gfx gfx = new();
-        gfx.Create(new GfxParameters(
+        using Gfx gfx = new(new GfxApiParameters(
             parameters.AppInfo,
             EnableValidation: true,
             EnableDebugging: true,
             EnableSwapchain: true
+        ));
+        gfx.Create(new GfxParameters(
+            PhysicalDevice: GfxParameters.SelectOptimalDevice(gfx.EnumeratePhysicalDevices())
         ));
 
         // Frontend

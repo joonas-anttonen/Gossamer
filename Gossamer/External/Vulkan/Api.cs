@@ -26,7 +26,12 @@ unsafe static class Api
         }
     }
 
-    public static uint MAKE_API_VERSION(int variant, int major, int minor, int patch)
+    public static nint Next<T>(T* pT) where T : unmanaged
+    {
+        return (nint)pT;
+    }
+
+    public static uint MakeApiVersion(int variant, int major, int minor, int patch)
         => (uint)(variant << 29 | major << 22 | minor << 12 | patch);
 
     public static Version ParseVersion(uint version)
@@ -37,11 +42,27 @@ unsafe static class Api
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkEnumerateInstanceVersion(uint* pApiVersion);
+
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkEnumerateInstanceLayerProperties(uint* pPropertyCount, VkLayerProperties* pProperties);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkEnumerateInstanceExtensionProperties([MarshalAs(UnmanagedType.LPUTF8Str)] string? pLayerName, uint* pPropertyCount, VkExtensionProperties* pProperties = default);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern VkResult vkEnumerateDeviceExtensionProperties(VkPhysicalDevice physicalDevice, [MarshalAs(UnmanagedType.LPUTF8Str)] string? pLayerName, uint* pPropertyCount, VkExtensionProperties* pProperties = default);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern VkResult vkEnumeratePhysicalDevices(VkInstance instance, uint* pPhysicalDeviceCount, VkPhysicalDevice* pPhysicalDevices = default);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void vkGetPhysicalDeviceProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties* pProperties);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice physicalDevice, uint* pQueueFamilyPropertyCount, VkQueueFamilyProperties* pQueueFamilyProperties = default);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceFeatures2* pFeatures);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkCreateInstance(VkInstanceCreateInfo* pCreateInfo, VkAllocationCallbacks* pAllocator, VkInstance* pInstance);
@@ -54,4 +75,7 @@ unsafe static class Api
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint vkGetDeviceProcAddr(VkDevice device, [MarshalAs(UnmanagedType.LPUTF8Str)] string pName);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, VkDeviceCreateInfo* pCreateInfo, VkAllocationCallbacks* pAllocator, VkDevice* pDevice);
 }

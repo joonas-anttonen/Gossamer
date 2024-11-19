@@ -35,6 +35,20 @@ public static class ExceptionUtilities
     }
 
     /// <summary>
+    /// Throws an <see cref="ArgumentNullException"/> if the condition is true.
+    /// </summary>
+    /// <param name="condition"></param>
+    /// <param name="message"></param>
+    /// <exception cref="InvalidDataException"></exception>
+    public static void ThrowInvalidDataIf(bool condition, string? message = default)
+    {
+        if (condition)
+        {
+            throw new InvalidDataException(message);
+        }
+    }
+
+    /// <summary>
     /// Throws an <see cref="InvalidDataException"/> if the value is null.
     /// </summary>
     /// <typeparam name="T"></typeparam>
