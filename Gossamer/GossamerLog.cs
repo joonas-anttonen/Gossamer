@@ -174,7 +174,9 @@ public sealed class GossamerLog : IDisposable
     {
         public override string ToString()
         {
-            return $"[{Timestamp}] [{LevelToString(Level)}] {Message}";
+            string timestamp = Timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+
+            return $"[{timestamp}] [{LevelToString(Level)}] {Message}";
         }
 
         static string LevelToString(Level level)
