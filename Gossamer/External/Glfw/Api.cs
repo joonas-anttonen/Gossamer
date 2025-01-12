@@ -411,4 +411,7 @@ unsafe static class Api
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern GLFWjoystickfun glfwSetJoystickCallback(GLFWjoystickfun cbfun);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern Vulkan.VkResult glfwCreateWindowSurface(Vulkan.VkInstance instance, GLFWwindow window, Vulkan.VkAllocationCallbacks* allocator, Vulkan.VkSurfaceKhr* surface);
 }

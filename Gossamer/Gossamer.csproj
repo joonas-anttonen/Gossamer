@@ -16,10 +16,16 @@
   </ItemGroup>
   
   <ItemGroup>
-    <None Update="Gossamer.glfw.dll">
+    <None Update="Gossamer.Glfw.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Gossamer.glfw.so">
+    <None Update="Gossamer.FreeType.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Gossamer.HarfBuzz.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Gossamer.Vma.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

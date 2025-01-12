@@ -2,31 +2,19 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
-namespace Gossamer;
+namespace Gossamer.Logging;
 
 public interface ILogListener
 {
-    void Append(GossamerLog.Event logEvent);
+    void Append(Log.Event logEvent);
     void Flush();
 }
 
 public sealed class ConsoleLogListener : ILogListener
 {
-    public void Append(GossamerLog.Event logEvent)
+    public void Append(Log.Event logEvent)
     {
-        Console.WriteLine(logEvent);
-    }
-
-    void ILogListener.Flush()
-    {
-    }
-}
-
-public sealed class DebugLogListener : ILogListener
-{
-    public void Append(GossamerLog.Event logEvent)
-    {
-        System.Diagnostics.Debug.WriteLine(logEvent);
+        Console.WriteLine(logEvent.ToShortString());
     }
 
     void ILogListener.Flush()
@@ -47,10 +35,10 @@ public class FileLogListener : ILogListener
         SaveToFile();
     }
 
-    readonly ConcurrentQueue<GossamerLog.Event> events = [];
+    readonly ConcurrentQueue<Log.Event> events = [];
 
     /// <summary>
-    /// Creates a new instance of <see cref="GossamerLog"/> with the specified output path.
+    /// Creates a new instance of <see cref="Log"/> with the specified output path.
     /// If <paramref name="path"/> points to a directory that does not exist, it will be created.
     /// If <paramref name="path"/> has no extension, .log will be appended to it.
     /// </summary>
@@ -116,7 +104,7 @@ public class FileLogListener : ILogListener
 
                 while (!events.IsEmpty)
                 {
-                    if (events.TryDequeue(out GossamerLog.Event? ev) && ev != null)
+                    if (events.TryDequeue(out Log.Event? ev) && ev != null)
                     {
                         file.WriteLine(ev);
                     }
@@ -131,7 +119,7 @@ public class FileLogListener : ILogListener
         SaveToFile();
     }
 
-    void ILogListener.Append(GossamerLog.Event logEvent)
+    void ILogListener.Append(Log.Event logEvent)
     {
         events.Enqueue(logEvent);
 
@@ -151,8 +139,10 @@ public class FileLogListener : ILogListener
 /// <summary>
 /// Logging system for Gossamer.
 /// </summary>
-public sealed class GossamerLog : IDisposable
+public sealed class Log : IDisposable
 {
+    bool isDisposed;
+
     /// <summary>
     /// Log levels.
     /// </summary>
@@ -172,9 +162,15 @@ public sealed class GossamerLog : IDisposable
     /// <param name="Timestamp">Log timestamp.</param>
     public record class Event(Level Level, string Message, DateTime Timestamp)
     {
+        public string ToShortString()
+        {
+            return Message;
+        }
+
         public override string ToString()
         {
-            string timestamp = Timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+            // ISO 8601
+            string timestamp = Timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
 
             return $"[{timestamp}] [{LevelToString(Level)}] {Message}";
         }
@@ -204,20 +200,13 @@ public sealed class GossamerLog : IDisposable
 
     public IReadOnlyDictionary<string, Logger> Loggers => loggers;
 
-    public GossamerLog()
+    public Log()
     {
     }
 
     public ILogListener AddConsoleListener()
     {
         ILogListener listener = new ConsoleLogListener();
-        listeners.Add(listener);
-        return listener;
-    }
-
-    public ILogListener AddDebugListener()
-    {
-        ILogListener listener = new DebugLogListener();
         listeners.Add(listener);
         return listener;
     }
@@ -236,20 +225,28 @@ public sealed class GossamerLog : IDisposable
 
     public void Dispose()
     {
+        if (isDisposed)
+        {
+            return;
+        }
+
+        GC.SuppressFinalize(this);
+        isDisposed = true;
+
         foreach (ILogListener listener in listeners)
         {
             listener.Flush();
         }
     }
 
-    public Logger GetLogger(string name, bool enableTypeName, bool enableCallerName)
+    public Logger GetLogger(string name)
     {
         if (loggers.TryGetValue(name, out Logger? logger))
         {
             return logger;
         }
 
-        logger = new Logger(this, name, enableTypeName, enableCallerName);
+        logger = new Logger(this, name);
         loggers.TryAdd(name, logger);
         return logger;
     }
@@ -301,28 +298,24 @@ public sealed class GossamerLog : IDisposable
         }
         catch (Exception e)
         {
-            Console.WriteLine(string.Format(CultureInfo.InvariantCulture, TypedCallerFormat, nameof(GossamerLog), nameof(Append), e.Message));
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture, TypedCallerFormat, nameof(Log), nameof(Append), e.Message));
         }
     }
 }
 
-public class Logger(GossamerLog applicationLog, string name, bool enableTypeName = true, bool enableCallerName = true)
+public class Logger(Log applicationLog, string name)
 {
-    readonly GossamerLog log = applicationLog;
+    readonly Log log = applicationLog;
     readonly string name = name;
-
-    public bool EnableName { get; } = enableTypeName;
-
-    public bool EnableCallerName { get; } = enableCallerName;
 
     /// <summary>
     /// Logs an error message.
     /// </summary>
     /// <param name="message"></param>
     /// <param name="callerName"></param>
-    public void Error(string message = "", [CallerMemberName] string callerName = "")
+    public void Error(string message = "")
     {
-        log.Append(GossamerLog.Level.Error, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
+        log.Append(Log.Level.Error, message, DateTime.Now, string.Empty, string.Empty);
     }
 
     /// <summary>
@@ -330,9 +323,9 @@ public class Logger(GossamerLog applicationLog, string name, bool enableTypeName
     /// </summary>
     /// <param name="message"></param>
     /// <param name="callerName"></param>
-    public void Warning(string message = "", [CallerMemberName] string callerName = "")
+    public void Warning(string message = "")
     {
-        log.Append(GossamerLog.Level.Warning, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
+        log.Append(Log.Level.Warning, message, DateTime.Now, string.Empty, string.Empty);
     }
 
     /// <summary>
@@ -340,9 +333,9 @@ public class Logger(GossamerLog applicationLog, string name, bool enableTypeName
     /// </summary>
     /// <param name="message"></param>
     /// <param name="callerName"></param>
-    public void Information(string message = "", [CallerMemberName] string callerName = "")
+    public void Information(string message = "")
     {
-        log.Append(GossamerLog.Level.Information, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
+        log.Append(Log.Level.Information, message, DateTime.Now, string.Empty, string.Empty);
     }
 
     /// <summary>
@@ -352,6 +345,6 @@ public class Logger(GossamerLog applicationLog, string name, bool enableTypeName
     /// <param name="callerName"></param>
     public void Debug(string message = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(GossamerLog.Level.Debug, message, DateTime.Now, EnableName ? name : string.Empty, EnableCallerName ? callerName : string.Empty);
+        log.Append(Log.Level.Debug, message, DateTime.Now, name, callerName);
     }
 }

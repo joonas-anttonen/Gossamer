@@ -1,4 +1,5 @@
 ﻿using Gossamer.Frontend;
+using Gossamer.Logging;
 using Gossamer.Utilities;
 
 namespace Gossamer.Benchmark
@@ -7,20 +8,17 @@ namespace Gossamer.Benchmark
     {
         public static int Main(string[] args)
         {
-            // Get application
-
-            using GossamerLog log = new();
-            log.AddDebugListener();
-
-            using Gossamer gossamer = new(log, new Gossamer.Parameters(Gossamer.AppInfo.FromCallingAssembly()));
+            using Gossamer engine = new(new Gossamer.Parameters(Gossamer.ApplicationInfo.FromCallingAssembly()));
 
             try
             {
-                gossamer.Run();
+                engine.Log.AddConsoleListener();
+
+                engine.Run();
             }
             catch (Exception ex)
             {
-                log.Append(GossamerLog.Level.Error, ex.ToString(), DateTime.Now);
+                engine.Log.Append(Log.Level.Error, ex.ToString(), DateTime.Now);
                 return 1;
             }
 

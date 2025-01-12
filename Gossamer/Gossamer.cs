@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Gossamer.Backend;
 using Gossamer.Collections;
 using Gossamer.Frontend;
+using Gossamer.Logging;
 
 using static Gossamer.Utilities.ExceptionUtilities;
 
@@ -11,27 +12,27 @@ namespace Gossamer;
 
 public sealed class Gossamer : SynchronizationContext, IDisposable
 {
-    public record class AppInfo(string Name, Version Version)
+    public record class ApplicationInfo(string Name, Version Version)
     {
         /// <summary>
-        /// Reads the name and version of the calling assembly using <see cref="System.Reflection.Assembly.GetCallingAssembly"/>.
+        /// Creates <see cref="ApplicationInfo"/> using <see cref="System.Reflection.Assembly.GetCallingAssembly"/>.
         /// </summary>
         /// <returns></returns>
-        public static AppInfo FromCallingAssembly()
+        public static ApplicationInfo FromCallingAssembly()
         {
             var assembly = System.Reflection.Assembly.GetCallingAssembly();
             var name = assembly.GetName();
-            return new AppInfo(name.Name!, name.Version!);
+            return new ApplicationInfo(name.Name!, name.Version!);
         }
     }
-    public record class Parameters(AppInfo AppInfo);
+    public record class Parameters(ApplicationInfo AppInfo);
 
-    readonly GossamerLog log;
+    readonly Log log;
     readonly Logger logger;
 
     bool isDisposed;
 
-    readonly BackendMessageQueue backendMessageQueue = new();
+    readonly BackendMessageQueue backendMessageQueue = new(initialCapacity: 16);
 
     readonly int frontendThreadId;
     readonly int backendThreadId;
@@ -57,14 +58,14 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
     }
 
     /// <summary>
-    /// The <see cref="GossamerLog"/> instance used by the <see cref="Gossamer"/> instance.
+    /// The <see cref="global::Gossamer.Log"/> instance used by the <see cref="Gossamer"/> instance.
     /// </summary>
-    public GossamerLog Log
+    public Log Log
     {
         get => log;
     }
 
-    public Gossamer(GossamerLog log, Parameters parameters)
+    public Gossamer(Parameters parameters)
     {
         if (instance != null)
         {
@@ -72,16 +73,16 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         }
         instance = this;
 
+        this.parameters = parameters;
+
         frontendThreadId = Environment.CurrentManagedThreadId;
-        backendThread = new(RunBackend);
+        backendThread = new(BackendThread);
         backendThreadId = backendThread.ManagedThreadId;
 
+        log = new Log();
+        logger = log.GetLogger(nameof(Gossamer));
+
         SetSynchronizationContext(this);
-
-        this.parameters = parameters;
-        this.log = log;
-
-        logger = log.GetLogger("Gossamer", false, false);
 
         NativeLibrary.SetDllImportResolver(typeof(Gossamer).Assembly, DllImportResolver);
     }
@@ -129,49 +130,67 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         GC.SuppressFinalize(this);
         isDisposed = true;
 
-        backendMessageQueue.PostQuit();
-        backendThread?.Join();
+        log.Dispose();
     }
 
+    /// <summary>
+    /// Runs <see cref="Gossamer"/> in full application mode. This method will block until the frontend is closed.
+    /// </summary>
     public void Run()
     {
         // Set the current directory to the directory of the executable
         Directory.SetCurrentDirectory(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location!)!);
 
-        logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
         logger.Debug($"OS: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
+        logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
         logger.Debug($"Working directory: {Directory.GetCurrentDirectory()}");
 
         // Debug log threading information
         logger.Debug("Frontend thread = " + frontendThreadId);
         logger.Debug("Backend thread = " + backendThreadId);
 
-        // Backend
-        backendThread.Start();
-
-        using Gfx gfx = new(new GfxApiParameters(
-            parameters.AppInfo,
-            EnableValidation: true,
-            EnableDebugging: true,
-            EnableSwapchain: true
-        ));
-        gfx.Create(new GfxParameters(
-            PhysicalDevice: GfxParameters.SelectOptimalDevice(gfx.EnumeratePhysicalDevices())
-        ));
-
         // Frontend
         using Gui gui = new(backendMessageQueue);
         gui.Create();
 
-        this.gfx = gfx;
-        this.gui = gui;
+        // Backend
+        using Gfx gfx = new(new GfxApiParameters(
+            parameters.AppInfo,
+            EnableDebugging: true,
+            PresentationMode: GfxPresentationMode.SwapChain
+        ));
+        gfx.Create(new GfxParameters(
+            PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices()),
+            Presentation: new GfxSwapChainPresentation(Color.DarkPeriwinkle, gui)
+        ));
 
-        RunFrontend();
+        RunBackend(gfx);
+        RunFrontend(gui);
+
+        backendMessageQueue.PostQuit();
+        backendThread?.Join();
     }
 
-    void RunFrontend()
+    /// <summary>
+    /// Runs the backend on a separate thread. This method will return immediately.
+    /// </summary>
+    /// <param name="gfx"></param>
+    public void RunBackend(Gfx gfx)
+    {
+        ThrowInvalidOperationIfNull(gfx, "Gfx is null.");
+        this.gfx = gfx;
+
+        backendThread.Start();
+    }
+
+    /// <summary>
+    /// Runs the frontend on the current thread. This method will block until the frontend is closed.
+    /// </summary>
+    /// <param name="gui"></param>
+    public void RunFrontend(Gui gui)
     {
         ThrowInvalidOperationIfNull(gui, "Gui is null.");
+        this.gui = gui;
 
         while (true)
         {
@@ -211,7 +230,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         Gui.PostEmptyEvent();
     }
 
-    void RunBackend()
+    void BackendThread()
     {
         bool keepRunning = true;
         while (keepRunning)
@@ -237,8 +256,10 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
                 }
             }
 
+            gfx?.Render();
+
             // FIXME: This is a temporary solution to prevent the backend from spinning too fast
-            Thread.Sleep(10);
+            Thread.Sleep(1);
         }
 
         logger.Debug("Backend Exit");

@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Gossamer.Benchmark": {
+      "commandName": "Project",
+      "nativeDebugging": true,
+      "hotReloadEnabled": false
+    }
+  }
+}

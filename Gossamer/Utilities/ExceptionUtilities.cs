@@ -22,6 +22,13 @@ public static class ExceptionUtilities
         Debug.Assert(instance != null, message);
     }
 
+    /// <inheritdoc cref="Debug.Assert(bool, string?)"/>
+    [Conditional("DEBUG")]
+    public static void AssertIsNull<T>(T? instance, string? message = default) where T : class
+    {
+        Debug.Assert(instance == null, message);
+    }
+
     /// <summary>
     /// Throws an <see cref="ArgumentNullException"/> if the value is null.
     /// </summary>
@@ -62,7 +69,7 @@ public static class ExceptionUtilities
     }
 
     /// <summary>
-    /// Throws an <see cref="NotSupportedException"/> if the value is null.
+    /// Throws a <see cref="NotSupportedException"/> if the value is null.
     /// </summary>
     /// <typeparam name="T"></typeparam>
     /// <param name="value"></param>
@@ -75,12 +82,12 @@ public static class ExceptionUtilities
     }
 
     /// <summary>
-    /// Throws an <see cref="NotSupportedException"/> if the condition is true.
+    /// Throws a <see cref="NotSupportedException"/> if the condition is true.
     /// </summary>
     /// <param name="condition"></param>
     /// <param name="message"></param>
     /// <exception cref="NotSupportedException"></exception>
-    public static void ThrowNotSupportedIf(bool condition, string? message = default)
+    public static void ThrowNotSupportedIf([DoesNotReturnIf(false)] bool condition, string? message = default)
     {
         if (condition)
         {

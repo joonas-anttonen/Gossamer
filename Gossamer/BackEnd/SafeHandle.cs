@@ -22,10 +22,7 @@ abstract class SafeHandle : IDisposable
 
     protected virtual void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            ReleaseHandle();
-        }
+        ReleaseHandle();
     }
 
     protected abstract void ReleaseHandle();
@@ -33,6 +30,27 @@ abstract class SafeHandle : IDisposable
     ~SafeHandle()
     {
         Dispose(false);
+    }
+}
+
+sealed class SafeNativeBlob : SafeHandle
+{
+    public int Size { get; }
+
+    public SafeNativeBlob(byte[] data)
+    {
+        Size = sizeof(byte) * data.Length;
+        handle = Marshal.AllocHGlobal(Size);
+        Marshal.Copy(data, 0, handle, data.Length);
+    }
+
+    protected override void ReleaseHandle()
+    {
+        if (handle != nint.Zero)
+        {
+            Marshal.FreeHGlobal(handle);
+            handle = nint.Zero;
+        }
     }
 }
 
@@ -55,19 +73,16 @@ sealed class SafeNativeString : SafeHandle
     {
         Encoding = encoding ?? Encoding.UTF8;
 
-        if (encoding is null)
-        {
-            handle = StringToHGlobal(str, Encoding);
-        }
-        else
-        {
-            handle = Marshal.StringToHGlobalAnsi(str);
-        }
+        handle = StringToHGlobal(str, Encoding);
     }
 
     protected override void ReleaseHandle()
     {
-        Marshal.FreeHGlobal(handle);
+        if (handle != nint.Zero)
+        {
+            Marshal.FreeHGlobal(handle);
+            handle = nint.Zero;
+        }
     }
 
     static unsafe nint StringToHGlobal(string? s, Encoding encoding)
@@ -119,7 +134,11 @@ sealed class SafeNativeStringArray : SafeHandle
 
     protected override void ReleaseHandle()
     {
-        Marshal.FreeHGlobal(handle);
+        if (handle != nint.Zero)
+        {
+            Marshal.FreeHGlobal(handle);
+            handle = nint.Zero;
+        }
     }
 
     /// <summary>
