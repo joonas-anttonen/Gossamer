@@ -854,22 +854,28 @@ class Gfx2D(Gfx gfx) : IDisposable
         float cursorX = position.X;
         float cursorY = position.Y + font.GetMetrics().Ascender;
 
-        foreach (ShapedGlyph shapedGlyph in font.ShapeText(text))
+        foreach (var line in text.EnumerateLines())
         {
-            Glyph glyph = shapedGlyph.Glyph;
-
-            float x = cursorX + shapedGlyph.XOffset + glyph.BearingX;
-            float y = cursorY + shapedGlyph.YOffset - glyph.BearingY;
-
-            PushQuadUV(new(x, y), new(x + glyph.Width, y + glyph.Height), new(glyph.U0, glyph.V0), new(glyph.U1, glyph.V1), color);
-
-            cursorX += shapedGlyph.XAdvance;
-            cursorY += shapedGlyph.YAdvance;
-
-            if (shapedGlyph.XAdvance == 0)
+            foreach (ShapedGlyph shapedGlyph in font.ShapeText(line))
             {
-                cursorX += glyph.Width;
+                Glyph glyph = shapedGlyph.Glyph;
+
+                float x = cursorX + shapedGlyph.XOffset + glyph.BearingX;
+                float y = cursorY + shapedGlyph.YOffset - glyph.BearingY;
+
+                PushQuadUV(new(x, y), new(x + glyph.Width, y + glyph.Height), new(glyph.U0, glyph.V0), new(glyph.U1, glyph.V1), color);
+
+                cursorX += shapedGlyph.XAdvance;
+                cursorY += shapedGlyph.YAdvance;
+
+                if (shapedGlyph.XAdvance == 0)
+                {
+                    cursorX += glyph.Width;
+                }
             }
+
+            cursorX = position.X;
+            cursorY += font.GetMetrics().Height;
         }
     }
 
