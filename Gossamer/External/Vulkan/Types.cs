@@ -17,6 +17,7 @@ readonly struct VkSemaphore { internal readonly ulong Value; public bool HasValu
 readonly struct VkSwapChainKhr { internal readonly ulong Value; public bool HasValue => Value != 0; public override string ToString() => Value.ToString("x"); }
 readonly struct VkImageView { internal readonly ulong Value; public bool HasValue => Value != 0; public override string ToString() => Value.ToString("x"); }
 readonly struct VkCommandPool { internal readonly ulong Value; public bool HasValue => Value != 0; public override string ToString() => Value.ToString("x"); }
+readonly struct VkQueryPool { internal readonly ulong Value; public bool HasValue => Value != 0; public override string ToString() => Value.ToString("x"); }
 readonly struct VkFrameBuffer { internal readonly ulong Value; public bool HasValue => Value != 0; public override string ToString() => Value.ToString("x"); }
 readonly struct VkDescriptorPool { internal readonly ulong Value; public bool HasValue => Value != 0; public override string ToString() => Value.ToString("x"); }
 readonly struct VkSampler { internal readonly ulong Value; public bool HasValue => Value != 0; public override string ToString() => Value.ToString("x"); }
@@ -280,6 +281,9 @@ struct VkPhysicalDeviceLimits
     public VkSampleCount StorageImageSampleCounts;
     public uint MaxSampleMaskWords;
     public uint TimestampComputeAndGraphics;
+    /// <summary>
+    /// The number of nanoseconds required for a timestamp query value to be incremented by 1.
+    /// </summary>
     public float TimestampPeriod;
     public uint MaxClipDistances;
     public uint MaxCullDistances;
@@ -1302,4 +1306,14 @@ struct VkBufferImageCopy
     public VkImageSubresourceLayers ImageSubresource;
     public VkOffset3D ImageOffset;
     public VkExtent3D ImageExtent;
+}
+
+struct VkQueryPoolCreateInfo(nint next)
+{
+    public VkStructureType SType = VkStructureType.QUERY_POOL_CREATE_INFO;
+    public nint Next = next;
+    internal uint Flags;
+    internal VkQueryType QueryType;
+    internal uint QueryCount;
+    internal VkQueryPipelineStatisticFlags PipelineStatistics;
 }

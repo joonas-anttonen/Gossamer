@@ -406,4 +406,19 @@ unsafe static class Api
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void vkCmdCopyImageToBuffer(VkCommandBuffer commandBuffer, ulong srcImage, VkImageLayout srcImageLayout, ulong dstBuffer, uint regionCount, VkBufferImageCopy* pRegions);
 
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern VkResult vkCreateQueryPool(VkDevice device, VkQueryPoolCreateInfo* pCreateInfo, VkAllocationCallbacks* pAllocator, VkQueryPool* pQueryPool);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void vkCmdResetQueryPool(VkCommandBuffer commandBuffer, VkQueryPool queryPool, uint firstQuery, uint queryCount);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void vkDestroyQueryPool(VkDevice device, VkQueryPool queryPool, VkAllocationCallbacks* pAllocator = default);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern VkResult vkGetQueryPoolResults(VkDevice device, VkQueryPool queryPool, uint firstQuery, uint queryCount, nuint dataSize, nint pData, ulong stride, VkQueryResultFlags flags);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void vkCmdWriteTimestamp(VkCommandBuffer commandBuffer, VkPipelineStage pipelineStage, VkQueryPool queryPool, uint query);
+
 }

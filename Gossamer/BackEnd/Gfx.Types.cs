@@ -28,7 +28,8 @@ public record class GfxParameters(
 
 public record class GfxCapabilities(
     bool CanDebug,
-    bool CanSwap
+    bool CanSwap,
+    bool CanTimestamp
 );
 
 /// <summary>

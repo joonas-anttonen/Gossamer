@@ -13,6 +13,8 @@ namespace Gossamer.Backend;
 
 class Gfx2D(Gfx gfx) : IDisposable
 {
+    public readonly record struct Statistics(int DrawCalls, int Vertices, int Indices);
+
     readonly Gfx gfx = gfx;
 
     readonly GfxFontCache fontCache = new();
@@ -51,7 +53,8 @@ class Gfx2D(Gfx gfx) : IDisposable
     int frameIndexCount;
 
     record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, GfxFont? Font, Vector3 Color);
-    int commandsCount;
+    int batchCommandsCount;
+    int frameCommandsCount;
     Command[] commands = new Command[128];
 
     [StructLayout(LayoutKind.Sequential)]
@@ -73,13 +76,19 @@ class Gfx2D(Gfx gfx) : IDisposable
         readonly float _padding;
     }
 
+    public Statistics GetStatistics()
+    {
+        return new Statistics(frameCommandsCount, frameVertexCount, frameIndexCount);
+    }
+
     ref Command BeginCommand()
     {
         Command command = new((uint)frameVertexCount, (uint)frameIndexCount, 0, default, default, Color.Black.ToVector3());
 
-        ArrayUtilities.Reserve(ref commands, commandsCount + 1);
+        ArrayUtilities.Reserve(ref commands, batchCommandsCount + 1);
 
-        commands[commandsCount++] = command;
+        commands[batchCommandsCount++] = command;
+        frameCommandsCount++;
 
         return ref GetCurrentCommand();
     }
@@ -88,7 +97,7 @@ class Gfx2D(Gfx gfx) : IDisposable
     {
         Assert(batchInProgress);
 
-        return ref commands[commandsCount - 1];
+        return ref commands[batchCommandsCount - 1];
     }
 
     public void Create()
@@ -222,7 +231,8 @@ class Gfx2D(Gfx gfx) : IDisposable
         }
 
         frameInProgress = true;
-        commandsCount = 0;
+        batchCommandsCount = 0;
+        frameCommandsCount = 0;
         frameVertexCount = 0;
         frameIndexCount = 0;
         scratchVertexCount = 0;
@@ -268,8 +278,6 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         if (frameVertexCount > 0)
         {
-            Console.WriteLine($"Frame vertex count: {frameVertexCount}");
-
             gfx.UpdateDynamicBuffer(vertexBuffer, vertices, frameVertexCount);
             gfx.UpdateDynamicBuffer(indexBuffer, indices, frameIndexCount);
         }
@@ -461,7 +469,7 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
 
-        for (int i = 0; i < commandsCount; i++)
+        for (int i = 0; i < batchCommandsCount; i++)
         {
             ref Command command = ref commands[i];
 
@@ -505,7 +513,7 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         vkCmdEndRendering(commandBuffer);
 
-        commandsCount = 0;
+        batchCommandsCount = 0;
     }
 
     void DestroyRendering()
