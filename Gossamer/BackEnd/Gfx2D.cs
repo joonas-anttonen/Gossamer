@@ -536,8 +536,8 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         DestroyRendering();
 
-        var par = new GfxPipelineParameters(
-            ShaderProgram: "Overlay",
+        pipeline = gfx.CreatePipeline(new GfxPipelineParameters(
+            ShaderProgram: gfx.GetShaderProgram("Overlay"),
             PushConstants: [
                 new()
                 {
@@ -613,12 +613,10 @@ class Gfx2D(Gfx gfx) : IDisposable
                     }
                 }
             ]
-        );
-
-        pipeline = gfx.CreatePipeline(par);
+        ));
 
         compositionPipeline = gfx.CreatePipeline(new GfxPipelineParameters(
-            ShaderProgram: "Composition",
+            ShaderProgram: gfx.GetShaderProgram("Composition"),
             PushConstants: [],
             Layout: [
                 new()

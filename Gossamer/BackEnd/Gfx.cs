@@ -114,12 +114,20 @@ class GfxTimestampPool
     }
 }
 
-record class GfxPipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout);
-
 readonly record struct GfxSingleCommand(VkCommandBuffer CommandBuffer, VkFence Fence);
 
+record class GfxPipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout);
+
+class GfxPipelineShader(string name, GfxPipelineShader.Stage[] stages)
+{
+    public record class Stage(VkShaderStage StageType, SafeNativeString Entrypoint, byte[] Code);
+
+    public string Name { get; } = name;
+    public Stage[] Stages { get; } = stages;
+}
+
 record class GfxPipelineParameters(
-    string ShaderProgram,
+    GfxPipelineShader ShaderProgram,
     VkPushConstantRange[] PushConstants,
     VkDescriptorSetLayoutBinding[] Layout,
     VkPrimitiveTopology InputTopology,
@@ -227,7 +235,7 @@ public unsafe class Gfx : IDisposable
 
     Gfx2D? gfx2D;
 
-    readonly Dictionary<string, PipelineShaderProgram> cachedPipelineShaders = [];
+    readonly Dictionary<string, GfxPipelineShader> cachedPipelineShaders = [];
 
     internal GfxSamples GetDeviceMaxSampleCount()
     {
@@ -646,14 +654,6 @@ public unsafe class Gfx : IDisposable
         vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
     }
 
-    record class PipelineShaderProgramStage(VkShaderStage Stage, SafeNativeString Entrypoint, byte[] Code);
-
-    class PipelineShaderProgram(string name, PipelineShaderProgramStage[] stages)
-    {
-        public string Name { get; } = name;
-        public PipelineShaderProgramStage[] Stages { get; } = stages;
-    }
-
     record class ShaderStageDefinition(uint Stage, string EntryPoint, long Offset, long Size);
     record class ShaderProgramDefinition(string Name, ShaderStageDefinition[] Stages);
     record class ShaderPackageDefinition(Dictionary<string, ShaderProgramDefinition> Pipelines);
@@ -897,7 +897,7 @@ public unsafe class Gfx : IDisposable
 
         foreach (var (shaderProgramName, shaderProgramDefinition) in packageDefinition.Pipelines)
         {
-            PipelineShaderProgramStage[] stages = new PipelineShaderProgramStage[shaderProgramDefinition.Stages.Length];
+            GfxPipelineShader.Stage[] stages = new GfxPipelineShader.Stage[shaderProgramDefinition.Stages.Length];
 
             for (int i = 0; i < shaderProgramDefinition.Stages.Length; i++)
             {
@@ -905,11 +905,18 @@ public unsafe class Gfx : IDisposable
                 byte[] stageBytecode = new byte[stageDefinition.Size];
                 Array.Copy(packageBytecode, stageDefinition.Offset, stageBytecode, 0, stageDefinition.Size);
 
-                stages[i] = new PipelineShaderProgramStage((VkShaderStage)stageDefinition.Stage, new SafeNativeString(stageDefinition.EntryPoint), stageBytecode);
+                stages[i] = new GfxPipelineShader.Stage((VkShaderStage)stageDefinition.Stage, new SafeNativeString(stageDefinition.EntryPoint), stageBytecode);
             }
 
-            cachedPipelineShaders[shaderProgramName] = new PipelineShaderProgram(shaderProgramName, stages);
+            cachedPipelineShaders[shaderProgramName] = new GfxPipelineShader(shaderProgramName, stages);
         }
+    }
+
+    internal GfxPipelineShader GetShaderProgram(string name)
+    {
+        _ = cachedPipelineShaders.TryGetValue(name, out GfxPipelineShader? shaderProgram);
+        ThrowInvalidOperationIfNull(shaderProgram, $"Shader program '{name}' not found.");
+        return shaderProgram;
     }
 
     /// <summary>
@@ -939,9 +946,6 @@ public unsafe class Gfx : IDisposable
 
     internal GfxPipeline CreatePipeline(GfxPipelineParameters parameters)
     {
-        _ = cachedPipelineShaders.TryGetValue(parameters.ShaderProgram, out PipelineShaderProgram? pipelineShaderProgram);
-        ThrowInvalidOperationIfNull(pipelineShaderProgram, $"Shaders program '{parameters.ShaderProgram}' not found.");
-
         VkDescriptorSetLayout descriptorSetLayout = CreateDescriptorLayout(parameters.Layout);
         VkPipelineLayout pipelineLayout = CreatePipelineLayout([descriptorSetLayout], parameters.PushConstants);
 
@@ -1038,11 +1042,11 @@ public unsafe class Gfx : IDisposable
             Attachments = colorAttachmentBlends
         };
 
-        int shaderStageCount = pipelineShaderProgram.Stages.Length;
+        int shaderStageCount = parameters.ShaderProgram.Stages.Length;
         VkPipelineShaderStageCreateInfo* shaderStageCreateInfos = stackalloc VkPipelineShaderStageCreateInfo[shaderStageCount];
         for (int i = 0; i < shaderStageCount; i++)
         {
-            PipelineShaderProgramStage stage = pipelineShaderProgram.Stages[i];
+            GfxPipelineShader.Stage stage = parameters.ShaderProgram.Stages[i];
 
             VkShaderModule shaderModule;
             fixed (void* pCode = stage.Code)
@@ -1058,7 +1062,7 @@ public unsafe class Gfx : IDisposable
 
             shaderStageCreateInfos[i] = new(default)
             {
-                Stage = stage.Stage,
+                Stage = stage.StageType,
                 Module = shaderModule,
                 Name = stage.Entrypoint.DangerousGetHandle()
             };
