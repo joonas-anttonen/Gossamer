@@ -1,15 +1,76 @@
 using System.Runtime.InteropServices;
 using System.Security;
+using System.Text.Json.Serialization;
 
 using Gossamer.Backend;
 using Gossamer.Collections;
 using Gossamer.External.Glfw;
 using Gossamer.Logging;
+using Gossamer.Utilities;
 
 using static Gossamer.External.Glfw.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Frontend;
+
+public class GuiParameters
+{
+    /// <summary>
+    /// Name and title of the <see cref="Window"/>.
+    /// </summary>
+    [JsonIgnore]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Determines whether or not the graphics debugging layer is enabled. Defaults to true in debug builds.
+    /// </summary>
+    [JsonIgnore]
+    public bool EnableDebug { get; set; } = false;
+
+    /// <summary>
+    /// Path to the icon to be set the for the <see cref="Window"/>.
+    /// </summary>
+    [JsonIgnore]
+    public string IconPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Zero-based index of the monitor to initially display the window in.
+    /// Zero is always the system main monitor.
+    /// </summary>
+    public int StartupMonitor { get; set; }
+    /// <summary>
+    /// Whether or not to initially fullscreen the window.
+    /// </summary>
+    public bool StartupFullscreen { get; set; }
+
+    /// <summary>
+    /// Initial position of the window.
+    /// </summary>
+    [JsonConverter(typeof(JsonVector2Converter))]
+    public Vector2? Position { get; set; }
+    /// <summary>
+    /// Initial size of the window.
+    /// </summary>
+    [JsonConverter(typeof(JsonVector2Converter))]
+    public Vector2? Size { get; set; }
+
+    /// <summary>
+    /// Size of the edges of the <see cref="Window"/>.
+    /// </summary>
+    [JsonIgnore]
+    public Vector4 SizeOfFrame { get; set; } = new Vector4(3.0f, 32.0f, 3.0f, 3.0f);
+
+    /// <summary>
+    /// Color of the edges of the <see cref="Window"/>.
+    /// </summary>
+    [JsonConverter(typeof(JsonColorConverter))]
+    public Color ColorOfFrame { get; set; } = Color.UnpackRGB(0x2B2A33);
+    /// <summary>
+    /// Color of the client area of the <see cref="Window"/>.
+    /// </summary>
+    [JsonConverter(typeof(JsonColorConverter))]
+    public Color ColorOfBackground { get; set; } = Color.UnpackRGB(0x0b0a10);
+}
 
 public class Gui : IDisposable
 {
@@ -24,6 +85,7 @@ public class Gui : IDisposable
     readonly BackendMessageQueue messageQueue = new();
 
     GLFWwindow glfwWindow;
+
     readonly WndProcDelegate glfwCallbackWindowProc;
     readonly GLFWwindowrefreshfun glfwCallbackWindowRefresh;
     readonly GLFWcursorenterfun glfwCallbackMouseEnter;
@@ -77,6 +139,7 @@ public class Gui : IDisposable
     internal unsafe External.Vulkan.VkSurfaceKhr CreateSurface(External.Vulkan.VkInstance instance)
     {
         Assert(isCreated);
+        Assert(glfwWindow.HasValue);
 
         External.Vulkan.VkSurfaceKhr surface = default;
         External.Vulkan.Api.ThrowVulkanIfFailed(glfwCreateWindowSurface(instance, glfwWindow, null, &surface),
@@ -92,12 +155,27 @@ public class Gui : IDisposable
         // Disable OpenGL
         glfwWindowHint(Constants.GLFW_CLIENT_API, 0);
         // Disable default window frame
-        //glfwWindowHint(Constants.GLFW_DECORATED, 0);
+        glfwWindowHint(Constants.GLFW_DECORATED, 0);
         // Disable automatic iconification when focus gets lost in fullscreen mode
         glfwWindowHint(Constants.GLFW_AUTO_ICONIFY, 0);
 
-        glfwWindow = glfwCreateWindow(1920, 1080, "Gossamer");
-        ThrowIf(!HasValue(glfwWindow), "Failed to create GLFW window.");
+        GuiParameters parameters = new();
+
+        // Retrieve monitor info for the monitor we are going to be starting in
+        GLFWmonitor monitor = glfwGetMonitor(MathUtilities.Clamp(parameters.StartupMonitor, 0, glfwGetMonitorCount() - 1));
+
+        glfwGetMonitorWorkarea(monitor, out int mx, out int my, out int mw, out int mh);
+        glfwGetMonitorPhysicalSize(monitor, out int mpw, out int mph);
+        GlfwVideoMode monitorVideoMode = glfwGetVideoMode(monitor);
+
+        Vector2 windowSize = parameters.Size ?? new Vector2((int)(monitorVideoMode.Width * 0.75f), (int)(monitorVideoMode.Height * 0.75f));
+        Vector2 windowPosition = parameters.Position ?? new Vector2(mx + (int)((mw - windowSize.X) / 2.0f), my + (int)((mh - windowSize.Y) / 2.0f));
+
+        glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, "Gossamer");
+        ThrowIf(!glfwWindow.HasValue, "Failed to create GLFW window.");
+
+        glfwSetWindowPos(glfwWindow, (int)windowPosition.X, (int)windowPosition.Y);
+        glfwSetWindowSizeLimits(glfwWindow, 256, 144, -1, -1);
 
         glfwSetWindowRefreshCallback(glfwWindow, glfwCallbackWindowRefresh);
         glfwSetCursorEnterCallback(glfwWindow, glfwCallbackMouseEnter);

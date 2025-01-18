@@ -11,9 +11,6 @@ unsafe static class Api
     public const string BinaryName = "Gossamer.glfw";
     public const CallingConvention CallConvention = CallingConvention.Cdecl;
 
-    public static bool HasValue(GLFWwindow window) => window.Value != default;
-    public static bool HasValue(GLFWmonitor monitor) => monitor.Value != default;
-
     public static class Constants
     {
         public const int GLFW_RELEASE = 0;
@@ -414,4 +411,91 @@ unsafe static class Api
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern Vulkan.VkResult glfwCreateWindowSurface(Vulkan.VkInstance instance, GLFWwindow window, Vulkan.VkAllocationCallbacks* allocator, Vulkan.VkSurfaceKhr* surface);
+
+    [DllImport(BinaryName, CallingConvention = CallingConvention.Cdecl)]
+    static extern string glfwGetClipboardString(IntPtr window);
+
+    public static string glfwGetClipboardString() => glfwGetClipboardString(IntPtr.Zero);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern long[] glfwGetVideoModes(nint monitor, out int count);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern GLFWmonitor glfwGetPrimaryMonitor();
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetMonitorWorkarea(GLFWmonitor monitor, out int xpos, out int ypos, out int width, out int height);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwSetWindowSizeLimits(GLFWwindow window, int minWidth, int minHeight, int maxWidth, int maxHeight);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    static extern void** glfwGetMonitors(int* count);
+
+    public static int glfwGetMonitorCount()
+    {
+        int count = 0;
+        glfwGetMonitors(&count);
+        return count;
+    }
+
+    public static GLFWmonitor glfwGetMonitor(int index)
+    {
+        int count = 0;
+        void** pMonitors = glfwGetMonitors(&count);
+        return new GLFWmonitor((nint)pMonitors[index]);
+    }
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern nint glfwRequestWindowAttention(GLFWwindow window);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern nint glfwGetWindowUserPointer(GLFWwindow window);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetVersion(out int major, out int minor, out int rev);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetMonitorPos(GLFWmonitor monitor, out int xpos, out int ypos);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetMonitorPhysicalSize(GLFWmonitor monitor, out int widthMM, out int heightMM);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetWindowPos(GLFWwindow window, out int xpos, out int ypos);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetWindowSize(GLFWwindow window, out int width, out int height);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetFramebufferSize(GLFWwindow window, out int width, out int height);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetWindowFrameSize(GLFWwindow window, out int left, out int top, out int right, out int bottom);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention, EntryPoint = "glfwGetVideoMode")]
+    static extern nint _glfwGetVideoMode(GLFWmonitor monitor);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct GlfwVideoMode
+    {
+        public uint Width;
+        public uint Height;
+        public uint RedBits;
+        public uint GreenBits;
+        public uint BlueBits;
+        public uint RefreshRate;
+    }
+
+    public static GlfwVideoMode glfwGetVideoMode(GLFWmonitor monitor)
+    {
+        nint pVideoMode = _glfwGetVideoMode(monitor);
+        return Marshal.PtrToStructure<GlfwVideoMode>(pVideoMode);
+    }
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwSetWindowTitle(GLFWwindow window, string title);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwSetWindowPos(GLFWwindow window, int xpos, int ypos);
 }

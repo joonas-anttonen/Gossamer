@@ -11,6 +11,9 @@ namespace Gossamer.External.Glfw;
 readonly struct GLFWwindow
 {
     internal readonly nint Value;
+
+    public bool HasValue => Value != 0; 
+    public override string ToString() => Value.ToString("x");
 }
 
 /// <summary>
@@ -19,6 +22,11 @@ readonly struct GLFWwindow
 readonly struct GLFWmonitor
 {
     internal readonly nint Value;
+
+    internal GLFWmonitor(nint value) => Value = value;
+
+    public bool HasValue => Value != 0; 
+    public override string ToString() => Value.ToString("x");
 }
 
 /// <summary>
