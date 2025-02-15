@@ -8,7 +8,7 @@ namespace Gossamer.Benchmark
     {
         public static int Main(string[] args)
         {
-            using Gossamer engine = new(new Gossamer.Parameters(Gossamer.ApplicationInfo.FromCallingAssembly()));
+            using Gossamer engine = new(Gossamer.Parameters.FromArgs(args));
 
             try
             {

@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 
 using Gossamer.Backend;
@@ -25,7 +25,32 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             return new ApplicationInfo(name.Name!, name.Version!);
         }
     }
-    public record class Parameters(ApplicationInfo AppInfo);
+
+    public record class Parameters(bool EnableDebugging = false)
+    {
+        public static Parameters FromArgs(string[] args)
+        {
+            Dictionary<string, string> argMap = [];
+            for (int i = 0; i < args.Length; i++)
+            {
+                string arg = args[i];
+                if (arg.StartsWith("--"))
+                {
+                    string key = arg[2..];
+                    string value = i + 1 < args.Length ? args[i + 1] : string.Empty;
+                    if (!string.IsNullOrEmpty(value) && !value.StartsWith("--"))
+                    {
+                        i++;
+                    }
+                    argMap[key] = value;
+                }
+            }
+
+            return new Parameters(
+                EnableDebugging: argMap.ContainsKey("debug")
+            );
+        }
+    }
 
     readonly Log log;
     readonly Logger logger;
@@ -46,6 +71,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
     Gui? gui;
 
     readonly Parameters parameters;
+    readonly ApplicationInfo appInfo;
 
     static Gossamer? instance;
 
@@ -65,7 +91,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         get => log;
     }
 
-    public Gossamer(Parameters parameters)
+    public Gossamer(Parameters parameters, ApplicationInfo? appInfo = default)
     {
         if (instance != null)
         {
@@ -74,6 +100,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         instance = this;
 
         this.parameters = parameters;
+        this.appInfo = appInfo ?? ApplicationInfo.FromCallingAssembly();
 
         frontendThreadId = Environment.CurrentManagedThreadId;
         backendThread = new(BackendThread);
@@ -155,8 +182,8 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
         // Backend
         using Gfx gfx = new(new GfxApiParameters(
-            parameters.AppInfo,
-            EnableDebugging: true,
+            appInfo,
+            EnableDebugging: parameters.EnableDebugging,
             PresentationMode: GfxPresentationMode.SwapChain
         ));
         gfx.Create(new GfxParameters(
