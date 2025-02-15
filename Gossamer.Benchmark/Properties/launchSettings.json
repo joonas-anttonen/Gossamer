@@ -3,7 +3,8 @@
     "Gossamer.Benchmark": {
       "commandName": "Project",
       "nativeDebugging": true,
-      "hotReloadEnabled": false
+      "hotReloadEnabled": false,
+      "commandLineArgs": "--debug"
     }
   }
 }
