@@ -8,7 +8,7 @@ namespace Gossamer.External.Glfw;
 /// <summary>
 /// Opaque window object.
 /// </summary>
-readonly struct GLFWwindow
+readonly struct GlfwWindow
 {
     internal readonly nint Value;
 
@@ -19,11 +19,11 @@ readonly struct GLFWwindow
 /// <summary>
 /// Opaque monitor object.
 /// </summary>
-readonly struct GLFWmonitor
+readonly struct GlfwMonitor
 {
     internal readonly nint Value;
 
-    internal GLFWmonitor(nint value) => Value = value;
+    internal GlfwMonitor(nint value) => Value = value;
 
     public bool HasValue => Value != 0; 
     public override string ToString() => Value.ToString("x");
@@ -75,7 +75,7 @@ delegate void GLFWerrorfun(int errorcode, [MarshalAs(UnmanagedType.LPUTF8Str)] s
 /// <param name="posx"></param>
 /// <param name="posy"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWwindowposfun(GLFWwindow window, int posx, int posy);
+delegate void GLFWwindowposfun(GlfwWindow window, int posx, int posy);
 
 /// <summary>
 /// The function pointer type for window size callbacks.
@@ -84,21 +84,21 @@ delegate void GLFWwindowposfun(GLFWwindow window, int posx, int posy);
 /// <param name="width"></param>
 /// <param name="height"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWwindowsizefun(GLFWwindow window, int width, int height);
+delegate void GLFWwindowsizefun(GlfwWindow window, int width, int height);
 
 /// <summary>
 /// The function pointer type for window close callbacks.
 /// </summary>
 /// <param name="window"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWwindowclosefun(GLFWwindow window);
+delegate void GLFWwindowclosefun(GlfwWindow window);
 
 /// <summary>
 /// The function pointer type for window refresh callbacks.
 /// </summary>
 /// <param name="window"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWwindowrefreshfun(GLFWwindow window);
+delegate void GLFWwindowrefreshfun(GlfwWindow window);
 
 /// <summary>
 /// The function pointer type for window focus callbacks.
@@ -106,7 +106,7 @@ delegate void GLFWwindowrefreshfun(GLFWwindow window);
 /// <param name="window"></param>
 /// <param name="focused"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWwindowfocusfun(GLFWwindow window, int focused);
+delegate void GLFWwindowfocusfun(GlfwWindow window, int focused);
 
 /// <summary>
 /// The function pointer type for window iconify callbacks.
@@ -114,7 +114,7 @@ delegate void GLFWwindowfocusfun(GLFWwindow window, int focused);
 /// <param name="window"></param>
 /// <param name="iconified"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWwindowiconifyfun(GLFWwindow window, int iconified);
+delegate void GLFWwindowiconifyfun(GlfwWindow window, int iconified);
 
 /// <summary>
 /// The function pointer type for framebuffer size callbacks.
@@ -123,7 +123,7 @@ delegate void GLFWwindowiconifyfun(GLFWwindow window, int iconified);
 /// <param name="width"></param>
 /// <param name="height"></param>
 [UnmanagedFunctionPointer(Api.CallConvention), SuppressUnmanagedCodeSecurity]
-delegate void GLFWframebuffersizefun(GLFWwindow window, int width, int height);
+delegate void GLFWframebuffersizefun(GlfwWindow window, int width, int height);
 
 /// <summary>
 /// The function pointer type for mouse button callbacks.
@@ -133,7 +133,7 @@ delegate void GLFWframebuffersizefun(GLFWwindow window, int width, int height);
 /// <param name="action"></param>
 /// <param name="mods"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWmousebuttonfun(GLFWwindow window, int button, int action, int mods);
+delegate void GLFWmousebuttonfun(GlfwWindow window, int button, int action, int mods);
 
 /// <summary>
 /// The function pointer type for cursor position callbacks.
@@ -142,7 +142,7 @@ delegate void GLFWmousebuttonfun(GLFWwindow window, int button, int action, int 
 /// <param name="mousex"></param>
 /// <param name="mousey"></param>
 [UnmanagedFunctionPointer(Api.CallConvention), SuppressUnmanagedCodeSecurity]
-delegate void GLFWcursorposfun(GLFWwindow window, double mousex, double mousey);
+delegate void GLFWcursorposfun(GlfwWindow window, double mousex, double mousey);
 
 /// <summary>
 /// The function pointer type for cursor enter/leave callbacks.
@@ -150,7 +150,7 @@ delegate void GLFWcursorposfun(GLFWwindow window, double mousex, double mousey);
 /// <param name="window"></param>
 /// <param name="entered"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWcursorenterfun(GLFWwindow window, int entered);
+delegate void GLFWcursorenterfun(GlfwWindow window, int entered);
 
 /// <summary>
 /// The function pointer type for scroll callbacks.
@@ -159,7 +159,7 @@ delegate void GLFWcursorenterfun(GLFWwindow window, int entered);
 /// <param name="xoffset"></param>
 /// <param name="yoffset"></param>
 [UnmanagedFunctionPointer(Api.CallConvention), SuppressUnmanagedCodeSecurity]
-delegate void GLFWscrollfun(GLFWwindow window, double xoffset, double yoffset);
+delegate void GLFWscrollfun(GlfwWindow window, double xoffset, double yoffset);
 
 /// <summary>
 /// The function pointer type for key callbacks.
@@ -170,7 +170,7 @@ delegate void GLFWscrollfun(GLFWwindow window, double xoffset, double yoffset);
 /// <param name="action"></param>
 /// <param name="mods"></param>
 [UnmanagedFunctionPointer(Api.CallConvention), SuppressUnmanagedCodeSecurity]
-delegate void GLFWkeyfun(GLFWwindow window, int key, int scancode, int action, int mods);
+delegate void GLFWkeyfun(GlfwWindow window, int key, int scancode, int action, int mods);
 
 /// <summary>
 /// The function pointer type for character callbacks.
@@ -178,7 +178,7 @@ delegate void GLFWkeyfun(GLFWwindow window, int key, int scancode, int action, i
 /// <param name="window"></param>
 /// <param name="codepoint"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWcharfun(GLFWwindow window, uint codepoint);
+delegate void GLFWcharfun(GlfwWindow window, uint codepoint);
 
 /// <summary>
 /// The function pointer type for character with modifiers callbacks.
@@ -187,7 +187,7 @@ delegate void GLFWcharfun(GLFWwindow window, uint codepoint);
 /// <param name="codepoint"></param>
 /// <param name="mods"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWcharmodsfun(GLFWwindow window, int codepoint, int mods);
+delegate void GLFWcharmodsfun(GlfwWindow window, int codepoint, int mods);
 
 /// <summary>
 /// The function pointer type for file drop callbacks.
@@ -196,7 +196,7 @@ delegate void GLFWcharmodsfun(GLFWwindow window, int codepoint, int mods);
 /// <param name="count"></param>
 /// <param name="paths"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWdropfun(GLFWwindow window, int count, string[] paths);
+delegate void GLFWdropfun(GlfwWindow window, int count, string[] paths);
 
 /// <summary>
 /// The function pointer type for monitor callbacks.
@@ -204,7 +204,7 @@ delegate void GLFWdropfun(GLFWwindow window, int count, string[] paths);
 /// <param name="window"></param>
 /// <param name="monitorevent"></param>
 [UnmanagedFunctionPointer(Api.CallConvention)]
-delegate void GLFWmonitorfun(GLFWwindow window, int monitorevent);
+delegate void GLFWmonitorfun(GlfwWindow window, int monitorevent);
 
 /// <summary>
 /// The function pointer type for joystick callbacks.

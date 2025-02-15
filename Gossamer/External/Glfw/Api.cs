@@ -338,14 +338,14 @@ unsafe static class Api
     /// <param name="share"></param>
     /// <returns>The handle of the created window, or `NULL` if an error occured.</returns>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWwindow glfwCreateWindow(int width, int height, [MarshalAs(UnmanagedType.LPUTF8Str)] string title, GLFWmonitor monitor = default, GLFWwindow share = default);
+    public static extern GlfwWindow glfwCreateWindow(int width, int height, [MarshalAs(UnmanagedType.LPUTF8Str)] string title, GlfwMonitor monitor = default, GlfwWindow share = default);
 
     /// <summary>
     /// Destroys the specified window and its context.
     /// </summary>
     /// <param name="window">The window to destroy.</param>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwDestroyWindow(GLFWwindow window);
+    public static extern void glfwDestroyWindow(GlfwWindow window);
 
     /// <summary>
     /// Checks the close flag of the specified window.
@@ -353,7 +353,7 @@ unsafe static class Api
     /// <param name="window">The window to query.</param>
     /// <returns>The value of the close flag.</returns>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern int glfwWindowShouldClose(GLFWwindow window);
+    public static extern int glfwWindowShouldClose(GlfwWindow window);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern GLFWerrorfun glfwSetErrorCallback(GLFWerrorfun cbfun);
@@ -362,55 +362,55 @@ unsafe static class Api
     public static extern GLFWmonitorfun glfwSetMonitorCallback(GLFWmonitorfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWwindowposfun glfwSetWindowPosCallback(GLFWwindow window, GLFWwindowposfun cbfun);
+    public static extern GLFWwindowposfun glfwSetWindowPosCallback(GlfwWindow window, GLFWwindowposfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWwindowsizefun glfwSetWindowSizeCallback(GLFWwindow window, GLFWwindowsizefun cbfun);
+    public static extern GLFWwindowsizefun glfwSetWindowSizeCallback(GlfwWindow window, GLFWwindowsizefun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWwindowclosefun glfwSetWindowCloseCallback(GLFWwindow window, GLFWwindowclosefun cbfun);
+    public static extern GLFWwindowclosefun glfwSetWindowCloseCallback(GlfwWindow window, GLFWwindowclosefun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWwindowrefreshfun glfwSetWindowRefreshCallback(GLFWwindow window, GLFWwindowrefreshfun cbfun);
+    public static extern GLFWwindowrefreshfun glfwSetWindowRefreshCallback(GlfwWindow window, GLFWwindowrefreshfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWwindowfocusfun glfwSetWindowFocusCallback(GLFWwindow window, GLFWwindowfocusfun cbfun);
+    public static extern GLFWwindowfocusfun glfwSetWindowFocusCallback(GlfwWindow window, GLFWwindowfocusfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWwindowiconifyfun glfwSetWindowIconifyCallback(GLFWwindow window, GLFWwindowiconifyfun cbfun);
+    public static extern GLFWwindowiconifyfun glfwSetWindowIconifyCallback(GlfwWindow window, GLFWwindowiconifyfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWframebuffersizefun glfwSetFramebufferSizeCallback(GLFWwindow window, GLFWframebuffersizefun cbfun);
+    public static extern GLFWframebuffersizefun glfwSetFramebufferSizeCallback(GlfwWindow window, GLFWframebuffersizefun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWkeyfun glfwSetKeyCallback(GLFWwindow window, GLFWkeyfun cbfun);
+    public static extern GLFWkeyfun glfwSetKeyCallback(GlfwWindow window, GLFWkeyfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWcharfun glfwSetCharCallback(GLFWwindow window, GLFWcharfun cbfun);
+    public static extern GLFWcharfun glfwSetCharCallback(GlfwWindow window, GLFWcharfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWcharmodsfun glfwSetCharModsCallback(GLFWwindow window, GLFWcharmodsfun cbfun);
+    public static extern GLFWcharmodsfun glfwSetCharModsCallback(GlfwWindow window, GLFWcharmodsfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWmousebuttonfun glfwSetMouseButtonCallback(GLFWwindow window, GLFWmousebuttonfun cbfun);
+    public static extern GLFWmousebuttonfun glfwSetMouseButtonCallback(GlfwWindow window, GLFWmousebuttonfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWcursorposfun glfwSetCursorPosCallback(GLFWwindow window, GLFWcursorposfun cbfun);
+    public static extern GLFWcursorposfun glfwSetCursorPosCallback(GlfwWindow window, GLFWcursorposfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWcursorenterfun glfwSetCursorEnterCallback(GLFWwindow window, GLFWcursorenterfun cbfun);
+    public static extern GLFWcursorenterfun glfwSetCursorEnterCallback(GlfwWindow window, GLFWcursorenterfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWscrollfun glfwSetScrollCallback(GLFWwindow window, GLFWscrollfun cbfun);
+    public static extern GLFWscrollfun glfwSetScrollCallback(GlfwWindow window, GLFWscrollfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWdropfun glfwSetDropCallback(GLFWwindow window, GLFWdropfun cbfun);
+    public static extern GLFWdropfun glfwSetDropCallback(GlfwWindow window, GLFWdropfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern GLFWjoystickfun glfwSetJoystickCallback(GLFWjoystickfun cbfun);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern Vulkan.VkResult glfwCreateWindowSurface(Vulkan.VkInstance instance, GLFWwindow window, Vulkan.VkAllocationCallbacks* allocator, Vulkan.VkSurfaceKhr* surface);
+    public static extern Vulkan.VkResult glfwCreateWindowSurface(Vulkan.VkInstance instance, GlfwWindow window, Vulkan.VkAllocationCallbacks* allocator, Vulkan.VkSurfaceKhr* surface);
 
     [DllImport(BinaryName, CallingConvention = CallingConvention.Cdecl)]
     static extern string glfwGetClipboardString(IntPtr window);
@@ -421,13 +421,13 @@ unsafe static class Api
     public static extern long[] glfwGetVideoModes(nint monitor, out int count);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern GLFWmonitor glfwGetPrimaryMonitor();
+    public static extern GlfwMonitor glfwGetPrimaryMonitor();
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwGetMonitorWorkarea(GLFWmonitor monitor, out int xpos, out int ypos, out int width, out int height);
+    public static extern void glfwGetMonitorWorkarea(GlfwMonitor monitor, out int xpos, out int ypos, out int width, out int height);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwSetWindowSizeLimits(GLFWwindow window, int minWidth, int minHeight, int maxWidth, int maxHeight);
+    public static extern void glfwSetWindowSizeLimits(GlfwWindow window, int minWidth, int minHeight, int maxWidth, int maxHeight);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     static extern void** glfwGetMonitors(int* count);
@@ -439,42 +439,42 @@ unsafe static class Api
         return count;
     }
 
-    public static GLFWmonitor glfwGetMonitor(int index)
+    public static GlfwMonitor glfwGetMonitor(int index)
     {
         int count = 0;
         void** pMonitors = glfwGetMonitors(&count);
-        return new GLFWmonitor((nint)pMonitors[index]);
+        return new GlfwMonitor((nint)pMonitors[index]);
     }
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern nint glfwRequestWindowAttention(GLFWwindow window);
+    public static extern nint glfwRequestWindowAttention(GlfwWindow window);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern nint glfwGetWindowUserPointer(GLFWwindow window);
+    public static extern nint glfwGetWindowUserPointer(GlfwWindow window);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void glfwGetVersion(out int major, out int minor, out int rev);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwGetMonitorPos(GLFWmonitor monitor, out int xpos, out int ypos);
+    public static extern void glfwGetMonitorPos(GlfwMonitor monitor, out int xpos, out int ypos);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwGetMonitorPhysicalSize(GLFWmonitor monitor, out int widthMM, out int heightMM);
+    public static extern void glfwGetMonitorPhysicalSize(GlfwMonitor monitor, out int widthMM, out int heightMM);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwGetWindowPos(GLFWwindow window, out int xpos, out int ypos);
+    public static extern void glfwGetWindowPos(GlfwWindow window, out int xpos, out int ypos);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwGetWindowSize(GLFWwindow window, out int width, out int height);
+    public static extern void glfwGetWindowSize(GlfwWindow window, out int width, out int height);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwGetFramebufferSize(GLFWwindow window, out int width, out int height);
+    public static extern void glfwGetFramebufferSize(GlfwWindow window, out int width, out int height);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwGetWindowFrameSize(GLFWwindow window, out int left, out int top, out int right, out int bottom);
+    public static extern void glfwGetWindowFrameSize(GlfwWindow window, out int left, out int top, out int right, out int bottom);
 
     [DllImport(BinaryName, CallingConvention = CallConvention, EntryPoint = "glfwGetVideoMode")]
-    static extern nint _glfwGetVideoMode(GLFWmonitor monitor);
+    static extern nint _glfwGetVideoMode(GlfwMonitor monitor);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct GlfwVideoMode
@@ -487,15 +487,15 @@ unsafe static class Api
         public uint RefreshRate;
     }
 
-    public static GlfwVideoMode glfwGetVideoMode(GLFWmonitor monitor)
+    public static GlfwVideoMode glfwGetVideoMode(GlfwMonitor monitor)
     {
         nint pVideoMode = _glfwGetVideoMode(monitor);
         return Marshal.PtrToStructure<GlfwVideoMode>(pVideoMode);
     }
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwSetWindowTitle(GLFWwindow window, string title);
+    public static extern void glfwSetWindowTitle(GlfwWindow window, string title);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void glfwSetWindowPos(GLFWwindow window, int xpos, int ypos);
+    public static extern void glfwSetWindowPos(GlfwWindow window, int xpos, int ypos);
 }

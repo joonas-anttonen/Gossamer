@@ -192,7 +192,7 @@ public class PixelBuffer
 
 public unsafe class Gfx : IDisposable
 {
-    readonly Logger logger = Gossamer.Instance.Log.GetLogger(nameof(Gfx));
+    readonly Logger logger = Gossamer.GetLogger(nameof(Gfx));
 
     bool isDisposed;
 
@@ -242,6 +242,12 @@ public unsafe class Gfx : IDisposable
         return (GfxSamples)deviceSampleCount;
     }
 
+    internal Gfx2D Get2D()
+    {
+        ThrowInvalidOperationIfNull(gfx2D, "No 2D renderer available.");
+        return gfx2D;
+    }
+
     internal GfxPresenter GetPresenter()
     {
         ThrowInvalidOperationIfNull(presenter, "No presenter available.");
@@ -287,13 +293,17 @@ public unsafe class Gfx : IDisposable
 
         gfx2D.BeginFrame();
 
-        gfx2D.BeginBatch();
+        var cmdBuffer = gfx2D.BeginCommandBuffer();
+
+        cmdBuffer.BeginBatch();
         //gfx2D.DrawRectangle(new(10, 10), new(100, 100), new Color(Color.MintyGreen, 1.0f));
         //gfx2D.DrawCircle(new(200, 200), 50, new Color(Color.White, 1.0f), 2);
 
-        gfx2D.DrawRectangle(new(5, 0), new(5, 20), new Color(Color.MintyGreen, 1.0f));
-        gfx2D.DrawRectangle(new(0, 5), new(20, 5), new Color(Color.MintyGreen, 1.0f));
-        gfx2D.DrawText($"{globalRenderTimestamp:hh\\:mm\\:ss\\.fff} {GC.GetTotalPauseDuration():mm\\:ss\\.ffffff} {globalRenderElapsed:ss\\.ffffff}\nCPU: {cpuFrameTime:ss\\.ffffff}\nGPU: {gpuFrameTime:ss\\.ffffff}\n2D Draws: {gfx2DStatistics.DrawCalls} ({gfx2DStatistics.Vertices} vtx {gfx2DStatistics.Indices} idx)", new(5, 5), new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000));
+        cmdBuffer.DrawRectangle(new(5, 0), new(5, 20), new Color(Color.MintyGreen, 1.0f));
+        cmdBuffer.DrawRectangle(new(0, 5), new(20, 5), new Color(Color.MintyGreen, 1.0f));
+
+        var font = gfx2D.GetFont("Arial", 12);
+        cmdBuffer.DrawText($"{globalRenderTimestamp:hh\\:mm\\:ss\\.fff} GC: {GC.GetTotalPauseDuration():mm\\:ss\\.ffffff} {globalRenderElapsed:ss\\.ffffff}\nCPU: {cpuFrameTime:ss\\.ffffff}\nGPU: {gpuFrameTime:ss\\.ffffff}\n2D Draws: {gfx2DStatistics.DrawCalls} ({gfx2DStatistics.Vertices} vtx {gfx2DStatistics.Indices} idx)", new(5, 5), new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000), font);
 
         Vector2 textPosition = new(5, 200);
         Vector2 textAvailableSize = new(400, 200);
@@ -305,15 +315,15 @@ public unsafe class Gfx : IDisposable
                 textAvailableSize,
                 wordWrap: true);
 
-            gfx2D.DrawText(textLayout, textPosition, new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000));
-            gfx2D.DrawRectangle(textPosition, textPosition + textAvailableSize, new Color(Color.HighlighterRed, 1.0f));
-            gfx2D.DrawRectangle(textPosition, textPosition + textLayout.Size, new Color(Color.MintyGreen, 1.0f));
+            cmdBuffer.DrawText(textLayout, textPosition, new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000));
+            cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, new Color(Color.HighlighterRed, 1.0f));
+            cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, new Color(Color.MintyGreen, 1.0f));
 
             gfx2D.DestroyTextLayout(textLayout);
         }
 
         //gfx2D.DrawText("t", new(300, 300), new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000));
-        gfx2D.EndBatch();
+        cmdBuffer.EndBatch();
 
         gfx2D.EndFrame();
 
@@ -435,27 +445,18 @@ public unsafe class Gfx : IDisposable
 
     uint VulkanDebugMessageCallback(VkDebugUtilsMessageSeverityExt severity, VkDebugUtilsMessageTypeExt type, VkDebugUtilsMessengerCallbackDataExt* pCallbackData, nint pUserData)
     {
-        Log.Level level = severity switch
-        {
-            VkDebugUtilsMessageSeverityExt.VERBOSE => Log.Level.Debug,
-            VkDebugUtilsMessageSeverityExt.INFO => Log.Level.Information,
-            VkDebugUtilsMessageSeverityExt.WARNING => Log.Level.Warning,
-            VkDebugUtilsMessageSeverityExt.ERROR => Log.Level.Error,
-            _ => Log.Level.Debug
-        };
-
-        Gossamer.Instance.Log.Append(level, Utf8StringMarshaller.ConvertToManaged((byte*)pCallbackData->pMessage) ?? "", DateTime.Now, "Vulkan", "Validation");
+        logger.Debug($"{severity} {Utf8StringMarshaller.ConvertToManaged((byte*)pCallbackData->pMessage)}", "Vulkan", "Validation");
         return 0;
     }
 
     void VmaAllocateDeviceMemory(VmaAllocator allocator, uint memoryType, VkDeviceMemory memory, ulong size, nint pUserData)
     {
-        Gossamer.Instance.Log.Append(Log.Level.Debug, $"{StringUtilities.ByteSizeShortIEC(size)}", DateTime.Now, "Vma", "Allocate");
+        logger.Debug($"{StringUtilities.ByteSizeShortIEC(size)}", "Vma", "Allocate");
     }
 
     void VmaFreeDeviceMemory(VmaAllocator allocator, uint memoryType, VkDeviceMemory memory, ulong size, nint pUserData)
     {
-        Gossamer.Instance.Log.Append(Log.Level.Debug, $"{StringUtilities.ByteSizeShortIEC(size)}", DateTime.Now, "Vma", "Free");
+        logger.Debug($"{StringUtilities.ByteSizeShortIEC(size)}", "Vma", "Free");
     }
 
     internal GfxTimestampPool CreateTimestampPool(int capacity)
@@ -555,7 +556,7 @@ public unsafe class Gfx : IDisposable
         vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
     }
 
-    internal void FIXME_OmegaBarrier(VkCommandBuffer commandBuffer)
+    internal void FullBarrier(VkCommandBuffer commandBuffer)
     {
         VkMemoryBarrier2 memoryBarrier = new(default)
         {
@@ -678,11 +679,10 @@ public unsafe class Gfx : IDisposable
         UpdateDynamicBuffer(memoryBuffer, &data, sizeof(T));
     }
 
-    internal void UpdateDynamicBuffer<T>(MemoryBuffer<T> memoryBuffer, T[] data, int dataCount = -1) where T : unmanaged
+    internal void UpdateDynamicBuffer<T>(MemoryBuffer<T> memoryBuffer, ReadOnlySpan<T> data) where T : unmanaged
     {
         fixed (void* pData = data)
         {
-            dataCount = dataCount < 0 ? data.Length : dataCount;
             int srcSize = data.Length * sizeof(T);
             UpdateDynamicBuffer(memoryBuffer, pData, srcSize);
         }

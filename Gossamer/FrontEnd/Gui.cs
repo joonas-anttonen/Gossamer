@@ -77,14 +77,14 @@ public class Gui : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl), SuppressUnmanagedCodeSecurity]
     public delegate long WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
 
-    readonly Logger logger = Gossamer.Instance.Log.GetLogger(nameof(Gui));
+    readonly Logger logger = Gossamer.GetLogger(nameof(Gui));
 
     bool isDisposed;
     bool isCreated;
 
     readonly BackendMessageQueue messageQueue = new();
 
-    GLFWwindow glfwWindow;
+    GlfwWindow glfwWindow;
 
     readonly WndProcDelegate glfwCallbackWindowProc;
     readonly GLFWwindowrefreshfun glfwCallbackWindowRefresh;
@@ -142,8 +142,7 @@ public class Gui : IDisposable
         Assert(glfwWindow.HasValue);
 
         External.Vulkan.VkSurfaceKhr surface = default;
-        External.Vulkan.Api.ThrowVulkanIfFailed(glfwCreateWindowSurface(instance, glfwWindow, null, &surface),
-            "Failed to create window surface.");
+        External.Vulkan.Api.ThrowVulkanIfFailed(glfwCreateWindowSurface(instance, glfwWindow, null, &surface));
 
         return surface;
     }
@@ -162,7 +161,7 @@ public class Gui : IDisposable
         GuiParameters parameters = new();
 
         // Retrieve monitor info for the monitor we are going to be starting in
-        GLFWmonitor monitor = glfwGetMonitor(MathUtilities.Clamp(parameters.StartupMonitor, 0, glfwGetMonitorCount() - 1));
+        GlfwMonitor monitor = glfwGetMonitor(MathUtilities.Clamp(parameters.StartupMonitor, 0, glfwGetMonitorCount() - 1));
 
         glfwGetMonitorWorkarea(monitor, out int mx, out int my, out int mw, out int mh);
         glfwGetMonitorPhysicalSize(monitor, out int mpw, out int mph);
@@ -206,50 +205,50 @@ public class Gui : IDisposable
         return 0;
     }
 
-    void Callback_WindowRefresh(GLFWwindow window)
+    void Callback_WindowRefresh(GlfwWindow window)
     {
         messageQueue.PostSurfaceDamaged();
     }
 
-    void Callback_WindowSize(GLFWwindow window, int w, int h)
+    void Callback_WindowSize(GlfwWindow window, int w, int h)
     {
         messageQueue.PostSurfaceLost();
     }
 
-    void Callback_WindowIconify(GLFWwindow window, int iconified)
+    void Callback_WindowIconify(GlfwWindow window, int iconified)
     {
     }
 
-    void Callback_WindowClose(GLFWwindow window)
+    void Callback_WindowClose(GlfwWindow window)
     {
         messageQueue.PostQuit();
     }
 
-    void Callback_MouseEnter(GLFWwindow window, int contained)
+    void Callback_MouseEnter(GlfwWindow window, int contained)
     {
     }
 
-    void Callback_MouseMove(GLFWwindow window, double x, double y)
+    void Callback_MouseMove(GlfwWindow window, double x, double y)
     {
         messageQueue.PostMouseXY((int)(x * 1000), (int)(y * 1000));
     }
 
-    void Callback_MouseButton(GLFWwindow window, int button, int action, int mods)
+    void Callback_MouseButton(GlfwWindow window, int button, int action, int mods)
     {
         messageQueue.PostMouseButton(GetInputButton(button), GetInputAction(action), GetInputMod(mods));
     }
 
-    void Callback_MouseScroll(GLFWwindow window, double x, double y)
+    void Callback_MouseScroll(GlfwWindow window, double x, double y)
     {
         messageQueue.PostMouseWheel((int)(x * 1000), (int)(y * 1000));
     }
 
-    void Callback_KeyboardKey(GLFWwindow window, int key, int code, int action, int mods)
+    void Callback_KeyboardKey(GlfwWindow window, int key, int code, int action, int mods)
     {
         messageQueue.PostKeyboardKey(GetInputKey(key), code, GetInputAction(action), GetInputMod(mods));
     }
 
-    void Callback_KeyboardChar(GLFWwindow window, uint c)
+    void Callback_KeyboardChar(GlfwWindow window, uint c)
     {
         messageQueue.PostKeyboardChar((int)c, 0);
     }

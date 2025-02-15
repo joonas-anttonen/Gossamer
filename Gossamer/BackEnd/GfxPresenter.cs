@@ -94,7 +94,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
     uint deviceQueueIndex,
     VkSurfaceKhr surface) : GfxPresenter
 {
-    readonly Logger logger = Gossamer.Instance.Log.GetLogger(nameof(GfxSwapChainPresenter));
+    readonly Logger logger = Gossamer.GetLogger(nameof(GfxSwapChainPresenter));
 
     class PerFrame(VkCommandPool CommandPool, VkCommandBuffer CommandBuffer, VkSemaphore ReleaseSemaphore, VkFence SubmissionFence, PixelBuffer OutputImage)
     {

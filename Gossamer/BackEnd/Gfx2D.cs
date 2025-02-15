@@ -11,35 +11,31 @@ using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Backend;
 
-class Gfx2D(Gfx gfx) : IDisposable
+[StructLayout(LayoutKind.Sequential)]
+readonly struct Vertex2D(Vector2 position, Vector2 uv, Color color)
 {
-    public readonly record struct Statistics(int DrawCalls, int Vertices, int Indices);
+    public static readonly Vector2 DefaultUV = new(-1, -1);
 
-    readonly Gfx gfx = gfx;
+    public readonly Vector2 Position = position;
+    public readonly Vector2 UV = uv;
+    public readonly Vector4 Color = color.ToVector4();
+}
 
-    readonly GfxFontCache fontCache = new();
+[StructLayout(LayoutKind.Sequential)]
+readonly struct PerCommandData(Vector2 scale, Vector2 translation, Vector3 color)
+{
+    public readonly Vector2 Scale = scale;
+    public readonly Vector2 Translation = translation;
+    public readonly Vector3 Color = color;
+    readonly float _padding;
+}
 
-    bool renderingInitialized;
+record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, GfxFont? Font, Vector3 Color);
 
-    DisplayParameters? parameters;
+record struct CommandBatch(int firstCommandIndex, int commandCount, PixelBuffer? surface);
 
-    VkSampler drawSampler;
-
-    GfxPipeline? pipeline;
-    GfxPipeline? compositionPipeline;
-
-    PixelBuffer? backBuffer;
-
-    MemoryBuffer<PerCommandData>? uniformBuffer;
-    MemoryBuffer<Vertex2D>? vertexBuffer;
-    MemoryBuffer<ushort>? indexBuffer;
-
-    readonly Dictionary<GfxFont, int> fontTextureIndices = [];
-    PixelBuffer[] fontTextures = [];
-
-    bool frameInProgress = false;
-    bool batchInProgress = false;
-
+class Gfx2DCommandBuffer
+{
     const int InitialArraySize = 8192 * 4;
 
     readonly Vector2[] temp_points = new Vector2[InitialArraySize];
@@ -52,43 +48,67 @@ class Gfx2D(Gfx gfx) : IDisposable
     ushort[] indices = new ushort[InitialArraySize];
     int frameIndexCount;
 
-    record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, GfxFont? Font, Vector3 Color);
-    int batchCommandsCount;
-    int frameCommandsCount;
-    Command[] commands = new Command[128];
+    int commandsCount;
+    int batchCount;
+    Command[] commands = new Command[32];
 
-    [StructLayout(LayoutKind.Sequential)]
-    readonly struct Vertex2D(Vector2 position, Vector2 uv, Color color)
+    CommandBatch[] batches = new CommandBatch[8];
+
+    bool batchInProgress = false;
+    int batchFirstCommandIndex;
+    int batchCommandCount;
+
+    public void Reset()
     {
-        public static readonly Vector2 DefaultUV = new(-1, -1);
-
-        public readonly Vector2 Position = position;
-        public readonly Vector2 UV = uv;
-        public readonly Vector4 Color = color.ToVector4();
+        frameVertexCount = 0;
+        frameIndexCount = 0;
+        commandsCount = 0;
+        batchCount = 0;
+        scratchVertexCount = 0;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    readonly struct PerCommandData(Vector2 scale, Vector2 translation, Vector3 color)
+    public void GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches)
     {
-        public readonly Vector2 Scale = scale;
-        public readonly Vector2 Translation = translation;
-        public readonly Vector3 Color = color;
-        readonly float _padding;
+        vertices = this.vertices.AsSpan(0, frameVertexCount);
+        indices = this.indices.AsSpan(0, frameIndexCount);
+        commandBatches = batches.AsSpan(0, batchCount);
     }
 
-    public Statistics GetStatistics()
+    public void GetBatchData(CommandBatch batch, out ReadOnlySpan<Command> commands)
     {
-        return new Statistics(frameCommandsCount, frameVertexCount, frameIndexCount);
+        commands = this.commands.AsSpan(batch.firstCommandIndex, batch.commandCount);
+    }
+
+    public void BeginBatch()
+    {
+        Assert(!batchInProgress);
+
+        batchInProgress = true;
+        batchFirstCommandIndex = commandsCount;
+        batchCommandCount = 0;
+
+        BeginCommand();
+    }
+
+    public void EndBatch(PixelBuffer? surface = null)
+    {
+        Assert(batchInProgress);
+        batchInProgress = false;
+
+        ArrayUtilities.Reserve(ref batches, batchCount + 1);
+
+        batches[batchCount] = new CommandBatch(batchFirstCommandIndex, batchCommandCount, surface);
+        batchCount++;
     }
 
     ref Command BeginCommand()
     {
+        ArrayUtilities.Reserve(ref commands, commandsCount + 1);
+
         Command command = new((uint)frameVertexCount, (uint)frameIndexCount, 0, default, default, Color.Black.ToVector3());
+        commands[commandsCount++] = command;
 
-        ArrayUtilities.Reserve(ref commands, batchCommandsCount + 1);
-
-        commands[batchCommandsCount++] = command;
-        frameCommandsCount++;
+        batchCommandCount++;
 
         return ref GetCurrentCommand();
     }
@@ -97,584 +117,12 @@ class Gfx2D(Gfx gfx) : IDisposable
     {
         Assert(batchInProgress);
 
-        return ref commands[batchCommandsCount - 1];
+        return ref commands[commandsCount - 1];
     }
-
-    public void Create()
-    {
-        AssertIsNull(uniformBuffer);
-        AssertIsNull(vertexBuffer);
-        AssertIsNull(indexBuffer);
-
-        vertexBuffer = gfx.CreateDynamicMemoryBuffer<Vertex2D>(length: vertices.Length, GfxMemoryBufferUsage.Vertex);
-        indexBuffer = gfx.CreateDynamicMemoryBuffer<ushort>(length: indices.Length, GfxMemoryBufferUsage.Index);
-        uniformBuffer = gfx.CreateDynamicMemoryBuffer<PerCommandData>(length: 1, GfxMemoryBufferUsage.Uniform);
-
-        VkSamplerCreateInfo samplerCreateInfo = new(default)
-        {
-            AddressModeU = VkSamplerAddressMode.CLAMP_TO_BORDER,
-            AddressModeV = VkSamplerAddressMode.CLAMP_TO_BORDER,
-            AddressModeW = VkSamplerAddressMode.CLAMP_TO_BORDER,
-
-            MinFilter = VkFilter.NEAREST,
-            MagFilter = VkFilter.NEAREST,
-            MipmapMode = VkSamplerMipmapMode.NEAREST,
-
-            BorderColor = VkBorderColor.FLOAT_OPAQUE_WHITE,
-
-            MaxAnisotropy = 1,
-        };
-        drawSampler = gfx.CreateSampler(samplerCreateInfo);
-
-        unsafe
-        {
-            (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 36, CharacterSet.Full);
-
-            PixelBuffer fontTexture = gfx.CreatePixelBuffer(
-                width: fontAtlas.Width,
-                height: fontAtlas.Height,
-                format: GfxFormat.Rgba8,
-                usage: GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferDst,
-                aspect: GfxAspect.Color,
-                samples: GfxSamples.X1);
-
-            MemoryBuffer<byte> fontStagingBuffer = gfx.CreateDynamicMemoryBuffer<byte>(length: fontAtlas.Pixels.Length, GfxMemoryBufferUsage.TransferSrc);
-            gfx.UpdateDynamicBuffer(fontStagingBuffer, fontAtlas.Pixels);
-
-            GfxSingleCommand fontStagingCommand = gfx.BeginSingleCommand();
-
-            gfx.PixelBufferBarrier(
-                fontStagingCommand.CommandBuffer,
-                pixelBuffer: fontTexture,
-                srcLayout: VkImageLayout.UNDEFINED,
-                dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
-
-            VkBufferImageCopy bufferImageCopy = new()
-            {
-                BufferOffset = 0,
-                BufferRowLength = 0,
-                BufferImageHeight = 0,
-                ImageSubresource = new()
-                {
-                    Aspect = VkImageAspect.COLOR,
-                    MipLevel = 0,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1,
-                },
-                ImageOffset = new(0, 0, 0),
-                ImageExtent = new(fontAtlas.Width, fontAtlas.Height, 1),
-            };
-
-            vkCmdCopyBufferToImage(fontStagingCommand.CommandBuffer, fontStagingBuffer.Buffer, fontTexture.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
-
-            gfx.PixelBufferBarrier(
-                fontStagingCommand.CommandBuffer,
-                pixelBuffer: fontTexture,
-                srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
-                dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
-
-            gfx.SubmitSingleCommand(fontStagingCommand);
-            gfx.EndSingleCommand(fontStagingCommand);
-
-            fontTextureIndices[font] = fontTextures.Length;
-            ArrayUtilities.Append(ref fontTextures, fontTexture);
-
-            gfx.DestroyMemoryBuffer(fontStagingBuffer);
-        }
-    }
-
-    public void Dispose()
-    {
-        DestroyRendering();
-
-        gfx.DestroySampler(drawSampler);
-        drawSampler = default;
-
-        foreach (PixelBuffer fontTexture in fontTextures)
-            gfx.DestroyPixelBuffer(fontTexture);
-        fontTextures = [];
-
-        gfx.DestroyMemoryBuffer(uniformBuffer);
-        uniformBuffer = default;
-
-        gfx.DestroyMemoryBuffer(vertexBuffer);
-        vertexBuffer = default;
-
-        gfx.DestroyMemoryBuffer(indexBuffer);
-        indexBuffer = default;
-    }
-
-    /// <summary>
-    /// Begins a frame of rendering. Resets the internal state.
-    /// </summary>
-    public unsafe void BeginFrame()
-    {
-        Assert(!frameInProgress && !batchInProgress);
-        Assert(renderingInitialized);
-
-        GfxPresenter presenter = gfx.GetPresenter();
-        PixelBuffer presentationBuffer = presenter.GetPresentationBuffer();
-
-        bool needsCreate = backBuffer == null || backBuffer.Width != presentationBuffer.Width || backBuffer.Height != presentationBuffer.Height;
-        if (needsCreate)
-        {
-            gfx.DestroyPixelBuffer(backBuffer);
-            backBuffer = gfx.CreatePixelBuffer(
-                width: presentationBuffer.Width * 1,
-                height: presentationBuffer.Height * 1,
-                format: presentationBuffer.Format,
-                usage: GfxPixelBufferUsage.ColorAttachment | GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferSrc | GfxPixelBufferUsage.TransferDst,
-                aspect: GfxAspect.Color,
-                samples: GfxSamples.X1
-            );
-            gfx.AssingName(backBuffer, StringUtilities.DebugName<Gfx2D>(nameof(backBuffer)));
-        }
-
-        frameInProgress = true;
-        batchCommandsCount = 0;
-        frameCommandsCount = 0;
-        frameVertexCount = 0;
-        frameIndexCount = 0;
-        scratchVertexCount = 0;
-
-        VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
-
-        AssertNotNull(backBuffer);
-
-        gfx.PixelBufferBarrier(
-            commandBuffer,
-            pixelBuffer: backBuffer,
-            srcLayout: VkImageLayout.UNDEFINED,
-            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
-
-        VkImageSubresourceRange clearRange = new()
-        {
-            AspectMask = VkImageAspect.COLOR,
-            BaseMipLevel = 0,
-            LevelCount = 1,
-            BaseArrayLayer = 0,
-            LayerCount = 1,
-        };
-        VkClearColorValue clearColor = VkClearColorValue.FromColor(Color.Transparent);
-        vkCmdClearColorImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
-
-        gfx.PixelBufferBarrier(
-            commandBuffer,
-            pixelBuffer: backBuffer,
-            srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
-            dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
-    }
-
-    /// <summary>
-    /// Ends a frame of rendering. Flushes the vertex and index buffers to the GPU.
-    /// </summary>
-    public unsafe void EndFrame()
-    {
-        Assert(frameInProgress && !batchInProgress);
-        AssertNotNull(vertexBuffer);
-        AssertNotNull(indexBuffer);
-
-        frameInProgress = false;
-
-        if (frameVertexCount > 0)
-        {
-            gfx.UpdateDynamicBuffer(vertexBuffer, vertices, frameVertexCount);
-            gfx.UpdateDynamicBuffer(indexBuffer, indices, frameIndexCount);
-        }
-
-        AssertNotNull(backBuffer);
-        AssertNotNull(compositionPipeline);
-
-        GfxPresenter presenter = gfx.GetPresenter();
-        VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
-        PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
-
-        /*if (true)
-        {
-            gfx.PixelBufferBarrier(
-                commandBuffer,
-                pixelBuffer: backBuffer,
-                srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-                dstLayout: VkImageLayout.TRANSFER_SRC_OPTIMAL);
-
-            VkImageBlit imageBlit = new()
-            {
-                Src = new()
-                {
-                    Aspect = VkImageAspect.COLOR,
-                    MipLevel = 0,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1,
-                },
-                SrcOffsets1 = new((int)backBuffer.Width, (int)backBuffer.Height, 1),
-                Dst = new()
-                {
-                    Aspect = VkImageAspect.COLOR,
-                    MipLevel = 0,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1,
-                },
-                DstOffsets1 = new((int)presentBuffer.Width, (int)presentBuffer.Height, 1),
-            };
-
-            vkCmdBlitImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_SRC_OPTIMAL, presentBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &imageBlit, VkFilter.LINEAR);
-
-            gfx.FIXME_OmegaBarrier(commandBuffer);
-            return;
-        }*/
-
-        gfx.PixelBufferBarrier(
-            commandBuffer,
-            pixelBuffer: presentBuffer,
-            srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
-            dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
-
-        gfx.PixelBufferBarrier(
-            commandBuffer,
-            pixelBuffer: backBuffer,
-            srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-            dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
-
-        VkRenderingAttachmentInfo colorAttachment = new(default)
-        {
-            ImageView = presentBuffer.View,
-            ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-            LoadOp = VkAttachmentLoadOp.LOAD,
-            StoreOp = VkAttachmentStoreOp.STORE,
-        };
-
-        VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
-        VkRenderingInfo renderingInfo = new(default)
-        {
-            RenderArea = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height)),
-            ColorAttachmentCount = 1,
-            ColorAttachments = colorAttachments,
-            LayerCount = 1,
-        };
-
-        VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
-        VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
-
-        vkCmdBeginRendering(commandBuffer, &renderingInfo);
-
-        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Pipeline);
-
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-        VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
-
-        VkDescriptorImageInfo descriptorImageInfo = new()
-        {
-            ImageView = backBuffer.View,
-            ImageLayout = VkImageLayout.SHADER_READ_ONLY_OPTIMAL,
-        };
-        descriptorWrites[0] = new(default)
-        {
-            DestinationBinding = 0,
-            DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
-            DescriptorCount = 1,
-            ImageInfo = &descriptorImageInfo,
-        };
-
-        VkDescriptorImageInfo descriptorImageInfo2 = new()
-        {
-            Sampler = drawSampler,
-        };
-        descriptorWrites[1] = new(default)
-        {
-            DestinationBinding = 1,
-            DescriptorType = VkDescriptorType.SAMPLER,
-            DescriptorCount = 1,
-            ImageInfo = &descriptorImageInfo2,
-        };
-
-        vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Layout, 0, 2, descriptorWrites);
-        vkCmdDraw(commandBuffer, 4, 1, 0, 0);
-
-        vkCmdEndRendering(commandBuffer);
-
-        gfx.FIXME_OmegaBarrier(commandBuffer);
-
-        gfx.PixelBufferBarrier(
-            commandBuffer,
-            pixelBuffer: presentBuffer,
-            srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
-    }
-
-    /// <summary>
-    /// Begins a batch of commands. This is used to group commands to a single render pass.
-    /// </summary>
-    public void BeginBatch()
-    {
-        Assert(frameInProgress && !batchInProgress);
-
-        batchInProgress = true;
-        BeginCommand();
-    }
-
-    public unsafe void EndBatch()
-    {
-        Assert(frameInProgress && batchInProgress);
-        AssertNotNull(backBuffer);
-        AssertNotNull(pipeline);
-        AssertNotNull(vertexBuffer);
-        AssertNotNull(indexBuffer);
-        AssertNotNull(uniformBuffer);
-
-        batchInProgress = false;
-
-        GfxPipeline activePipeline = pipeline;
-
-        PixelBuffer presentBuffer = backBuffer;
-
-        VkCommandBuffer commandBuffer = gfx.GetPresenter().GetCommandBuffer();
-
-        VkRenderingAttachmentInfo colorAttachment = new(default)
-        {
-            ImageView = presentBuffer.View,
-            ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-            LoadOp = VkAttachmentLoadOp.LOAD,
-            StoreOp = VkAttachmentStoreOp.STORE,
-            ClearValue = VkClearValue.FromColor(Color.Transparent),
-        };
-
-        VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
-        VkRenderingInfo renderingInfo = new(default)
-        {
-            RenderArea = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height)),
-            ColorAttachmentCount = 1,
-            ColorAttachments = colorAttachments,
-            LayerCount = 1,
-        };
-
-        VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
-        VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
-
-        vkCmdBeginRendering(commandBuffer, &renderingInfo);
-
-        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.Pipeline);
-
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-        VkBuffer localVertexBuffer = vertexBuffer.Buffer;
-        VkBuffer localIndexBuffer = indexBuffer.Buffer;
-        ulong vertexBufferOffset = 0ul;
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &localVertexBuffer, &vertexBufferOffset);
-        vkCmdBindIndexBuffer(commandBuffer, localIndexBuffer, 0, VkIndexType.UINT16);
-
-        PerCommandData commandData;
-
-        VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
-
-        for (int i = 0; i < batchCommandsCount; i++)
-        {
-            ref Command command = ref commands[i];
-
-            commandData = new(
-                scale: new(2.0f / presentBuffer.Width, 2.0f / presentBuffer.Height),
-                translation: new(-1.0f, -1.0f),
-                color: command.Color
-            );
-            vkCmdPushConstants(commandBuffer, activePipeline.Layout, VkShaderStage.VERTEX | VkShaderStage.FRAGMENT, 0, (uint)Unsafe.SizeOf<PerCommandData>(), &commandData);
-
-            PixelBuffer commandTexture = command.Texture ?? fontTextures[0];
-
-            VkDescriptorImageInfo descriptorImageInfo = new()
-            {
-                ImageView = commandTexture.View,
-                ImageLayout = VkImageLayout.SHADER_READ_ONLY_OPTIMAL,
-            };
-            descriptorWrites[0] = new(default)
-            {
-                DestinationBinding = 0,
-                DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
-                DescriptorCount = 1,
-                ImageInfo = &descriptorImageInfo,
-            };
-
-            VkDescriptorImageInfo descriptorImageInfo2 = new()
-            {
-                Sampler = drawSampler,
-            };
-            descriptorWrites[1] = new(default)
-            {
-                DestinationBinding = 1,
-                DescriptorType = VkDescriptorType.SAMPLER,
-                DescriptorCount = 1,
-                ImageInfo = &descriptorImageInfo2,
-            };
-
-            vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.Layout, 0, 2, descriptorWrites);
-            vkCmdDrawIndexed(commandBuffer, command.IndexCount, 1, command.IndexOffset, 0, 0);
-        }
-
-        vkCmdEndRendering(commandBuffer);
-
-        batchCommandsCount = 0;
-    }
-
-    void DestroyRendering()
-    {
-        gfx.DestroyPixelBuffer(backBuffer);
-        backBuffer = null;
-
-        gfx.DestroyPipeline(pipeline);
-        pipeline = null;
-
-        gfx.DestroyPipeline(compositionPipeline);
-        compositionPipeline = null;
-
-        renderingInitialized = false;
-    }
-
-    public void InitializeRendering(DisplayParameters parameters)
-    {
-        this.parameters = parameters;
-
-        DestroyRendering();
-
-        pipeline = gfx.CreatePipeline(new GfxPipelineParameters(
-            ShaderProgram: gfx.GetShaderProgram("Overlay"),
-            PushConstants: [
-                new()
-                {
-                    StageFlags = VkShaderStage.VERTEX | VkShaderStage.FRAGMENT,
-                    Size = (uint)Marshal.SizeOf<PerCommandData>()
-                }
-            ],
-            Layout: [
-                new()
-                {
-                    Binding = 0,
-                    DescriptorCount = 1,
-                    DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
-                    Stages = VkShaderStage.FRAGMENT
-                },
-                new()
-                {
-                    Binding = 1,
-                    DescriptorCount = 1,
-                    DescriptorType = VkDescriptorType.SAMPLER,
-                    Stages = VkShaderStage.FRAGMENT
-                }
-            ],
-            InputTopology: VkPrimitiveTopology.TRIANGLE_LIST,
-            CullMode: VkCullMode.NONE,
-            FrontFace: VkFrontFace.COUNTER_CLOCKWISE,
-            DepthTest: false,
-            DepthWrite: false,
-            DepthCompareOp: VkCompareOp.ALWAYS,
-            Multisampling: false,
-            InputBindings: [
-                new()
-                {
-                    Stride = (uint)Marshal.SizeOf<Vertex2D>(),
-                    InputRate = VkVertexInputRate.VERTEX
-                },
-            ],
-            InputAttributes: [
-                new()
-                {
-                    Location = 0,
-                    Format = VkFormat.R32G32_SFLOAT,
-                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.Position))
-                },
-                new()
-                {
-                    Location = 1,
-                    Format = VkFormat.R32G32_SFLOAT,
-                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.UV))
-                },
-                new()
-                {
-                    Location = 2,
-                    Format = VkFormat.R32G32B32A32_SFLOAT,
-                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.Color))
-                },
-            ],
-            Attachments: [
-                new()
-                {
-                    Format = VkFormat.B8G8R8A8_UNORM,
-                    Blend = new()
-                    {
-                        BlendEnable  = 1,
-                        // Premultiplied alpha
-                        SrcColorBlendFactor = VkBlendFactor.ONE,
-                        DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-                        ColorBlendOp = VkBlendOp.ADD,
-                        SrcAlphaBlendFactor = VkBlendFactor.ONE,
-                        DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-                        AlphaBlendOp = VkBlendOp.ADD,
-                        ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
-                    }
-                }
-            ]
-        ));
-
-        compositionPipeline = gfx.CreatePipeline(new GfxPipelineParameters(
-            ShaderProgram: gfx.GetShaderProgram("Composition"),
-            PushConstants: [],
-            Layout: [
-                new()
-                {
-                    Binding = 0,
-                    DescriptorCount = 1,
-                    DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
-                    Stages = VkShaderStage.FRAGMENT
-                },
-                new()
-                {
-                    Binding = 1,
-                    DescriptorCount = 1,
-                    DescriptorType = VkDescriptorType.SAMPLER,
-                    Stages = VkShaderStage.FRAGMENT
-                }
-            ],
-            InputTopology: VkPrimitiveTopology.TRIANGLE_LIST,
-            CullMode: VkCullMode.NONE,
-            FrontFace: VkFrontFace.COUNTER_CLOCKWISE,
-            DepthTest: false,
-            DepthWrite: false,
-            DepthCompareOp: VkCompareOp.ALWAYS,
-            Multisampling: false,
-            InputBindings: [],
-            InputAttributes: [],
-            Attachments: [
-                new()
-                {
-                    Format = VkFormat.B8G8R8A8_UNORM,
-                    Blend = new()
-                    {
-                        BlendEnable  = 1,
-                        // Premultiplied alpha
-                        SrcColorBlendFactor = VkBlendFactor.ONE,
-                        DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-                        ColorBlendOp = VkBlendOp.ADD,
-                        SrcAlphaBlendFactor = VkBlendFactor.ONE,
-                        DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-                        AlphaBlendOp = VkBlendOp.ADD,
-                        ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
-                    }
-                }
-            ]
-        ));
-
-        renderingInitialized = true;
-    }
-
-    readonly ConcurrentObjectPool<TextLayout> textLayoutPool = new(initialCapacity: 16);
-
-    int scratchRunesCount;
-    readonly uint[] scratchRunes = new uint[1024];
-    readonly Range[] scratchWordRanges = new Range[1024];
 
     public void DrawText(TextLayout layout, Vector2 position, Color color, Color backgroundColor)
     {
-        Assert(frameInProgress && batchInProgress);
+        Assert(batchInProgress);
 
         ref Command newCommand = ref BeginCommand();
         newCommand.Font = layout.Font;
@@ -690,169 +138,8 @@ class Gfx2D(Gfx gfx) : IDisposable
         }
     }
 
-    public void DestroyTextLayout(TextLayout layout)
+    public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color, Color backgroundColor, GfxFont font)
     {
-        layout.Reset();
-        textLayoutPool.Return(layout);
-    }
-
-    public TextLayout CreateTextLayout(ReadOnlySpan<char> text, Vector2 availableSize, bool wordWrap, GfxFont? font = default)
-    {
-        const float glyphHorizontalPadding = 4;
-
-        Assert(scratchRunesCount == 0);
-
-        font ??= fontCache.GetDefaultFont();
-        GfxFont.Metrics fontMetrics = font.GetMetrics();
-
-        TextLayout layout = textLayoutPool.Rent();
-        layout.Font = font;
-
-        float totalWidth = 0;
-        float totalHeight = 0;
-
-        float cursorY = fontMetrics.Ascender;
-
-        int wordCountOnLine = 0;
-
-        Rune spaceRune = new(' ');
-        float spaceRuneWidth = font.GetGlyph((uint)spaceRune.Value).Width;
-
-        Vector2 MeasureText(ReadOnlySpan<char> word)
-        {
-            float width = 0;
-            float height = fontMetrics.Height;
-
-            foreach (var rune in word.EnumerateRunes())
-            {
-                Glyph glyph = font.GetGlyph((uint)rune.Value);
-
-                width += glyph.Width + glyphHorizontalPadding;
-            }
-
-            return new(width, height);
-        }
-
-        foreach (var line in text.EnumerateLines())
-        {
-            float remainingWidth = availableSize.X;
-
-            int wordCount = line.Split(scratchWordRanges.AsSpan(), ' ', StringSplitOptions.None);
-            ThrowNotSupportedIf(wordCount >= scratchWordRanges.Length, "Too many words in a line");
-
-            for (int i = 0; i < wordCount; i++)
-            {
-                Range wordRange = scratchWordRanges[i];
-                ReadOnlySpan<char> word = line[wordRange];
-
-                Vector2 wordSize = MeasureText(word);
-
-                if (i > 0)
-                {
-                    wordSize.X += spaceRuneWidth;
-                }
-
-                if (wordWrap && remainingWidth < wordSize.X)
-                {
-                    if (wordCountOnLine > 0)
-                    {
-                        ConsumeRunes(font, layout, cursorY);
-
-                        remainingWidth = availableSize.X;
-                        cursorY += fontMetrics.Height;
-
-                        foreach (var rune in word.EnumerateRunes())
-                        {
-                            scratchRunes[scratchRunesCount++] = (uint)rune.Value;
-                        }
-
-                        wordCountOnLine = 1;
-                        remainingWidth -= wordSize.X;
-                    }
-                    else
-                    {
-                        if (i > 0)
-                            scratchRunes[scratchRunesCount++] = (uint)spaceRune.Value;
-                        foreach (var rune in word.EnumerateRunes())
-                        {
-                            scratchRunes[scratchRunesCount++] = (uint)rune.Value;
-                        }
-                        ConsumeRunes(font, layout, cursorY);
-
-                        remainingWidth = availableSize.X;
-                        cursorY += fontMetrics.Height;
-                        wordCountOnLine = 0;
-                    }
-                }
-                else
-                {
-                    if (i > 0)
-                        scratchRunes[scratchRunesCount++] = (uint)spaceRune.Value;
-                    foreach (var rune in word.EnumerateRunes())
-                    {
-                        scratchRunes[scratchRunesCount++] = (uint)rune.Value;
-                    }
-
-                    remainingWidth -= wordSize.X;
-                    wordCountOnLine++;
-                }
-            }
-
-            if (scratchRunesCount > 0)
-            {
-                ConsumeRunes(font, layout, cursorY);
-            }
-
-            cursorY += fontMetrics.Height;
-        }
-
-        layout.Size = new(totalWidth, totalHeight);
-        return layout;
-
-        void ConsumeRunes(GfxFont font, TextLayout layout, float cursorY)
-        {
-            float cursorX = 0;
-
-            foreach (ShapedGlyph shapedGlyph in font.ShapeText(scratchRunes.AsSpan(0, scratchRunesCount)))
-            {
-                float x = cursorX + shapedGlyph.XOffset + shapedGlyph.Glyph.BearingX;
-                float y = cursorY + shapedGlyph.YOffset - shapedGlyph.Glyph.BearingY;
-
-                // Expand total size of the layout based on the bottom right corner of the glyph
-                float farX = x + shapedGlyph.Glyph.Width;
-                float farY = y + shapedGlyph.Glyph.Height;
-                totalWidth = Math.Max(totalWidth, farX);
-                totalHeight = Math.Max(totalHeight, farY);
-
-                bool isWithinBounds = x <= availableSize.X && y <= availableSize.Y;
-
-                if (isWithinBounds)
-                {
-                    TextLayout.LayoutGlyph layoutGlyph = new(
-                        new(x, y),
-                        new(shapedGlyph.Glyph.Width, shapedGlyph.Glyph.Height),
-                        new(shapedGlyph.Glyph.U0, shapedGlyph.Glyph.V0),
-                        new(shapedGlyph.Glyph.U1, shapedGlyph.Glyph.V1),
-                        Color.RedOrange);
-
-                    layout.Append(layoutGlyph);
-                }
-
-                cursorX += shapedGlyph.XAdvance;
-                if (shapedGlyph.XAdvance == 0)
-                {
-                    cursorX += shapedGlyph.Glyph.Width;
-                }
-            }
-
-            scratchRunesCount = 0;
-        }
-    }
-
-    public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color, Color backgroundColor, GfxFont? font = default)
-    {
-        font ??= fontCache.GetDefaultFont();
-
         ref Command newCommand = ref BeginCommand();
         newCommand.Font = font;
         newCommand.Color = backgroundColor.ToVector3();
@@ -887,7 +174,7 @@ class Gfx2D(Gfx gfx) : IDisposable
 
     public void DrawCircle(Vector2 center, float radius, Color color, float thickness = 1.0f, bool useAntialiasing = true)
     {
-        Assert(frameInProgress && batchInProgress);
+        Assert(batchInProgress);
 
         if (radius <= 0.0f)
             return;
@@ -1179,5 +466,785 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         ref Command currentCommand = ref GetCurrentCommand();
         currentCommand.IndexCount += (uint)(frameIndexCount - frameIndexCountStart);
+    }
+}
+
+class Gfx2D(Gfx gfx) : IDisposable
+{
+    public const int MaxVertices = 65536;
+
+    public readonly record struct Statistics(int DrawCalls, int Vertices, int Indices);
+
+    readonly Gfx gfx = gfx;
+
+    readonly GfxFontCache fontCache = new();
+
+    bool renderingInitialized;
+
+    DisplayParameters? parameters;
+
+    VkSampler drawSampler;
+
+    GfxPipeline? pipeline;
+    GfxPipeline? compositionPipeline;
+
+    PixelBuffer? backBuffer;
+
+    MemoryBuffer<PerCommandData>? uniformBuffer;
+    MemoryBuffer<Vertex2D>? vertexBuffer;
+    MemoryBuffer<ushort>? indexBuffer;
+
+    readonly Dictionary<GfxFont, int> fontTextureIndices = [];
+    PixelBuffer[] fontTextures = [];
+
+    bool frameInProgress = false;
+
+    readonly ConcurrentObjectPool<TextLayout> textLayoutPool = new(initialCapacity: 16);
+
+    int scratchRunesCount;
+    readonly uint[] scratchRunes = new uint[1024];
+    readonly Range[] scratchWordRanges = new Range[1024];
+
+    readonly Gfx2DCommandBuffer? current2DCommandBuffer = new();
+    int frameCommandsCount;
+    int frameVertexCount;
+    int frameIndexCount;
+
+    public GfxFont GetFont(string name, int size)
+    {
+        fontCache.TryGetFontOrDefault(name, size, out GfxFont? font);
+        return font;
+    }
+
+    public Statistics GetStatistics()
+    {
+        return new Statistics(frameCommandsCount, frameVertexCount, frameIndexCount);
+    }
+
+    public Gfx2DCommandBuffer BeginCommandBuffer()
+    {
+        Assert(frameInProgress);
+
+        var commandBuffer = current2DCommandBuffer ?? throw new InvalidOperationException("No command buffer available.");
+        commandBuffer.Reset();
+        return commandBuffer;
+    }
+
+    public void Create()
+    {
+        AssertIsNull(uniformBuffer);
+        AssertIsNull(vertexBuffer);
+        AssertIsNull(indexBuffer);
+
+        vertexBuffer = gfx.CreateDynamicMemoryBuffer<Vertex2D>(length: MaxVertices, GfxMemoryBufferUsage.Vertex);
+        indexBuffer = gfx.CreateDynamicMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryBufferUsage.Index);
+        uniformBuffer = gfx.CreateDynamicMemoryBuffer<PerCommandData>(length: 1, GfxMemoryBufferUsage.Uniform);
+
+        VkSamplerCreateInfo samplerCreateInfo = new(default)
+        {
+            AddressModeU = VkSamplerAddressMode.CLAMP_TO_BORDER,
+            AddressModeV = VkSamplerAddressMode.CLAMP_TO_BORDER,
+            AddressModeW = VkSamplerAddressMode.CLAMP_TO_BORDER,
+
+            MinFilter = VkFilter.NEAREST,
+            MagFilter = VkFilter.NEAREST,
+            MipmapMode = VkSamplerMipmapMode.NEAREST,
+
+            BorderColor = VkBorderColor.FLOAT_OPAQUE_WHITE,
+
+            MaxAnisotropy = 1,
+        };
+        drawSampler = gfx.CreateSampler(samplerCreateInfo);
+
+        unsafe
+        {
+            (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 36, CharacterSet.Full);
+
+            PixelBuffer fontTexture = gfx.CreatePixelBuffer(
+                width: fontAtlas.Width,
+                height: fontAtlas.Height,
+                format: GfxFormat.Rgba8,
+                usage: GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferDst,
+                aspect: GfxAspect.Color,
+                samples: GfxSamples.X1);
+
+            MemoryBuffer<byte> fontStagingBuffer = gfx.CreateDynamicMemoryBuffer<byte>(length: fontAtlas.Pixels.Length, GfxMemoryBufferUsage.TransferSrc);
+            gfx.UpdateDynamicBuffer(fontStagingBuffer, fontAtlas.Pixels);
+
+            GfxSingleCommand fontStagingCommand = gfx.BeginSingleCommand();
+
+            gfx.PixelBufferBarrier(
+                fontStagingCommand.CommandBuffer,
+                pixelBuffer: fontTexture,
+                srcLayout: VkImageLayout.UNDEFINED,
+                dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+
+            VkBufferImageCopy bufferImageCopy = new()
+            {
+                BufferOffset = 0,
+                BufferRowLength = 0,
+                BufferImageHeight = 0,
+                ImageSubresource = new()
+                {
+                    Aspect = VkImageAspect.COLOR,
+                    MipLevel = 0,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1,
+                },
+                ImageOffset = new(0, 0, 0),
+                ImageExtent = new(fontAtlas.Width, fontAtlas.Height, 1),
+            };
+
+            vkCmdCopyBufferToImage(fontStagingCommand.CommandBuffer, fontStagingBuffer.Buffer, fontTexture.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
+
+            gfx.PixelBufferBarrier(
+                fontStagingCommand.CommandBuffer,
+                pixelBuffer: fontTexture,
+                srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
+                dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
+
+            gfx.SubmitSingleCommand(fontStagingCommand);
+            gfx.EndSingleCommand(fontStagingCommand);
+
+            fontTextureIndices[font] = fontTextures.Length;
+            ArrayUtilities.Append(ref fontTextures, fontTexture);
+
+            gfx.DestroyMemoryBuffer(fontStagingBuffer);
+        }
+    }
+
+    public void Dispose()
+    {
+        DestroyRendering();
+
+        gfx.DestroySampler(drawSampler);
+        drawSampler = default;
+
+        foreach (PixelBuffer fontTexture in fontTextures)
+            gfx.DestroyPixelBuffer(fontTexture);
+        fontTextures = [];
+
+        gfx.DestroyMemoryBuffer(uniformBuffer);
+        uniformBuffer = default;
+
+        gfx.DestroyMemoryBuffer(vertexBuffer);
+        vertexBuffer = default;
+
+        gfx.DestroyMemoryBuffer(indexBuffer);
+        indexBuffer = default;
+    }
+
+    /// <summary>
+    /// Begins a frame of rendering. Resets the internal state.
+    /// </summary>
+    public unsafe void BeginFrame()
+    {
+        Assert(!frameInProgress);
+        Assert(renderingInitialized);
+
+        GfxPresenter presenter = gfx.GetPresenter();
+        PixelBuffer presentationBuffer = presenter.GetPresentationBuffer();
+
+        bool needsCreate = backBuffer == null || backBuffer.Width != presentationBuffer.Width || backBuffer.Height != presentationBuffer.Height;
+        if (needsCreate)
+        {
+            gfx.DestroyPixelBuffer(backBuffer);
+            backBuffer = gfx.CreatePixelBuffer(
+                width: presentationBuffer.Width * 1,
+                height: presentationBuffer.Height * 1,
+                format: presentationBuffer.Format,
+                usage: GfxPixelBufferUsage.ColorAttachment | GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferSrc | GfxPixelBufferUsage.TransferDst,
+                aspect: GfxAspect.Color,
+                samples: GfxSamples.X1
+            );
+            gfx.AssingName(backBuffer, StringUtilities.DebugName<Gfx2D>(nameof(backBuffer)));
+        }
+
+        frameInProgress = true;
+        frameCommandsCount = 0;
+        frameVertexCount = 0;
+        frameIndexCount = 0;
+
+        VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
+
+        AssertNotNull(backBuffer);
+
+        gfx.PixelBufferBarrier(
+            commandBuffer,
+            pixelBuffer: backBuffer,
+            srcLayout: VkImageLayout.UNDEFINED,
+            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+
+        VkImageSubresourceRange clearRange = new()
+        {
+            AspectMask = VkImageAspect.COLOR,
+            BaseMipLevel = 0,
+            LevelCount = 1,
+            BaseArrayLayer = 0,
+            LayerCount = 1,
+        };
+        VkClearColorValue clearColor = VkClearColorValue.FromColor(Color.Transparent);
+        vkCmdClearColorImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
+
+        gfx.PixelBufferBarrier(
+            commandBuffer,
+            pixelBuffer: backBuffer,
+            srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
+            dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
+    }
+
+    /// <summary>
+    /// Ends a frame of rendering. Flushes the vertex and index buffers to the GPU.
+    /// </summary>
+    public unsafe void EndFrame()
+    {
+        Assert(frameInProgress);
+        AssertNotNull(vertexBuffer);
+        AssertNotNull(indexBuffer);
+        AssertNotNull(current2DCommandBuffer);
+
+        current2DCommandBuffer.GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches);
+        if (vertices.Length > 0)
+        {
+            gfx.UpdateDynamicBuffer(vertexBuffer, vertices);
+            gfx.UpdateDynamicBuffer(indexBuffer, indices);
+        }
+
+        AssertNotNull(backBuffer);
+        AssertNotNull(compositionPipeline);
+
+        for (int i = 0; i < commandBatches.Length; i++)
+        {
+            CommandBatch batch = commandBatches[i];
+            current2DCommandBuffer.GetBatchData(batch, out ReadOnlySpan<Command> commands);
+
+            RecordBatch(commands, backBuffer);
+        }
+
+        GfxPresenter presenter = gfx.GetPresenter();
+        VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
+        PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
+
+        /*if (true)
+        {
+            gfx.PixelBufferBarrier(
+                commandBuffer,
+                pixelBuffer: backBuffer,
+                srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+                dstLayout: VkImageLayout.TRANSFER_SRC_OPTIMAL);
+
+            VkImageBlit imageBlit = new()
+            {
+                Src = new()
+                {
+                    Aspect = VkImageAspect.COLOR,
+                    MipLevel = 0,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1,
+                },
+                SrcOffsets1 = new((int)backBuffer.Width, (int)backBuffer.Height, 1),
+                Dst = new()
+                {
+                    Aspect = VkImageAspect.COLOR,
+                    MipLevel = 0,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1,
+                },
+                DstOffsets1 = new((int)presentBuffer.Width, (int)presentBuffer.Height, 1),
+            };
+
+            vkCmdBlitImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_SRC_OPTIMAL, presentBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &imageBlit, VkFilter.LINEAR);
+
+            gfx.FIXME_OmegaBarrier(commandBuffer);
+            return;
+        }*/
+
+        gfx.PixelBufferBarrier(
+            commandBuffer,
+            pixelBuffer: presentBuffer,
+            srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
+            dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
+
+        gfx.PixelBufferBarrier(
+            commandBuffer,
+            pixelBuffer: backBuffer,
+            srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+            dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
+
+        VkRenderingAttachmentInfo colorAttachment = new(default)
+        {
+            ImageView = presentBuffer.View,
+            ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+            LoadOp = VkAttachmentLoadOp.LOAD,
+            StoreOp = VkAttachmentStoreOp.STORE,
+        };
+
+        VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
+        VkRenderingInfo renderingInfo = new(default)
+        {
+            RenderArea = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height)),
+            ColorAttachmentCount = 1,
+            ColorAttachments = colorAttachments,
+            LayerCount = 1,
+        };
+
+        VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
+        VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
+
+        vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Pipeline);
+
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+        VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
+
+        VkDescriptorImageInfo descriptorImageInfo = new()
+        {
+            ImageView = backBuffer.View,
+            ImageLayout = VkImageLayout.SHADER_READ_ONLY_OPTIMAL,
+        };
+        descriptorWrites[0] = new(default)
+        {
+            DestinationBinding = 0,
+            DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
+            DescriptorCount = 1,
+            ImageInfo = &descriptorImageInfo,
+        };
+
+        VkDescriptorImageInfo descriptorImageInfo2 = new()
+        {
+            Sampler = drawSampler,
+        };
+        descriptorWrites[1] = new(default)
+        {
+            DestinationBinding = 1,
+            DescriptorType = VkDescriptorType.SAMPLER,
+            DescriptorCount = 1,
+            ImageInfo = &descriptorImageInfo2,
+        };
+
+        vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Layout, 0, 2, descriptorWrites);
+        vkCmdDraw(commandBuffer, 4, 1, 0, 0);
+
+        vkCmdEndRendering(commandBuffer);
+
+        gfx.FullBarrier(commandBuffer);
+
+        gfx.PixelBufferBarrier(
+            commandBuffer,
+            pixelBuffer: presentBuffer,
+            srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+
+        frameInProgress = false;
+    }
+
+    public unsafe void RecordBatch(ReadOnlySpan<Command> commands, PixelBuffer presentBuffer)
+    {
+        Assert(frameInProgress);
+        AssertNotNull(backBuffer);
+        AssertNotNull(pipeline);
+        AssertNotNull(vertexBuffer);
+        AssertNotNull(indexBuffer);
+        AssertNotNull(uniformBuffer);
+
+        GfxPipeline activePipeline = pipeline;
+
+        VkCommandBuffer commandBuffer = gfx.GetPresenter().GetCommandBuffer();
+
+        VkRenderingAttachmentInfo colorAttachment = new(default)
+        {
+            ImageView = presentBuffer.View,
+            ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+            LoadOp = VkAttachmentLoadOp.LOAD,
+            StoreOp = VkAttachmentStoreOp.STORE,
+            ClearValue = VkClearValue.FromColor(Color.Transparent),
+        };
+
+        VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
+        VkRenderingInfo renderingInfo = new(default)
+        {
+            RenderArea = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height)),
+            ColorAttachmentCount = 1,
+            ColorAttachments = colorAttachments,
+            LayerCount = 1,
+        };
+
+        VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
+        VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
+
+        vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.Pipeline);
+
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+        VkBuffer localVertexBuffer = vertexBuffer.Buffer;
+        VkBuffer localIndexBuffer = indexBuffer.Buffer;
+        ulong vertexBufferOffset = 0ul;
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &localVertexBuffer, &vertexBufferOffset);
+        vkCmdBindIndexBuffer(commandBuffer, localIndexBuffer, 0, VkIndexType.UINT16);
+
+        PerCommandData commandData;
+
+        VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
+
+        for (int i = 0; i < commands.Length; i++)
+        {
+            ref readonly Command command = ref commands[i];
+
+            commandData = new(
+                scale: new(2.0f / presentBuffer.Width, 2.0f / presentBuffer.Height),
+                translation: new(-1.0f, -1.0f),
+                color: command.Color
+            );
+            vkCmdPushConstants(commandBuffer, activePipeline.Layout, VkShaderStage.VERTEX | VkShaderStage.FRAGMENT, 0, (uint)Unsafe.SizeOf<PerCommandData>(), &commandData);
+
+            PixelBuffer commandTexture = command.Texture ?? fontTextures[0];
+
+            VkDescriptorImageInfo descriptorImageInfo = new()
+            {
+                ImageView = commandTexture.View,
+                ImageLayout = VkImageLayout.SHADER_READ_ONLY_OPTIMAL,
+            };
+            descriptorWrites[0] = new(default)
+            {
+                DestinationBinding = 0,
+                DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
+                DescriptorCount = 1,
+                ImageInfo = &descriptorImageInfo,
+            };
+
+            VkDescriptorImageInfo descriptorImageInfo2 = new()
+            {
+                Sampler = drawSampler,
+            };
+            descriptorWrites[1] = new(default)
+            {
+                DestinationBinding = 1,
+                DescriptorType = VkDescriptorType.SAMPLER,
+                DescriptorCount = 1,
+                ImageInfo = &descriptorImageInfo2,
+            };
+
+            vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.Layout, 0, 2, descriptorWrites);
+            vkCmdDrawIndexed(commandBuffer, command.IndexCount, 1, command.IndexOffset, 0, 0);
+        }
+
+        vkCmdEndRendering(commandBuffer);
+
+        gfx.FullBarrier(commandBuffer);
+    }
+
+    void DestroyRendering()
+    {
+        gfx.DestroyPixelBuffer(backBuffer);
+        backBuffer = null;
+
+        gfx.DestroyPipeline(pipeline);
+        pipeline = null;
+
+        gfx.DestroyPipeline(compositionPipeline);
+        compositionPipeline = null;
+
+        renderingInitialized = false;
+    }
+
+    public void InitializeRendering(DisplayParameters parameters)
+    {
+        this.parameters = parameters;
+
+        DestroyRendering();
+
+        pipeline = gfx.CreatePipeline(new GfxPipelineParameters(
+            ShaderProgram: gfx.GetShaderProgram("Overlay"),
+            PushConstants: [
+                new()
+                {
+                    StageFlags = VkShaderStage.VERTEX | VkShaderStage.FRAGMENT,
+                    Size = (uint)Marshal.SizeOf<PerCommandData>()
+                }
+            ],
+            Layout: [
+                new()
+                {
+                    Binding = 0,
+                    DescriptorCount = 1,
+                    DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
+                    Stages = VkShaderStage.FRAGMENT
+                },
+                new()
+                {
+                    Binding = 1,
+                    DescriptorCount = 1,
+                    DescriptorType = VkDescriptorType.SAMPLER,
+                    Stages = VkShaderStage.FRAGMENT
+                }
+            ],
+            InputTopology: VkPrimitiveTopology.TRIANGLE_LIST,
+            CullMode: VkCullMode.NONE,
+            FrontFace: VkFrontFace.COUNTER_CLOCKWISE,
+            DepthTest: false,
+            DepthWrite: false,
+            DepthCompareOp: VkCompareOp.ALWAYS,
+            Multisampling: false,
+            InputBindings: [
+                new()
+                {
+                    Stride = (uint)Marshal.SizeOf<Vertex2D>(),
+                    InputRate = VkVertexInputRate.VERTEX
+                },
+            ],
+            InputAttributes: [
+                new()
+                {
+                    Location = 0,
+                    Format = VkFormat.R32G32_SFLOAT,
+                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.Position))
+                },
+                new()
+                {
+                    Location = 1,
+                    Format = VkFormat.R32G32_SFLOAT,
+                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.UV))
+                },
+                new()
+                {
+                    Location = 2,
+                    Format = VkFormat.R32G32B32A32_SFLOAT,
+                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.Color))
+                },
+            ],
+            Attachments: [
+                new()
+                {
+                    Format = VkFormat.B8G8R8A8_UNORM,
+                    Blend = new()
+                    {
+                        BlendEnable  = 1,
+                        // Premultiplied alpha
+                        SrcColorBlendFactor = VkBlendFactor.ONE,
+                        DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+                        ColorBlendOp = VkBlendOp.ADD,
+                        SrcAlphaBlendFactor = VkBlendFactor.ONE,
+                        DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+                        AlphaBlendOp = VkBlendOp.ADD,
+                        ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
+                    }
+                }
+            ]
+        ));
+
+        compositionPipeline = gfx.CreatePipeline(new GfxPipelineParameters(
+            ShaderProgram: gfx.GetShaderProgram("Composition"),
+            PushConstants: [],
+            Layout: [
+                new()
+                {
+                    Binding = 0,
+                    DescriptorCount = 1,
+                    DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
+                    Stages = VkShaderStage.FRAGMENT
+                },
+                new()
+                {
+                    Binding = 1,
+                    DescriptorCount = 1,
+                    DescriptorType = VkDescriptorType.SAMPLER,
+                    Stages = VkShaderStage.FRAGMENT
+                }
+            ],
+            InputTopology: VkPrimitiveTopology.TRIANGLE_LIST,
+            CullMode: VkCullMode.NONE,
+            FrontFace: VkFrontFace.COUNTER_CLOCKWISE,
+            DepthTest: false,
+            DepthWrite: false,
+            DepthCompareOp: VkCompareOp.ALWAYS,
+            Multisampling: false,
+            InputBindings: [],
+            InputAttributes: [],
+            Attachments: [
+                new()
+                {
+                    Format = VkFormat.B8G8R8A8_UNORM,
+                    Blend = new()
+                    {
+                        BlendEnable  = 1,
+                        // Premultiplied alpha
+                        SrcColorBlendFactor = VkBlendFactor.ONE,
+                        DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+                        ColorBlendOp = VkBlendOp.ADD,
+                        SrcAlphaBlendFactor = VkBlendFactor.ONE,
+                        DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+                        AlphaBlendOp = VkBlendOp.ADD,
+                        ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
+                    }
+                }
+            ]
+        ));
+
+        renderingInitialized = true;
+    }
+
+    public void DestroyTextLayout(TextLayout layout)
+    {
+        layout.Reset();
+        textLayoutPool.Return(layout);
+    }
+
+    public TextLayout CreateTextLayout(ReadOnlySpan<char> text, Vector2 availableSize, bool wordWrap, GfxFont? font = default)
+    {
+        const float glyphHorizontalPadding = 4;
+
+        Assert(scratchRunesCount == 0);
+
+        font ??= fontCache.GetDefaultFont();
+        GfxFont.Metrics fontMetrics = font.GetMetrics();
+
+        TextLayout layout = textLayoutPool.Rent();
+        layout.Font = font;
+
+        float totalWidth = 0;
+        float totalHeight = 0;
+
+        float cursorY = fontMetrics.Ascender;
+
+        int wordCountOnLine = 0;
+
+        Rune spaceRune = new(' ');
+        float spaceRuneWidth = font.GetGlyph((uint)spaceRune.Value).Width;
+
+        Vector2 MeasureText(ReadOnlySpan<char> word)
+        {
+            float width = 0;
+            float height = fontMetrics.Height;
+
+            foreach (var rune in word.EnumerateRunes())
+            {
+                Glyph glyph = font.GetGlyph((uint)rune.Value);
+
+                width += glyph.Width + glyphHorizontalPadding;
+            }
+
+            return new(width, height);
+        }
+
+        foreach (var line in text.EnumerateLines())
+        {
+            float remainingWidth = availableSize.X;
+
+            int wordCount = line.Split(scratchWordRanges.AsSpan(), ' ', StringSplitOptions.None);
+            ThrowNotSupportedIf(wordCount >= scratchWordRanges.Length, "Too many words in a line");
+
+            for (int i = 0; i < wordCount; i++)
+            {
+                Range wordRange = scratchWordRanges[i];
+                ReadOnlySpan<char> word = line[wordRange];
+
+                Vector2 wordSize = MeasureText(word);
+
+                if (i > 0)
+                {
+                    wordSize.X += spaceRuneWidth;
+                }
+
+                if (wordWrap && remainingWidth < wordSize.X)
+                {
+                    if (wordCountOnLine > 0)
+                    {
+                        ConsumeRunes(font, layout, cursorY);
+
+                        remainingWidth = availableSize.X;
+                        cursorY += fontMetrics.Height;
+
+                        foreach (var rune in word.EnumerateRunes())
+                        {
+                            scratchRunes[scratchRunesCount++] = (uint)rune.Value;
+                        }
+
+                        wordCountOnLine = 1;
+                        remainingWidth -= wordSize.X;
+                    }
+                    else
+                    {
+                        if (i > 0)
+                            scratchRunes[scratchRunesCount++] = (uint)spaceRune.Value;
+                        foreach (var rune in word.EnumerateRunes())
+                        {
+                            scratchRunes[scratchRunesCount++] = (uint)rune.Value;
+                        }
+                        ConsumeRunes(font, layout, cursorY);
+
+                        remainingWidth = availableSize.X;
+                        cursorY += fontMetrics.Height;
+                        wordCountOnLine = 0;
+                    }
+                }
+                else
+                {
+                    if (i > 0)
+                        scratchRunes[scratchRunesCount++] = (uint)spaceRune.Value;
+                    foreach (var rune in word.EnumerateRunes())
+                    {
+                        scratchRunes[scratchRunesCount++] = (uint)rune.Value;
+                    }
+
+                    remainingWidth -= wordSize.X;
+                    wordCountOnLine++;
+                }
+            }
+
+            if (scratchRunesCount > 0)
+            {
+                ConsumeRunes(font, layout, cursorY);
+            }
+
+            cursorY += fontMetrics.Height;
+        }
+
+        layout.Size = new(totalWidth, totalHeight);
+        return layout;
+
+        void ConsumeRunes(GfxFont font, TextLayout layout, float cursorY)
+        {
+            float cursorX = 0;
+
+            foreach (ShapedGlyph shapedGlyph in font.ShapeText(scratchRunes.AsSpan(0, scratchRunesCount)))
+            {
+                float x = cursorX + shapedGlyph.XOffset + shapedGlyph.Glyph.BearingX;
+                float y = cursorY + shapedGlyph.YOffset - shapedGlyph.Glyph.BearingY;
+
+                // Expand total size of the layout based on the bottom right corner of the glyph
+                float farX = x + shapedGlyph.Glyph.Width;
+                float farY = y + shapedGlyph.Glyph.Height;
+                totalWidth = Math.Max(totalWidth, farX);
+                totalHeight = Math.Max(totalHeight, farY);
+
+                bool isWithinBounds = x <= availableSize.X && y <= availableSize.Y;
+
+                if (isWithinBounds)
+                {
+                    TextLayout.LayoutGlyph layoutGlyph = new(
+                        new(x, y),
+                        new(shapedGlyph.Glyph.Width, shapedGlyph.Glyph.Height),
+                        new(shapedGlyph.Glyph.U0, shapedGlyph.Glyph.V0),
+                        new(shapedGlyph.Glyph.U1, shapedGlyph.Glyph.V1),
+                        Color.RedOrange);
+
+                    layout.Append(layoutGlyph);
+                }
+
+                cursorX += shapedGlyph.XAdvance;
+                if (shapedGlyph.XAdvance == 0)
+                {
+                    cursorX += shapedGlyph.Glyph.Width;
+                }
+            }
+
+            scratchRunesCount = 0;
+        }
     }
 }

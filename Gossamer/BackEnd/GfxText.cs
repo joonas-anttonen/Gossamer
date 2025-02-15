@@ -269,12 +269,6 @@ public sealed class GfxFont : IDisposable
     readonly Dictionary<uint, Glyph> glyphMap = [];
     Glyph unknownGlyph;
 
-    unsafe uint MessageFunc(nint buffer, nint font, nint message, nint user_data)
-    {
-        Gossamer.Instance.Log.Append(Logging.Log.Level.Debug, $"{Utf8StringMarshaller.ConvertToManaged((byte*)message)}", DateTime.Now, "Hb", "Message");
-        return 0;
-    }
-
     Glyph GetGlyphByIndex(uint index)
     {
         if (glyphMap.TryGetValue(index, out Glyph glyph))

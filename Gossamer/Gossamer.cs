@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 
 using Gossamer.Backend;
@@ -75,20 +75,18 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     static Gossamer? instance;
 
+    /// <inheritdoc cref="Log.GetLogger(string)"/>
+    public static Logger GetLogger(string name)
+    {
+        return Instance.log.GetLogger(name);
+    }
+
     /// <summary>
     /// The singleton instance of <see cref="Gossamer"/>. Safe to use only after an instance has been created.
     /// </summary>
     public static Gossamer Instance
     {
         get => instance ?? throw new InvalidOperationException("Gossamer has not been initialized.");
-    }
-
-    /// <summary>
-    /// The <see cref="global::Gossamer.Log"/> instance used by the <see cref="Gossamer"/> instance.
-    /// </summary>
-    public Log Log
-    {
-        get => log;
     }
 
     public Gossamer(Parameters parameters, ApplicationInfo? appInfo = default)
@@ -108,6 +106,11 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
         log = new Log();
         logger = log.GetLogger(nameof(Gossamer));
+
+        if (parameters.EnableDebugging)
+        {
+            log.AddConsoleListener();
+        }
 
         SetSynchronizationContext(this);
 
@@ -163,39 +166,50 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
     /// <summary>
     /// Runs <see cref="Gossamer"/> in full application mode. This method will block until the frontend is closed.
     /// </summary>
-    public void Run()
+    public int Run()
     {
-        // Set the current directory to the directory of the executable
-        Directory.SetCurrentDirectory(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location!)!);
+        try
+        {
+            // Set the current directory to the directory of the executable
+            Directory.SetCurrentDirectory(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location!)!);
 
-        logger.Debug($"OS: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
-        logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
-        logger.Debug($"Working directory: {Directory.GetCurrentDirectory()}");
+            logger.Debug($"OS: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
+            logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
+            logger.Debug($"Working directory: {Directory.GetCurrentDirectory()}");
 
-        // Debug log threading information
-        logger.Debug("Frontend thread = " + frontendThreadId);
-        logger.Debug("Backend thread = " + backendThreadId);
+            // Debug log threading information
+            logger.Debug("Frontend thread = " + frontendThreadId);
+            logger.Debug("Backend thread = " + backendThreadId);
 
-        // Frontend
-        using Gui gui = new(backendMessageQueue);
-        gui.Create();
+            // Frontend
+            using Gui gui = new(backendMessageQueue);
+            gui.Create();
 
-        // Backend
-        using Gfx gfx = new(new GfxApiParameters(
-            appInfo,
-            EnableDebugging: parameters.EnableDebugging,
-            PresentationMode: GfxPresentationMode.SwapChain
-        ));
-        gfx.Create(new GfxParameters(
-            PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices()),
-            Presentation: new GfxSwapChainPresentation(Color.DarkPeriwinkle, gui)
-        ));
+            // Backend
+            using Gfx gfx = new(new GfxApiParameters(
+                appInfo,
+                EnableDebugging: parameters.EnableDebugging,
+                PresentationMode: GfxPresentationMode.SwapChain
+            ));
+            gfx.Create(new GfxParameters(
+                PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices()),
+                Presentation: new GfxSwapChainPresentation(Color.DarkPeriwinkle, gui)
+            ));
 
-        RunBackend(gfx);
-        RunFrontend(gui);
+            RunBackend(gfx);
+            RunFrontend(gui);
 
-        backendMessageQueue.PostQuit();
-        backendThread?.Join();
+            backendMessageQueue.PostQuit();
+            backendThread?.Join();
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex.ToString());
+        }
+
+        return 1;
     }
 
     /// <summary>
