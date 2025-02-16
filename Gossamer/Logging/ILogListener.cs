@@ -12,7 +12,7 @@ public interface ILogListener
 }
 
 /// <summary>
-/// Console log listener.
+/// Log listener that writes log events to the console.
 /// </summary>
 public sealed class ConsoleLogListener : ILogListener
 {
@@ -23,11 +23,13 @@ public sealed class ConsoleLogListener : ILogListener
 }
 
 /// <summary>
-/// File log listener.
+/// Log listener that writes log events to a file.
 /// </summary>
 public class FileLogListener : ILogListener
 {
-    readonly Timer saveToFileTimer;
+    readonly Timer outputTimer;
+    readonly StreamWriter outputWriter;
+    readonly Lock outputLock = new();
 
     public long MaximumFileSize { get; set; } = 10 * 1024 * 1024 /* 10 MB */;
 
@@ -75,37 +77,41 @@ public class FileLogListener : ILogListener
             Directory.CreateDirectory(pathDirectory);
         }
 
-        saveToFileTimer = new Timer(SaveToFileTimer, default, Timeout.Infinite, Timeout.Infinite);
+        outputTimer = new Timer(SaveToFileTimer, default, Timeout.Infinite, Timeout.Infinite);
+        outputWriter = new StreamWriter(Path, true);
     }
 
     void SaveToFile()
     {
-        lock (events)
+        using (outputLock.EnterScope())
         {
             if (events.IsEmpty)
                 return;
 
             try
             {
-                try
-                {
-                    // Limit log file size
-                    if (File.Exists(Path) && new FileInfo(Path).Length > MaximumFileSize)
-                    {
-                        File.Copy(Path, Path + ".old", true);
-                        File.Delete(Path);
-                    }
-                }
-                catch { }
-
-                using StreamWriter? file = new(Path, true);
-
                 while (!events.IsEmpty)
                 {
+                    LimitFileSize();
                     if (events.TryDequeue(out Log.Event ev))
                     {
-                        file.WriteLine(ev);
+                        outputWriter.WriteLine(ev.ToString());
                     }
+                }
+
+                LimitFileSize();
+            }
+            catch { }
+        }
+
+        void LimitFileSize()
+        {
+            try
+            {
+                if (outputWriter.BaseStream.Length > MaximumFileSize)
+                {
+                    File.Copy(Path, Path + ".old", true);
+                    outputWriter.BaseStream.SetLength(0);
                 }
             }
             catch { }
@@ -123,13 +129,13 @@ public class FileLogListener : ILogListener
 
         // Since every log event restarts the save timer, log might never be saved to disk
         // Force an immediate save if event count exceeds some constant
-        if (events.Count <= 10)
+        if (events.Count > 10)
         {
-            saveToFileTimer.Change(200, Timeout.Infinite);
+            SaveToFile();
         }
         else
         {
-            SaveToFile();
+            outputTimer.Change(200, Timeout.Infinite);
         }
     }
 

@@ -23,22 +23,29 @@ public sealed class Log : IDisposable
     /// <summary>
     /// Log event.
     /// </summary>
-    /// <param name="Level">Log level.</param>
-    /// <param name="Timestamp">Log timestamp.</param>
-    /// <param name="Message">Log message.</param>
-    public readonly record struct Event(Level Level, DateTime Timestamp, string Message)
+    /// <param name="Level">Event severity.</param>
+    /// <param name="Timestamp">Event timestamp.</param>
+    /// <param name="Message">Event message.</param>
+    /// <param name="Origin">Event origin.</param>
+    public readonly record struct Event(Level Level, DateTime Timestamp, string Message, string Origin)
     {
+        /// <summary>
+        /// Returns a string with the event origin and message.
+        /// </summary>
         public readonly string ToShortString()
         {
-            return Message;
+            return $"{Origin} {Message}";
         }
 
+        /// <summary>
+        /// Returns a string that represents the event.
+        /// </summary>
         public override readonly string ToString()
         {
             // ISO 8601
             string timestamp = Timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
 
-            return $"[{timestamp}] [{LevelToString(Level)}] {Message}";
+            return $"[{timestamp}] [{LevelToString(Level)}] {Origin} {Message}";
         }
 
         static string LevelToString(Level level)
@@ -109,7 +116,7 @@ public sealed class Log : IDisposable
     }
 
     /// <summary>
-    /// Gets a <see cref="Logger"/> instance with the specified name.
+    /// Gets a <see cref="Logger"/> instance with the specified name. Instances are cached so that only one instance is created per name.
     /// </summary>
     /// <param name="name"></param>
     public Logger GetLogger(string name)
@@ -128,28 +135,12 @@ public sealed class Log : IDisposable
     /// Appends a message to the log.
     /// </summary>
     /// <param name="level">Severity of the event.</param>
-    /// <param name="timestamp">Timestamp of the event.</param>
     /// <param name="message">Message describing the event.</param>
     /// <param name="typeName">Name of the type that the message originated from.</param>
     /// <param name="callerName">Name of the caller that the message originated from.</param>
-    public void Append(Level level, DateTime timestamp, string message, string typeName, string callerName)
+    public void Append(Level level, string message, string typeName, string callerName)
     {
-        const string TypedCallerFormat = "{0}::{1} {2}";
-        const string TypedFormat = "{0} {1}";
-        const string PlainFormat = "{0}";
-
-        bool haveTypeName = !string.IsNullOrEmpty(typeName);
-        bool haveCallerName = !string.IsNullOrEmpty(callerName);
-
-        string logMsg = haveTypeName
-            ? haveCallerName
-                ? string.Format(CultureInfo.InvariantCulture, PlainFormat, message)
-                : string.Format(CultureInfo.InvariantCulture, TypedFormat, callerName, message)
-            : haveCallerName
-                ? string.Format(CultureInfo.InvariantCulture, TypedFormat, typeName, message)
-                : string.Format(CultureInfo.InvariantCulture, TypedCallerFormat, typeName, callerName, message);
-
-        Event logEvent = new(level, timestamp, logMsg);
+        Event logEvent = new(level, DateTime.Now, message, $"{typeName}::{callerName}");
 
         foreach (ILogListener listener in listeners)
         {
@@ -172,27 +163,33 @@ public class Logger(Log log, string name)
     /// Logs an error message.
     /// </summary>
     /// <param name="message"></param>
-    public void Error(string message)
+    /// <param name="typeName"></param>
+    /// <param name="callerName"></param>
+    public void Error(string message, string typeName = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Error, DateTime.Now, message, string.Empty, string.Empty);
+        log.Append(Log.Level.Error, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
     }
 
     /// <summary>
     /// Logs a warning message.
     /// </summary>
     /// <param name="message"></param>
-    public void Warning(string message)
+    /// <param name="typeName"></param>
+    /// <param name="callerName"></param>
+    public void Warning(string message, string typeName = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Warning, DateTime.Now, message, string.Empty, string.Empty);
+        log.Append(Log.Level.Warning, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
     }
 
     /// <summary>
     /// Logs an information message.
     /// </summary>
     /// <param name="message"></param>
-    public void Information(string message)
+    /// <param name="typeName"></param>
+    /// <param name="callerName"></param>
+    public void Information(string message, string typeName = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Information, DateTime.Now, message, string.Empty, string.Empty);
+        log.Append(Log.Level.Information, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
     }
 
     /// <summary>
@@ -201,8 +198,8 @@ public class Logger(Log log, string name)
     /// <param name="message"></param>
     /// <param name="typeName"></param>
     /// <param name="callerName"></param>
-    public void Debug(string message = "", string typeName = "", [CallerMemberName] string callerName = "")
+    public void Debug(string message, string typeName = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Debug, DateTime.Now, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
+        log.Append(Log.Level.Debug, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
     }
 }
