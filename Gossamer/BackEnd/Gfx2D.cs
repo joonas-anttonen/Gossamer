@@ -4,6 +4,7 @@ using System.Text;
 
 using Gossamer.Collections;
 using Gossamer.External.Vulkan;
+using Gossamer.Logging;
 using Gossamer.Utilities;
 
 using static Gossamer.External.Vulkan.Api;
@@ -475,6 +476,8 @@ class Gfx2D(Gfx gfx) : IDisposable
 
     public readonly record struct Statistics(int DrawCalls, int Vertices, int Indices);
 
+    readonly Logger logger = Gossamer.GetLogger(nameof(Gfx2D));
+
     readonly Gfx gfx = gfx;
 
     readonly GfxFontCache fontCache = new();
@@ -505,7 +508,11 @@ class Gfx2D(Gfx gfx) : IDisposable
     readonly uint[] scratchRunes = new uint[1024];
     readonly Range[] scratchWordRanges = new Range[1024];
 
-    readonly Gfx2DCommandBuffer? current2DCommandBuffer = new();
+    readonly Lock commandBufferLock = new();
+    bool usingBufferA = true;
+    readonly Gfx2DCommandBuffer commandBufferA = new();
+    readonly Gfx2DCommandBuffer commandBufferB = new();
+    Gfx2DCommandBuffer? currentCommandBuffer;
     int frameCommandsCount;
     int frameVertexCount;
     int frameIndexCount;
@@ -525,9 +532,25 @@ class Gfx2D(Gfx gfx) : IDisposable
     {
         Assert(frameInProgress);
 
-        var commandBuffer = current2DCommandBuffer ?? throw new InvalidOperationException("No command buffer available.");
-        commandBuffer.Reset();
-        return commandBuffer;
+        // Return the free command buffer. Must lock to ensure that the command buffer is not used by the rendering thread.
+        using (commandBufferLock.EnterScope())
+        {
+            var freeCommandBuffer = usingBufferA ? commandBufferB : commandBufferA;
+            freeCommandBuffer.Reset();
+            return freeCommandBuffer;
+        }
+    }
+
+    public void EndCommandBuffer(Gfx2DCommandBuffer commandBuffer)
+    {
+        Assert(frameInProgress);
+
+        // Must lock to ensure that the command buffer is not used by the rendering thread.
+        using (commandBufferLock.EnterScope())
+        {
+            currentCommandBuffer = commandBuffer;
+            usingBufferA = !usingBufferA;
+        }
     }
 
     public void Create()
@@ -701,144 +724,153 @@ class Gfx2D(Gfx gfx) : IDisposable
         Assert(frameInProgress);
         AssertNotNull(vertexBuffer);
         AssertNotNull(indexBuffer);
-        AssertNotNull(current2DCommandBuffer);
 
-        current2DCommandBuffer.GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches);
-        if (vertices.Length > 0)
+        if (currentCommandBuffer == null)
         {
-            gfx.UpdateDynamicBuffer(vertexBuffer, vertices);
-            gfx.UpdateDynamicBuffer(indexBuffer, indices);
+            logger.Debug("No commands to render.");
+            frameInProgress = false;
+            return;
         }
 
-        AssertNotNull(backBuffer);
-        AssertNotNull(compositionPipeline);
-
-        for (int i = 0; i < commandBatches.Length; i++)
+        using (commandBufferLock.EnterScope())
         {
-            CommandBatch batch = commandBatches[i];
-            current2DCommandBuffer.GetBatchData(batch, out ReadOnlySpan<Command> commands);
+            currentCommandBuffer.GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches);
+            if (vertices.Length > 0)
+            {
+                gfx.UpdateDynamicBuffer(vertexBuffer, vertices);
+                gfx.UpdateDynamicBuffer(indexBuffer, indices);
+            }
 
-            RecordBatch(commands, backBuffer);
-        }
+            AssertNotNull(backBuffer);
+            AssertNotNull(compositionPipeline);
 
-        GfxPresenter presenter = gfx.GetPresenter();
-        VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
-        PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
+            for (int i = 0; i < commandBatches.Length; i++)
+            {
+                CommandBatch batch = commandBatches[i];
+                currentCommandBuffer.GetBatchData(batch, out ReadOnlySpan<Command> commands);
 
-        /*if (true)
-        {
+                RecordBatch(commands, backBuffer);
+            }
+
+            GfxPresenter presenter = gfx.GetPresenter();
+            VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
+            PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
+
+            /*if (true)
+            {
+                gfx.PixelBufferBarrier(
+                    commandBuffer,
+                    pixelBuffer: backBuffer,
+                    srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+                    dstLayout: VkImageLayout.TRANSFER_SRC_OPTIMAL);
+
+                VkImageBlit imageBlit = new()
+                {
+                    Src = new()
+                    {
+                        Aspect = VkImageAspect.COLOR,
+                        MipLevel = 0,
+                        BaseArrayLayer = 0,
+                        LayerCount = 1,
+                    },
+                    SrcOffsets1 = new((int)backBuffer.Width, (int)backBuffer.Height, 1),
+                    Dst = new()
+                    {
+                        Aspect = VkImageAspect.COLOR,
+                        MipLevel = 0,
+                        BaseArrayLayer = 0,
+                        LayerCount = 1,
+                    },
+                    DstOffsets1 = new((int)presentBuffer.Width, (int)presentBuffer.Height, 1),
+                };
+
+                vkCmdBlitImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_SRC_OPTIMAL, presentBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &imageBlit, VkFilter.LINEAR);
+
+                gfx.FIXME_OmegaBarrier(commandBuffer);
+                return;
+            }*/
+
+            gfx.PixelBufferBarrier(
+                commandBuffer,
+                pixelBuffer: presentBuffer,
+                srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
+                dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
+
             gfx.PixelBufferBarrier(
                 commandBuffer,
                 pixelBuffer: backBuffer,
                 srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-                dstLayout: VkImageLayout.TRANSFER_SRC_OPTIMAL);
+                dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
 
-            VkImageBlit imageBlit = new()
+            VkRenderingAttachmentInfo colorAttachment = new(default)
             {
-                Src = new()
-                {
-                    Aspect = VkImageAspect.COLOR,
-                    MipLevel = 0,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1,
-                },
-                SrcOffsets1 = new((int)backBuffer.Width, (int)backBuffer.Height, 1),
-                Dst = new()
-                {
-                    Aspect = VkImageAspect.COLOR,
-                    MipLevel = 0,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1,
-                },
-                DstOffsets1 = new((int)presentBuffer.Width, (int)presentBuffer.Height, 1),
+                ImageView = presentBuffer.View,
+                ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+                LoadOp = VkAttachmentLoadOp.LOAD,
+                StoreOp = VkAttachmentStoreOp.STORE,
             };
 
-            vkCmdBlitImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_SRC_OPTIMAL, presentBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &imageBlit, VkFilter.LINEAR);
+            VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
+            VkRenderingInfo renderingInfo = new(default)
+            {
+                RenderArea = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height)),
+                ColorAttachmentCount = 1,
+                ColorAttachments = colorAttachments,
+                LayerCount = 1,
+            };
 
-            gfx.FIXME_OmegaBarrier(commandBuffer);
-            return;
-        }*/
+            VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
+            VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
 
-        gfx.PixelBufferBarrier(
-            commandBuffer,
-            pixelBuffer: presentBuffer,
-            srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
-            dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
+            vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
-        gfx.PixelBufferBarrier(
-            commandBuffer,
-            pixelBuffer: backBuffer,
-            srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-            dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
+            vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Pipeline);
 
-        VkRenderingAttachmentInfo colorAttachment = new(default)
-        {
-            ImageView = presentBuffer.View,
-            ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-            LoadOp = VkAttachmentLoadOp.LOAD,
-            StoreOp = VkAttachmentStoreOp.STORE,
-        };
+            vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
-        VkRenderingInfo renderingInfo = new(default)
-        {
-            RenderArea = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height)),
-            ColorAttachmentCount = 1,
-            ColorAttachments = colorAttachments,
-            LayerCount = 1,
-        };
+            VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
 
-        VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
-        VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
+            VkDescriptorImageInfo descriptorImageInfo = new()
+            {
+                ImageView = backBuffer.View,
+                ImageLayout = VkImageLayout.SHADER_READ_ONLY_OPTIMAL,
+            };
+            descriptorWrites[0] = new(default)
+            {
+                DestinationBinding = 0,
+                DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
+                DescriptorCount = 1,
+                ImageInfo = &descriptorImageInfo,
+            };
 
-        vkCmdBeginRendering(commandBuffer, &renderingInfo);
+            VkDescriptorImageInfo descriptorImageInfo2 = new()
+            {
+                Sampler = drawSampler,
+            };
+            descriptorWrites[1] = new(default)
+            {
+                DestinationBinding = 1,
+                DescriptorType = VkDescriptorType.SAMPLER,
+                DescriptorCount = 1,
+                ImageInfo = &descriptorImageInfo2,
+            };
 
-        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Pipeline);
+            vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Layout, 0, 2, descriptorWrites);
+            vkCmdDraw(commandBuffer, 4, 1, 0, 0);
 
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+            vkCmdEndRendering(commandBuffer);
 
-        VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
+            gfx.FullBarrier(commandBuffer);
 
-        VkDescriptorImageInfo descriptorImageInfo = new()
-        {
-            ImageView = backBuffer.View,
-            ImageLayout = VkImageLayout.SHADER_READ_ONLY_OPTIMAL,
-        };
-        descriptorWrites[0] = new(default)
-        {
-            DestinationBinding = 0,
-            DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
-            DescriptorCount = 1,
-            ImageInfo = &descriptorImageInfo,
-        };
+            gfx.PixelBufferBarrier(
+                commandBuffer,
+                pixelBuffer: presentBuffer,
+                srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+                dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
 
-        VkDescriptorImageInfo descriptorImageInfo2 = new()
-        {
-            Sampler = drawSampler,
-        };
-        descriptorWrites[1] = new(default)
-        {
-            DestinationBinding = 1,
-            DescriptorType = VkDescriptorType.SAMPLER,
-            DescriptorCount = 1,
-            ImageInfo = &descriptorImageInfo2,
-        };
-
-        vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Layout, 0, 2, descriptorWrites);
-        vkCmdDraw(commandBuffer, 4, 1, 0, 0);
-
-        vkCmdEndRendering(commandBuffer);
-
-        gfx.FullBarrier(commandBuffer);
-
-        gfx.PixelBufferBarrier(
-            commandBuffer,
-            pixelBuffer: presentBuffer,
-            srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
-
-        frameInProgress = false;
+            frameInProgress = false;
+        }
     }
 
     public unsafe void RecordBatch(ReadOnlySpan<Command> commands, PixelBuffer presentBuffer)
