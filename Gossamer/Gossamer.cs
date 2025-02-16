@@ -181,16 +181,20 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             logger.Debug("Frontend thread = " + frontendThreadId);
             logger.Debug("Backend thread = " + backendThreadId);
 
-            // Frontend
-            using Gui gui = new(backendMessageQueue);
-            gui.Create();
-
-            // Backend
+            // 1. Create Gfx
             using Gfx gfx = new(new GfxApiParameters(
                 appInfo,
                 EnableDebugging: parameters.EnableDebugging,
                 PresentationMode: GfxPresentationMode.SwapChain
             ));
+
+            // 2. Create Gui
+            using Gui gui = new(gfx, backendMessageQueue);
+
+            // 3. Initialize Gui
+            gui.Create();
+
+            // 4. Initialize Gfx
             gfx.Create(new GfxParameters(
                 PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices()),
                 Presentation: new GfxSwapChainPresentation(Color.DarkPeriwinkle, gui)
@@ -263,12 +267,17 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     void FrontendFrame()
     {
-        Gui.WaitForEvents();
+        AssertNotNull(gui);
+
+        gui.WaitForEvents(0.1);
+        gui.Render();
     }
 
     void FrontendWakeUp()
     {
-        Gui.PostEmptyEvent();
+        AssertNotNull(gui);
+
+        gui.PostEmptyEvent();
     }
 
     void BackendThread()

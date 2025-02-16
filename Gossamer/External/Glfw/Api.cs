@@ -315,6 +315,15 @@ unsafe static class Api
     public static extern void glfwWaitEvents();
 
     /// <summary>
+    /// This function puts the calling thread to sleep until at least one event is available in the event queue, or until the specified timeout is reached. 
+    /// If one or more events are available, it behaves exactly like glfwPollEvents, i.e. the events in the queue are processed and the function then returns immediately. 
+    /// Processing events will cause the window and input callbacks associated with those events to be called.
+    /// </summary>
+    /// <param name="timeout"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwWaitEventsTimeout(double timeout);
+
+    /// <summary>
     /// Posts an empty event to the event queue.
     /// </summary>
     [DllImport(BinaryName, CallingConvention = CallConvention)]

@@ -171,7 +171,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
 
             if (waitTime.TotalMilliseconds > 1)
             {
-                logger.Debug($"Waited for fence for {waitTime}.");
+                //logger.Debug($"Waited for fence for {waitTime}.");
             }
         }
 

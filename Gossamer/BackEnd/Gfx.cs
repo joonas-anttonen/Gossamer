@@ -192,6 +192,8 @@ public class PixelBuffer
 
 public unsafe class Gfx : IDisposable
 {
+    public readonly record struct Statistics(ulong Frame, TimeSpan CpuFrameTime, TimeSpan GpuFrameTime);
+
     readonly Logger logger = Gossamer.GetLogger(nameof(Gfx));
 
     bool isDisposed;
@@ -235,7 +237,15 @@ public unsafe class Gfx : IDisposable
 
     Gfx2D? gfx2D;
 
+    ulong frameCounter;
+    Statistics statistics;
+
     readonly Dictionary<string, GfxPipelineShader> cachedPipelineShaders = [];
+
+    public Statistics GetStatistics()
+    {
+        return statistics;
+    }
 
     internal GfxSamples GetDeviceMaxSampleCount()
     {
@@ -289,51 +299,16 @@ public unsafe class Gfx : IDisposable
         timestampPool?.BeginCpuTimestamp();
         timestampPool?.BeginGpuTimestamp(presenter.GetCommandBuffer());
 
-        Gfx2D.Statistics gfx2DStatistics = gfx2D.GetStatistics();
-
         gfx2D.BeginFrame();
-        {
-            var cmdBuffer = gfx2D.BeginCommandBuffer();
-            {
-                cmdBuffer.BeginBatch();
-                //gfx2D.DrawRectangle(new(10, 10), new(100, 100), new Color(Color.MintyGreen, 1.0f));
-                //gfx2D.DrawCircle(new(200, 200), 50, new Color(Color.White, 1.0f), 2);
-
-                cmdBuffer.DrawRectangle(new(5, 0), new(5, 20), new Color(Color.MintyGreen, 1.0f));
-                cmdBuffer.DrawRectangle(new(0, 5), new(20, 5), new Color(Color.MintyGreen, 1.0f));
-
-                var font = gfx2D.GetFont("Arial", 12);
-                cmdBuffer.DrawText($"{globalRenderTimestamp:hh\\:mm\\:ss\\.fff} GC: {GC.GetTotalPauseDuration():mm\\:ss\\.ffffff} {globalRenderElapsed:ss\\.ffffff}\nCPU: {cpuFrameTime:ss\\.ffffff}\nGPU: {gpuFrameTime:ss\\.ffffff}\n2D Draws: {gfx2DStatistics.DrawCalls} ({gfx2DStatistics.Vertices} vtx {gfx2DStatistics.Indices} idx)", new(5, 5), new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000), font);
-
-                Vector2 textPosition = new(5, 200);
-                Vector2 textAvailableSize = new(400, 200);
-
-                {
-                    var textToTest = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-                    //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
-                    var textLayout = gfx2D.CreateTextLayout(textToTest,
-                        textAvailableSize,
-                        wordWrap: true);
-
-                    cmdBuffer.DrawText(textLayout, textPosition, new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000));
-                    cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, new Color(Color.HighlighterRed, 1.0f));
-                    cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, new Color(Color.MintyGreen, 1.0f));
-
-                    gfx2D.DestroyTextLayout(textLayout);
-                }
-
-                //gfx2D.DrawText("t", new(300, 300), new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000));
-                cmdBuffer.EndBatch();
-
-            }
-            gfx2D.EndCommandBuffer(cmdBuffer);
-        }
         gfx2D.EndFrame();
 
         timestampPool?.EndGpuTimestamp(presenter.GetCommandBuffer());
         timestampPool?.EndCpuTimestamp();
 
         presenter?.EndFrame();
+
+        statistics = new(frameCounter, cpuFrameTime, gpuFrameTime);
+        frameCounter++;
     }
 
     public void Create(GfxParameters parameters)

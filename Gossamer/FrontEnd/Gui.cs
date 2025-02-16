@@ -1,9 +1,4 @@
-using System.Runtime.InteropServices;
-using System.Security;
-using System.Text.Json.Serialization;
-
 using Gossamer.Backend;
-using Gossamer.Collections;
 using Gossamer.External.Glfw;
 using Gossamer.Logging;
 using Gossamer.Utilities;
@@ -13,80 +8,18 @@ using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Frontend;
 
-public class GuiParameters
-{
-    /// <summary>
-    /// Name and title of the <see cref="Window"/>.
-    /// </summary>
-    [JsonIgnore]
-    public string Name { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Determines whether or not the graphics debugging layer is enabled. Defaults to true in debug builds.
-    /// </summary>
-    [JsonIgnore]
-    public bool EnableDebug { get; set; } = false;
-
-    /// <summary>
-    /// Path to the icon to be set the for the <see cref="Window"/>.
-    /// </summary>
-    [JsonIgnore]
-    public string IconPath { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Zero-based index of the monitor to initially display the window in.
-    /// Zero is always the system main monitor.
-    /// </summary>
-    public int StartupMonitor { get; set; }
-    /// <summary>
-    /// Whether or not to initially fullscreen the window.
-    /// </summary>
-    public bool StartupFullscreen { get; set; }
-
-    /// <summary>
-    /// Initial position of the window.
-    /// </summary>
-    [JsonConverter(typeof(JsonVector2Converter))]
-    public Vector2? Position { get; set; }
-    /// <summary>
-    /// Initial size of the window.
-    /// </summary>
-    [JsonConverter(typeof(JsonVector2Converter))]
-    public Vector2? Size { get; set; }
-
-    /// <summary>
-    /// Size of the edges of the <see cref="Window"/>.
-    /// </summary>
-    [JsonIgnore]
-    public Vector4 SizeOfFrame { get; set; } = new Vector4(3.0f, 32.0f, 3.0f, 3.0f);
-
-    /// <summary>
-    /// Color of the edges of the <see cref="Window"/>.
-    /// </summary>
-    [JsonConverter(typeof(JsonColorConverter))]
-    public Color ColorOfFrame { get; set; } = Color.UnpackRGB(0x2B2A33);
-    /// <summary>
-    /// Color of the client area of the <see cref="Window"/>.
-    /// </summary>
-    [JsonConverter(typeof(JsonColorConverter))]
-    public Color ColorOfBackground { get; set; } = Color.UnpackRGB(0x0b0a10);
-}
-
 public class Gui : IDisposable
 {
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl), SuppressUnmanagedCodeSecurity]
-    public delegate long WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
-
     readonly Logger logger = Gossamer.GetLogger(nameof(Gui));
 
     bool isDisposed;
     bool isCreated;
 
+    readonly Gfx gfx;
     readonly BackendMessageQueue messageQueue = new();
 
     GlfwWindow glfwWindow;
 
-    readonly WndProcDelegate glfwCallbackWindowProc;
     readonly GLFWwindowrefreshfun glfwCallbackWindowRefresh;
     readonly GLFWcursorenterfun glfwCallbackMouseEnter;
     readonly GLFWcursorposfun glfwCallbackMouseMove;
@@ -103,14 +36,14 @@ public class Gui : IDisposable
         get => glfwWindowShouldClose(glfwWindow) == 1;
     }
 
-    internal Gui(BackendMessageQueue messageQueue)
+    internal Gui(Gfx gfx, BackendMessageQueue messageQueue)
     {
+        this.gfx = gfx;
         this.messageQueue = messageQueue;
 
         var glfwResult = glfwInit();
         ThrowIf(glfwResult != 1, "Failed to initialize GLFW.");
 
-        glfwCallbackWindowProc = Callback_WindowProc;
         glfwCallbackWindowRefresh = Callback_WindowRefresh;
         glfwCallbackMouseEnter = Callback_MouseEnter;
         glfwCallbackMouseMove = Callback_MouseMove;
@@ -154,7 +87,7 @@ public class Gui : IDisposable
         // Disable OpenGL
         glfwWindowHint(Constants.GLFW_CLIENT_API, 0);
         // Disable default window frame
-        glfwWindowHint(Constants.GLFW_DECORATED, 0);
+        //glfwWindowHint(Constants.GLFW_DECORATED, 0);
         // Disable automatic iconification when focus gets lost in fullscreen mode
         glfwWindowHint(Constants.GLFW_AUTO_ICONIFY, 0);
 
@@ -190,19 +123,64 @@ public class Gui : IDisposable
         isCreated = true;
     }
 
-    public static void PostEmptyEvent()
+    public void Render()
+    {
+        Assert(isCreated);
+
+        var gfx2D = gfx.Get2D();
+
+        var gfxStats = gfx.GetStatistics();
+        var gfx2DStats = gfx2D.GetStatistics();
+
+        var cmdBuffer = gfx2D.BeginCommandBuffer();
+        {
+            cmdBuffer.BeginBatch();
+            //gfx2D.DrawRectangle(new(10, 10), new(100, 100), new Color(Color.MintyGreen, 1.0f));
+            //gfx2D.DrawCircle(new(200, 200), 50, new Color(Color.White, 1.0f), 2);
+            //
+            cmdBuffer.DrawRectangle(new(5, 0), new(5, 20), new Color(Color.MintyGreen, 1.0f));
+            cmdBuffer.DrawRectangle(new(0, 5), new(20, 5), new Color(Color.MintyGreen, 1.0f));
+            //
+            var font = gfx2D.GetFont("Arial", 12);
+            cmdBuffer.DrawText($"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices} vtx {gfx2DStats.Indices} idx)", new(5, 5), new Color(Color.White, 1.0f), Color.UnpackRGB(0x1a1c1d), font);
+            //
+            Vector2 textPosition = new(5, 200);
+            Vector2 textAvailableSize = new(400, 200);
+            //
+            {
+                var textToTest = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+                //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
+                var textLayout = gfx2D.CreateTextLayout(textToTest,
+                    textAvailableSize,
+                    wordWrap: true);
+                //
+                cmdBuffer.DrawText(textLayout, textPosition, new Color(Color.White, 1.0f), Color.UnpackRGB(0x1a1c1d));
+                cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, new Color(Color.HighlighterRed, 1.0f));
+                cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, new Color(Color.MintyGreen, 1.0f));
+                //
+                gfx2D.DestroyTextLayout(textLayout);
+            }
+            //
+            //gfx2D.DrawText("t", new(300, 300), new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000));
+            cmdBuffer.EndBatch();
+            //
+        }
+        gfx2D.EndCommandBuffer(cmdBuffer);
+    }
+
+    public void PostEmptyEvent()
     {
         glfwPostEmptyEvent();
     }
 
-    public static void WaitForEvents()
+    public void WaitForEvents()
     {
         glfwWaitEvents();
     }
 
-    long Callback_WindowProc(nint hWnd, uint msg, nint wParam, nint lParam)
+    public void WaitForEvents(double timeout)
     {
-        return 0;
+        glfwWaitEventsTimeout(timeout);
     }
 
     void Callback_WindowRefresh(GlfwWindow window)

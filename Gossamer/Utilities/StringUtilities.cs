@@ -60,7 +60,8 @@ public static class StringUtilities
         else if (seconds >= 60) return $"{seconds / 60:F1} m";
         else if (seconds >= 1) return $"{seconds:F1} s";
         else if (seconds >= 1e-3) return $"{seconds * 1e3:F0} ms";
-        else return $"{seconds * 1e6:F0} μs";
+        else if (seconds >= 1e-6) return $"{seconds * 1e6:F0} us";
+        else return $"{seconds * 1e9:F0} ns";
     }
 
     /// <summary>
@@ -74,7 +75,8 @@ public static class StringUtilities
         else if (seconds >= 60) return FormatInvariant("{0:F1} m", seconds / 60);
         else if (seconds >= 1) return FormatInvariant("{0:F1} s", seconds);
         else if (seconds >= 1e-3) return FormatInvariant("{0:F0} ms", seconds * 1e3);
-        else return FormatInvariant("{0:F0} μs", seconds * 1e6);
+        else if (seconds >= 1e-6) return FormatInvariant("{0:F0} us", seconds * 1e6);
+        else return FormatInvariant("{0:F0} ns", seconds * 1e9);
     }
 
     /// <summary>

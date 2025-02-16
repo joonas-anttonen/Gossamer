@@ -33,7 +33,7 @@ readonly struct PerCommandData(Vector2 scale, Vector2 translation, Vector3 color
 
 record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, GfxFont? Font, Vector3 Color);
 
-record struct CommandBatch(int firstCommandIndex, int commandCount, PixelBuffer? surface);
+record struct CommandBatch(int FirstCommandIndex, int CommandCount, PixelBuffer? Surface);
 
 class Gfx2DCommandBuffer
 {
@@ -77,7 +77,7 @@ class Gfx2DCommandBuffer
 
     public void GetBatchData(CommandBatch batch, out ReadOnlySpan<Command> commands)
     {
-        commands = this.commands.AsSpan(batch.firstCommandIndex, batch.commandCount);
+        commands = this.commands.AsSpan(batch.FirstCommandIndex, batch.CommandCount);
     }
 
     public void BeginBatch()
@@ -474,7 +474,7 @@ class Gfx2D(Gfx gfx) : IDisposable
 {
     public const int MaxVertices = 65536;
 
-    public readonly record struct Statistics(int DrawCalls, int Vertices, int Indices);
+    public readonly record struct Statistics(ulong Frame, int DrawCalls, int Vertices, int Indices);
 
     readonly Logger logger = Gossamer.GetLogger(nameof(Gfx2D));
 
@@ -513,9 +513,9 @@ class Gfx2D(Gfx gfx) : IDisposable
     readonly Gfx2DCommandBuffer commandBufferA = new();
     readonly Gfx2DCommandBuffer commandBufferB = new();
     Gfx2DCommandBuffer? currentCommandBuffer;
-    int frameCommandsCount;
-    int frameVertexCount;
-    int frameIndexCount;
+
+    ulong frameCounter;
+    Statistics frameStatistics;
 
     public GfxFont GetFont(string name, int size)
     {
@@ -525,13 +525,11 @@ class Gfx2D(Gfx gfx) : IDisposable
 
     public Statistics GetStatistics()
     {
-        return new Statistics(frameCommandsCount, frameVertexCount, frameIndexCount);
+        return frameStatistics;
     }
 
     public Gfx2DCommandBuffer BeginCommandBuffer()
     {
-        Assert(frameInProgress);
-
         // Return the free command buffer. Must lock to ensure that the command buffer is not used by the rendering thread.
         using (commandBufferLock.EnterScope())
         {
@@ -543,8 +541,6 @@ class Gfx2D(Gfx gfx) : IDisposable
 
     public void EndCommandBuffer(Gfx2DCommandBuffer commandBuffer)
     {
-        Assert(frameInProgress);
-
         // Must lock to ensure that the command buffer is not used by the rendering thread.
         using (commandBufferLock.EnterScope())
         {
@@ -581,7 +577,7 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         unsafe
         {
-            (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 36, CharacterSet.Full);
+            (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 24, CharacterSet.Full);
 
             PixelBuffer fontTexture = gfx.CreatePixelBuffer(
                 width: fontAtlas.Width,
@@ -684,9 +680,6 @@ class Gfx2D(Gfx gfx) : IDisposable
         }
 
         frameInProgress = true;
-        frameCommandsCount = 0;
-        frameVertexCount = 0;
-        frameIndexCount = 0;
 
         VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
 
@@ -721,13 +714,15 @@ class Gfx2D(Gfx gfx) : IDisposable
     /// </summary>
     public unsafe void EndFrame()
     {
+        frameCounter++;
+
         Assert(frameInProgress);
         AssertNotNull(vertexBuffer);
         AssertNotNull(indexBuffer);
 
         if (currentCommandBuffer == null)
         {
-            logger.Debug("No commands to render.");
+            //logger.Debug("No commands to render.");
             frameInProgress = false;
             return;
         }
@@ -735,6 +730,7 @@ class Gfx2D(Gfx gfx) : IDisposable
         using (commandBufferLock.EnterScope())
         {
             currentCommandBuffer.GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches);
+
             if (vertices.Length > 0)
             {
                 gfx.UpdateDynamicBuffer(vertexBuffer, vertices);
@@ -744,13 +740,21 @@ class Gfx2D(Gfx gfx) : IDisposable
             AssertNotNull(backBuffer);
             AssertNotNull(compositionPipeline);
 
+            int statisticsVertices = vertices.Length;
+            int statisticsIndices = indices.Length;
+            int statisticsDrawCalls = 0;
+
             for (int i = 0; i < commandBatches.Length; i++)
             {
                 CommandBatch batch = commandBatches[i];
                 currentCommandBuffer.GetBatchData(batch, out ReadOnlySpan<Command> commands);
 
+                statisticsDrawCalls += batch.CommandCount;
+
                 RecordBatch(commands, backBuffer);
             }
+
+            frameStatistics = new(frameCounter, statisticsDrawCalls, statisticsVertices, statisticsIndices);
 
             GfxPresenter presenter = gfx.GetPresenter();
             VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
@@ -991,6 +995,30 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         DestroyRendering();
 
+        VkPipelineColorBlendAttachmentState straightAlphaBlend = new()
+        {
+            BlendEnable = 1,
+            SrcColorBlendFactor = VkBlendFactor.SRC_ALPHA,
+            DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+            ColorBlendOp = VkBlendOp.ADD,
+            SrcAlphaBlendFactor = VkBlendFactor.ONE,
+            DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+            AlphaBlendOp = VkBlendOp.ADD,
+            ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
+        };
+
+        VkPipelineColorBlendAttachmentState premultipliedAlphaBlend = new()
+        {
+            BlendEnable = 1,
+            SrcColorBlendFactor = VkBlendFactor.ONE,
+            DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+            ColorBlendOp = VkBlendOp.ADD,
+            SrcAlphaBlendFactor = VkBlendFactor.ONE,
+            DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+            AlphaBlendOp = VkBlendOp.ADD,
+            ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
+        };
+
         pipeline = gfx.CreatePipeline(new GfxPipelineParameters(
             ShaderProgram: gfx.GetShaderProgram("Overlay"),
             PushConstants: [
@@ -1054,18 +1082,7 @@ class Gfx2D(Gfx gfx) : IDisposable
                 new()
                 {
                     Format = VkFormat.B8G8R8A8_UNORM,
-                    Blend = new()
-                    {
-                        BlendEnable  = 1,
-                        // Premultiplied alpha
-                        SrcColorBlendFactor = VkBlendFactor.ONE,
-                        DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-                        ColorBlendOp = VkBlendOp.ADD,
-                        SrcAlphaBlendFactor = VkBlendFactor.ONE,
-                        DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-                        AlphaBlendOp = VkBlendOp.ADD,
-                        ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
-                    }
+                    Blend = straightAlphaBlend,
                 }
             ]
         ));
@@ -1102,18 +1119,7 @@ class Gfx2D(Gfx gfx) : IDisposable
                 new()
                 {
                     Format = VkFormat.B8G8R8A8_UNORM,
-                    Blend = new()
-                    {
-                        BlendEnable  = 1,
-                        // Premultiplied alpha
-                        SrcColorBlendFactor = VkBlendFactor.ONE,
-                        DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-                        ColorBlendOp = VkBlendOp.ADD,
-                        SrcAlphaBlendFactor = VkBlendFactor.ONE,
-                        DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-                        AlphaBlendOp = VkBlendOp.ADD,
-                        ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
-                    }
+                    Blend = straightAlphaBlend,
                 }
             ]
         ));
