@@ -101,7 +101,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         this.appInfo = appInfo ?? ApplicationInfo.FromCallingAssembly();
 
         frontendThreadId = Environment.CurrentManagedThreadId;
-        backendThread = new(BackendThread);
+        backendThread = new(RunBackend);
         backendThreadId = backendThread.ManagedThreadId;
 
         log = new Log();
@@ -248,7 +248,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             }
         }
 
-        logger.Debug("Frontend Exit");
+        logger.Debug("Exit");
     }
 
     void FrontendDispatchSyncQueue()
@@ -280,7 +280,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         gui.PostEmptyEvent();
     }
 
-    void BackendThread()
+    void RunBackend()
     {
         bool keepRunning = true;
         while (keepRunning)
@@ -312,7 +312,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             Thread.Sleep(1);
         }
 
-        logger.Debug("Backend Exit");
+        logger.Debug("Exit");
     }
 
     public override SynchronizationContext CreateCopy()

@@ -10,6 +10,10 @@ namespace Gossamer.Frontend;
 
 public class Gui : IDisposable
 {
+    const float ControlsOffFromFrameSide = 7f;
+    const float ControlButtonWidth = 40f;
+    const float ControlsButtonSeparation = 2f;
+
     readonly Logger logger = Gossamer.GetLogger(nameof(Gui));
 
     bool isDisposed;
@@ -18,7 +22,15 @@ public class Gui : IDisposable
     readonly Gfx gfx;
     readonly BackendMessageQueue messageQueue = new();
 
+    readonly GuiParameters parameters = new();
+
     GlfwWindow glfwWindow;
+
+    bool isIconified;
+    bool isMaximized;
+    bool isFullscreen;
+    bool isDamaged;
+    bool useFullscreen = true;
 
     readonly GLFWwindowrefreshfun glfwCallbackWindowRefresh;
     readonly GLFWcursorenterfun glfwCallbackMouseEnter;
@@ -87,11 +99,9 @@ public class Gui : IDisposable
         // Disable OpenGL
         glfwWindowHint(Constants.GLFW_CLIENT_API, 0);
         // Disable default window frame
-        //glfwWindowHint(Constants.GLFW_DECORATED, 0);
+        glfwWindowHint(Constants.GLFW_DECORATED, 0);
         // Disable automatic iconification when focus gets lost in fullscreen mode
         glfwWindowHint(Constants.GLFW_AUTO_ICONIFY, 0);
-
-        GuiParameters parameters = new();
 
         // Retrieve monitor info for the monitor we are going to be starting in
         GlfwMonitor monitor = glfwGetMonitor(MathUtilities.Clamp(parameters.StartupMonitor, 0, glfwGetMonitorCount() - 1));
@@ -123,6 +133,42 @@ public class Gui : IDisposable
         isCreated = true;
     }
 
+    void UpdateParameters()
+    {
+        isIconified = glfwGetWindowAttrib(glfwWindow, Constants.GLFW_ICONIFIED) != 0;
+        isMaximized = glfwGetWindowAttrib(glfwWindow, Constants.GLFW_MAXIMIZED) != 0;
+
+        glfwGetWindowPos(glfwWindow, out int wx, out int wy);
+        glfwGetWindowSize(glfwWindow, out int ww, out int wh);
+        parameters.Position = new Vector2(wx, wy);
+        parameters.Size = new Vector2(ww, wh);
+    }
+
+    bool layoutRequested = true;
+
+    bool mouseOnClose;
+    bool mouseOnMaximize;
+    bool mouseOnMinimize;
+    bool mouseOnFrameControls;
+    bool mouseIsFrameDragging;
+    Vector2 mousePressedPosition;
+
+    Rectangle controlsCloseRect;
+    Rectangle controlsCloseIconRect;
+    Rectangle controlsMaximizeRect;
+    Rectangle controlsMaximizeIconRect;
+    Rectangle controlsMinimizeRect;
+    Rectangle controlsMinimizeIconRect;
+
+    FrameMode mode = FrameMode.Full;
+
+    public enum FrameMode
+    {
+        None = 0,
+        Title = 1,
+        Full = 2,
+    }
+
     public void Render()
     {
         Assert(isCreated);
@@ -135,35 +181,67 @@ public class Gui : IDisposable
         var cmdBuffer = gfx2D.BeginCommandBuffer();
         {
             cmdBuffer.BeginBatch();
-            //gfx2D.DrawRectangle(new(10, 10), new(100, 100), new Color(Color.MintyGreen, 1.0f));
-            //gfx2D.DrawCircle(new(200, 200), 50, new Color(Color.White, 1.0f), 2);
-            //
-            cmdBuffer.DrawRectangle(new(5, 0), new(5, 20), new Color(Color.MintyGreen, 1.0f));
-            cmdBuffer.DrawRectangle(new(0, 5), new(20, 5), new Color(Color.MintyGreen, 1.0f));
-            //
+
+            UpdateParameters();
+            glfwGetWindowSize(glfwWindow, out int ww, out int wh);
+
+            Vector4 sizeOfFrame = parameters.SizeOfFrame;
+
+            controlsCloseRect = new Rectangle(ww - ControlButtonWidth - ControlsOffFromFrameSide, 0.0f, ww - ControlsOffFromFrameSide, sizeOfFrame.Y);
+            controlsCloseIconRect = new Rectangle(0, 0, 8, 8).CenterOn(controlsCloseRect.Center);
+            controlsMaximizeRect = new Rectangle(controlsCloseRect.Left - ControlsButtonSeparation - ControlButtonWidth, 0.0f, controlsCloseRect.Left - ControlsButtonSeparation, sizeOfFrame.Y);
+            controlsMaximizeIconRect = new Rectangle(0, 0, 8, 8).CenterOn(controlsMaximizeRect.Center);
+            controlsMinimizeRect = new Rectangle(controlsMaximizeRect.Left - ControlsButtonSeparation - ControlButtonWidth, 0.0f, controlsMaximizeRect.Left - ControlsButtonSeparation, sizeOfFrame.Y);
+            controlsMinimizeIconRect = new Rectangle(0, 0, 8, 8).CenterOn(controlsMinimizeRect.Center);
+
+            cmdBuffer.FillRectangle(new(0, 0), new(ww, wh), parameters.ColorOfBackground);
+
+            Color colorOfFrame = parameters.ColorOfFrame;
+
+            if (mode != FrameMode.None)
+            {
+                if (mode == FrameMode.Full)
+                {
+                    cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(sizeOfFrame.X, wh), colorOfFrame);
+                    cmdBuffer.FillRectangle(new Vector2(ww - sizeOfFrame.Z, 0), new Vector2(ww, wh), colorOfFrame);
+                    cmdBuffer.FillRectangle(new Vector2(0, wh - sizeOfFrame.W), new Vector2(ww, wh), colorOfFrame);
+                }
+
+                cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(ww, sizeOfFrame.Y), colorOfFrame);
+
+                cmdBuffer.FillRectangle(controlsCloseRect, mouseOnClose ? new Color(Color.SizzlingRed, 0.75f) : colorOfFrame);
+                cmdBuffer.FillRectangle(controlsMaximizeRect, mouseOnMaximize ? new Color(Color.White, 0.5f) : colorOfFrame);
+                cmdBuffer.FillRectangle(controlsMinimizeRect, mouseOnMinimize ? new Color(Color.White, 0.5f) : colorOfFrame);
+
+                cmdBuffer.FillRectangle(controlsCloseIconRect, Color.White);
+                cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
+                cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
+
+                //cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.UnpackRGB(0x1f1e25), gfx2D.GetFont("Arial", 16));
+            }
+
             var font = gfx2D.GetFont("Arial", 12);
-            cmdBuffer.DrawText($"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices} vtx {gfx2DStats.Indices} idx)", new(5, 5), new Color(Color.White, 1.0f), Color.UnpackRGB(0x1a1c1d), font);
-            //
-            Vector2 textPosition = new(5, 200);
-            Vector2 textAvailableSize = new(400, 200);
-            //
+            var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
+            cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
+
+            Vector2 textPosition = new(5, sizeOfFrame.Y + 200);
+            Vector2 textAvailableSize = new(400, sizeOfFrame.Y + 200);
+
             {
                 var textToTest = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
                 //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
                 var textLayout = gfx2D.CreateTextLayout(textToTest,
                     textAvailableSize,
                     wordWrap: true);
-                //
-                cmdBuffer.DrawText(textLayout, textPosition, new Color(Color.White, 1.0f), Color.UnpackRGB(0x1a1c1d));
-                cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, new Color(Color.HighlighterRed, 1.0f));
-                cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, new Color(Color.MintyGreen, 1.0f));
-                //
+
+                cmdBuffer.DrawText(textLayout, textPosition, Color.White, parameters.ColorOfBackground);
+                cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, Color.HighlighterRed);
+                cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, Color.MintyGreen);
+
                 gfx2D.DestroyTextLayout(textLayout);
             }
-            //
-            //gfx2D.DrawText("t", new(300, 300), new Color(Color.White, 1.0f), Color.UnpackRGB(0x000000));
+
             cmdBuffer.EndBatch();
-            //
         }
         gfx2D.EndCommandBuffer(cmdBuffer);
     }
@@ -209,11 +287,81 @@ public class Gui : IDisposable
     void Callback_MouseMove(GlfwWindow window, double x, double y)
     {
         messageQueue.PostMouseXY((int)(x * 1000), (int)(y * 1000));
+
+        Vector4 sizeOfFrame = parameters.SizeOfFrame;
+
+        Vector2 mouseOnWindow = new((float)x, (float)y);
+
+        glfwGetWindowSize(glfwWindow, out int ww, out int wh);
+
+        if (mouseIsFrameDragging)
+        {
+            glfwGetWindowPos(glfwWindow, out int wx, out int wy);
+            Vector2 windowPosition = new(wx, wy);
+
+            Vector2 mouseDelta = mouseOnWindow - mousePressedPosition;
+            windowPosition += mouseDelta;
+            glfwSetWindowPos(glfwWindow, (int)windowPosition.X, (int)windowPosition.Y);
+        }
+
+        if (mode != FrameMode.None && mouseOnWindow.Y <= sizeOfFrame.Y)
+        {
+            mouseOnClose = controlsCloseRect.Contains(mouseOnWindow);
+            mouseOnMaximize = controlsMaximizeRect.Contains(mouseOnWindow);
+            mouseOnMinimize = controlsMinimizeRect.Contains(mouseOnWindow);
+            mouseOnFrameControls = mouseOnClose || mouseOnMaximize || mouseOnMinimize;
+        }
+        else
+        {
+            mouseOnClose = mouseOnMaximize = mouseOnMinimize = mouseOnFrameControls = false;
+        }
+
+        if (mouseOnFrameControls)
+        {
+            return;
+        }
+    }
+
+    bool IsPositionOnFrame(Vector2 position)
+    {
+        Vector4 sizeOfFrame = parameters.SizeOfFrame;
+
+        glfwGetWindowSize(glfwWindow, out int ww, out int wh);
+
+        return mode == FrameMode.Full && (position.X <= sizeOfFrame.X || position.X >= (ww - sizeOfFrame.Z) || position.Y <= sizeOfFrame.Y || position.Y >= (wh - sizeOfFrame.W));
     }
 
     void Callback_MouseButton(GlfwWindow window, int button, int action, int mods)
     {
-        messageQueue.PostMouseButton(GetInputButton(button), GetInputAction(action), GetInputMod(mods));
+        InputButton iButton = GetInputButton(button);
+        InputAction iAction = GetInputAction(action);
+        InputMods iMods = GetInputMods(mods);
+
+        messageQueue.PostMouseButton(iButton, iAction, iMods);
+
+        if (iButton == InputButton.Left)
+        {
+            glfwGetCursorPos(glfwWindow, out double x, out double y);
+            mousePressedPosition = new Vector2((float)x, (float)y);
+
+            mouseIsFrameDragging = iAction != InputAction.Release && mode == FrameMode.Full && IsPositionOnFrame(mousePressedPosition);
+        }
+
+        if (iButton == InputButton.Left && iAction == InputAction.Release)
+        {
+            if (mouseOnClose)
+            {
+                glfwSetWindowShouldClose(window, true);
+            }
+            else if (mouseOnMaximize)
+            {
+                CommitMaximize();
+            }
+            else if (mouseOnMinimize)
+            {
+                glfwIconifyWindow(glfwWindow);
+            }
+        }
     }
 
     void Callback_MouseScroll(GlfwWindow window, double x, double y)
@@ -223,12 +371,62 @@ public class Gui : IDisposable
 
     void Callback_KeyboardKey(GlfwWindow window, int key, int code, int action, int mods)
     {
-        messageQueue.PostKeyboardKey(GetInputKey(key), code, GetInputAction(action), GetInputMod(mods));
+        messageQueue.PostKeyboardKey(GetInputKey(key), code, GetInputAction(action), GetInputMods(mods));
     }
 
     void Callback_KeyboardChar(GlfwWindow window, uint c)
     {
         messageQueue.PostKeyboardChar((int)c, 0);
+    }
+
+    int normalWindowX = 0;
+    int normalWindowY = 0;
+    int normalWindowW = 0;
+    int normalWindowH = 0;
+
+    void CommitMaximize()
+    {
+        if (!useFullscreen && !isMaximized || useFullscreen && !isFullscreen)
+        {
+            mode = FrameMode.Title;
+
+            if (useFullscreen)
+            {
+                isFullscreen = true;
+
+                glfwGetWindowPos(glfwWindow, out normalWindowX, out normalWindowY);
+                glfwGetWindowSize(glfwWindow, out normalWindowW, out normalWindowH);
+
+                GlfwMonitor primaryMonitor = glfwGetPrimaryMonitor();
+                GlfwVideoMode videoMode = glfwGetVideoMode(primaryMonitor);
+                glfwSetWindowMonitor(glfwWindow, primaryMonitor, 0, 0, (int)videoMode.Width, (int)videoMode.Height, (int)videoMode.RefreshRate);
+            }
+            else
+            {
+                glfwMaximizeWindow(glfwWindow);
+            }
+        }
+        else
+        {
+            mode = FrameMode.Full;
+
+            if (useFullscreen)
+            {
+                isFullscreen = false;
+                glfwSetWindowMonitor(glfwWindow, default, normalWindowX, normalWindowY, normalWindowW, normalWindowH, default);
+            }
+            else
+            {
+                glfwRestoreWindow(glfwWindow);
+            }
+        }
+
+        ScheduleLayout();
+    }
+
+    void ScheduleLayout()
+    {
+        layoutRequested = true;
     }
 
     static InputButton GetInputButton(int button)
@@ -253,28 +451,28 @@ public class Gui : IDisposable
         };
     }
 
-    static InputMod GetInputMod(int mods)
+    static InputMods GetInputMods(int mods)
     {
-        InputMod result = InputMod.None;
+        InputMods result = InputMods.None;
 
         if ((mods & Constants.GLFW_MOD_SHIFT) != 0)
         {
-            result |= InputMod.Shift;
+            result |= InputMods.Shift;
         }
 
         if ((mods & Constants.GLFW_MOD_CONTROL) != 0)
         {
-            result |= InputMod.Control;
+            result |= InputMods.Control;
         }
 
         if ((mods & Constants.GLFW_MOD_ALT) != 0)
         {
-            result |= InputMod.Alt;
+            result |= InputMods.Alt;
         }
 
         if ((mods & Constants.GLFW_MOD_SUPER) != 0)
         {
-            result |= InputMod.Super;
+            result |= InputMods.Super;
         }
 
         return result;

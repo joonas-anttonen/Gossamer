@@ -205,6 +205,11 @@ class Gfx2DCommandBuffer
         }
     }
 
+    public void DrawRectangle(Rectangle rectangle, Color color, float thickness = 1.0f)
+    {
+        DrawRectangle(rectangle.Position, rectangle.Position + rectangle.Size, color, thickness);
+    }
+
     public void DrawRectangle(Vector2 a, Vector2 c, Color color, float thickness = 1.0f)
     {
         float half_thickness = thickness * 0.5f;
@@ -213,6 +218,11 @@ class Gfx2DCommandBuffer
         PushQuadUV(new(a.X - half_thickness, c.Y - half_thickness), new(c.X + half_thickness, c.Y + half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
         PushQuadUV(new(a.X - half_thickness, a.Y + half_thickness), new(a.X + half_thickness, c.Y - half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
         PushQuadUV(new(c.X - half_thickness, a.Y + half_thickness), new(c.X + half_thickness, c.Y - half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
+    }
+
+    public void FillRectangle(Rectangle rectangle, Color color)
+    {
+        PushQuadUV(rectangle.Position, rectangle.Position + rectangle.Size, Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
     }
 
     public void FillRectangle(Vector2 a, Vector2 c, Color color)

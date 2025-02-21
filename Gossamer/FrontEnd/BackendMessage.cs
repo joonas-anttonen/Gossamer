@@ -32,12 +32,12 @@ class BackendMessage
         y = field1;
     }
 
-    public void GetMouseButton(out InputButton button, out InputAction action, out InputMod mods)
+    public void GetMouseButton(out InputButton button, out InputAction action, out InputMods mods)
     {
         Assert(Type == BackendMessageType.MouseButton);
         button = (InputButton)field0;
         action = (InputAction)field1;
-        mods = (InputMod)field2;
+        mods = (InputMods)field2;
     }
 
     public void GetMouseWheel(out int x, out int y)
@@ -47,20 +47,20 @@ class BackendMessage
         y = field1;
     }
 
-    public void GetKeyboardKey(out InputKey key, out int scancode, out InputAction action, out InputMod mods)
+    public void GetKeyboardKey(out InputKey key, out int scancode, out InputAction action, out InputMods mods)
     {
         Assert(Type == BackendMessageType.KeyboardKey);
         key = (InputKey)field0;
         scancode = field1;
         action = (InputAction)field2;
-        mods = (InputMod)field3;
+        mods = (InputMods)field3;
     }
 
-    public void GetKeyboardChar(out int codepoint, out InputMod mods)
+    public void GetKeyboardChar(out int codepoint, out InputMods mods)
     {
         Assert(Type == BackendMessageType.KeyboardChar);
         codepoint = field0;
-        mods = (InputMod)field1;
+        mods = (InputMods)field1;
     }
 
     public void SetQuit()
@@ -85,7 +85,7 @@ class BackendMessage
         field1 = y;
     }
 
-    public void SetMouseButton(InputButton button, InputAction action, InputMod mods)
+    public void SetMouseButton(InputButton button, InputAction action, InputMods mods)
     {
         Type = BackendMessageType.MouseButton;
         field0 = (int)button;
@@ -100,7 +100,7 @@ class BackendMessage
         field1 = y;
     }
 
-    public void SetKeyboardKey(InputKey key, int scancode, InputAction action, InputMod mods)
+    public void SetKeyboardKey(InputKey key, int scancode, InputAction action, InputMods mods)
     {
         Type = BackendMessageType.KeyboardKey;
         field0 = (int)key;
@@ -109,7 +109,7 @@ class BackendMessage
         field3 = (int)mods;
     }
 
-    public void SetKeyboardChar(int codepoint, InputMod mods)
+    public void SetKeyboardChar(int codepoint, InputMods mods)
     {
         Type = BackendMessageType.KeyboardChar;
         field0 = codepoint;

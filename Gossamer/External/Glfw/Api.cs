@@ -357,6 +357,75 @@ unsafe static class Api
     public static extern void glfwDestroyWindow(GlfwWindow window);
 
     /// <summary>
+    /// This function returns the value of an attribute of the specified window
+    /// </summary>
+    /// <param name="window"></param>
+    /// <param name="attrib"></param>
+    /// <returns></returns>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern int glfwGetWindowAttrib(GlfwWindow window, int attrib);
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="window"></param>
+    /// <param name="value"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwSetWindowShouldClose(GlfwWindow window, bool value);
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="window"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwIconifyWindow(GlfwWindow window);
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="window"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwRestoreWindow(GlfwWindow window);
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="window"></param>
+    /// <param name="width"></param>
+    /// <param name="height"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwSetWindowSize(GlfwWindow window, int width, int height);
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="window"></param>
+    /// <param name="xpos"></param>
+    /// <param name="ypos"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwGetCursorPos(GlfwWindow window, out double xpos, out double ypos);
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="window"></param>
+    /// <param name="monitor"></param>
+    /// <param name="xpos"></param>
+    /// <param name="ypos"></param>
+    /// <param name="width"></param>
+    /// <param name="height"></param>
+    /// <param name="refreshRate"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwSetWindowMonitor(GlfwWindow window, GlfwMonitor monitor, int xpos, int ypos, int width, int height, int refreshRate);
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="window"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwMaximizeWindow(GlfwWindow window);
+
+    /// <summary>
     /// Checks the close flag of the specified window.
     /// </summary>
     /// <param name="window">The window to query.</param>

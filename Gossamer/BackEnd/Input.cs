@@ -8,7 +8,7 @@ public enum MouseMode
 }
 
 [Flags]
-public enum InputMod
+public enum InputMods
 {
     None = 0,
     Shift = 1,

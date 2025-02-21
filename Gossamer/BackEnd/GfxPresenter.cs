@@ -92,7 +92,8 @@ internal unsafe sealed class GfxSwapChainPresenter(
     VkDevice device,
     VkQueue deviceQueue,
     uint deviceQueueIndex,
-    VkSurfaceKhr surface) : GfxPresenter
+    VkSurfaceKhr surface,
+    Color surfaceClearColor) : GfxPresenter
 {
     readonly Logger logger = Gossamer.GetLogger(nameof(GfxSwapChainPresenter));
 
@@ -112,6 +113,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
     readonly VkDevice device = device;
     readonly VkQueue deviceQueue = deviceQueue;
     readonly uint deviceQueueIndex = deviceQueueIndex;
+    readonly Color surfaceClearColor = surfaceClearColor;
 
     VkSurfaceKhr surface = surface;
     VkSwapChainKhr swapChain;

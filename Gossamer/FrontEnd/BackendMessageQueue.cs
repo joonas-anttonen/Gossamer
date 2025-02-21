@@ -48,7 +48,7 @@ class BackendMessageQueue(int initialCapacity = 4)
         messageQueue.Enqueue(message);
     }
 
-    public void PostMouseButton(InputButton button, InputAction action, InputMod mods)
+    public void PostMouseButton(InputButton button, InputAction action, InputMods mods)
     {
         var message = messagePool.Rent();
         message.SetMouseButton(button, action, mods);
@@ -62,14 +62,14 @@ class BackendMessageQueue(int initialCapacity = 4)
         messageQueue.Enqueue(message);
     }
 
-    public void PostKeyboardKey(InputKey key, int scancode, InputAction action, InputMod mods)
+    public void PostKeyboardKey(InputKey key, int scancode, InputAction action, InputMods mods)
     {
         var message = messagePool.Rent();
         message.SetKeyboardKey(key, scancode, action, mods);
         messageQueue.Enqueue(message);
     }
 
-    public void PostKeyboardChar(int codepoint, InputMod mods)
+    public void PostKeyboardChar(int codepoint, InputMods mods)
     {
         var message = messagePool.Rent();
         message.SetKeyboardChar(codepoint, mods);

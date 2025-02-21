@@ -321,7 +321,7 @@ public unsafe class Gfx : IDisposable
 
         if (parameters.Presentation is GfxSwapChainPresentation swapChainPresentation)
         {
-            var swapChainPresenter = new GfxSwapChainPresenter(instance, physicalDevice, device, deviceQueue, deviceQueueIndex, swapChainPresentation.Gui.CreateSurface(instance));
+            var swapChainPresenter = new GfxSwapChainPresenter(instance, physicalDevice, device, deviceQueue, deviceQueueIndex, swapChainPresentation.Gui.CreateSurface(instance), swapChainPresentation.ClearColor);
             presenter = swapChainPresenter;
             swapChainPresenter.Refresh(false);
         }

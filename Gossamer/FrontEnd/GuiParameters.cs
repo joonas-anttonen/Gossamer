@@ -60,5 +60,5 @@ public class GuiParameters
     /// Color of the client area of the <see cref="Window"/>.
     /// </summary>
     [JsonConverter(typeof(JsonColorConverter))]
-    public Color ColorOfBackground { get; set; } = Color.UnpackRGB(0x0b0a10);
+    public Color ColorOfBackground { get; set; } = Color.UnpackRGB(0x1f1e25);
 }
