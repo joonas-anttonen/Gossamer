@@ -3,10 +3,10 @@
 	"tasks": [
 		{
 			"type": "dotnet",
-			"task": "build d:/Projects/Gossamer/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
-			"file": "d:/Projects/Gossamer/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
+			"task": "build ${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
+			"file": "${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
 			"group": "build",
-			"label": "dotnet: build d:/Projects/Gossamer/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
+			"label": "dotnet: build ${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
 			"presentation": {
 				"echo": true,
 				"reveal": "always",

@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Gossamer\Gossamer.csproj" />
+    <ProjectReference Include="../Gossamer/Gossamer.csproj" />
   </ItemGroup>
 
 </Project>
