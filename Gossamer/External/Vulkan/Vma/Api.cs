@@ -1,7 +1,6 @@
 #pragma warning disable CS0649, IDE1006, SYSLIB1054
 
 using System.Runtime.InteropServices;
-using System.Security;
 
 namespace Gossamer.External.Vulkan.Vma;
 
@@ -902,10 +901,10 @@ struct VmaAllocationInfo
     public nint Name;
 }
 
-[SuppressUnmanagedCodeSecurity]
+[System.Security.SuppressUnmanagedCodeSecurity]
 static unsafe class Api
 {
-    const string VmaLibrary = "Gossamer.Vma.dll";
+    public const string BinaryName = "External/libgossamer-vma";
     const CallingConvention CallConvention = CallingConvention.Cdecl;
 
     /// <summary>
@@ -951,7 +950,7 @@ static unsafe class Api
     /// <param name="pCreateInfo"></param>
     /// <param name="pAllocator"></param>
     /// <returns></returns>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaCreateAllocator(VmaAllocatorCreateInfo* pCreateInfo, VmaAllocator* pAllocator);
 
     /// <summary>
@@ -959,7 +958,7 @@ static unsafe class Api
     /// </summary>
     /// <param name="pAllocator"></param>
     /// <returns></returns>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaDestroyAllocator(VmaAllocator pAllocator);
 
     /// <summary>
@@ -970,13 +969,13 @@ static unsafe class Api
     /// <param name="pAllocator"></param>
     /// <param name="pBudgets">Must point to array with number of elements at least equal to number of memory heaps in physical device used.</param>
     /// <returns></returns>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaGetHeapBudgets(VmaAllocator pAllocator, VmaBudget* pBudgets);
 
     /// <summary>
     /// Given Memory Type Index, returns Property Flags of this memory type.
     /// </summary>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void vmaGetMemoryTypeProperties(
         VmaAllocator allocator,
         uint memoryTypeIndex,
@@ -1017,7 +1016,7 @@ static unsafe class Api
     /// <param name="pAllocation"></param>
     /// <param name="pAllocationInfo"></param>
     /// <returns></returns>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaCreateBuffer(
         VmaAllocator pAllocator,
         VkBufferCreateInfo* pBufferCreateInfo,
@@ -1036,7 +1035,7 @@ static unsafe class Api
     /// <param name="pAllocation"></param>
     /// <param name="pAllocationInfo"></param>
     /// <returns></returns>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaCreateImage(
         VmaAllocator pAllocator,
         VkImageCreateInfo* pImageCreateInfo,
@@ -1058,7 +1057,7 @@ static unsafe class Api
     /// <param name="buffer"></param>
     /// <param name="allocation"></param>
     /// <returns></returns>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaDestroyBuffer(
         VmaAllocator allocator,
         VkBuffer buffer,
@@ -1077,7 +1076,7 @@ static unsafe class Api
     /// <param name="buffer"></param>
     /// <param name="allocation"></param>
     /// <returns></returns>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaDestroyImage(
         VmaAllocator allocator,
         VkImage image,
@@ -1120,7 +1119,7 @@ static unsafe class Api
     /// If the allocation is made from a memory types that is not `HOST_COHERENT`,
     /// you also need to use vmaInvalidateAllocation() / vmaFlushAllocation(), as required by Vulkan specification.
     /// </summary>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaMapMemory(
         VmaAllocator allocator,
         VmaAllocation allocation,
@@ -1133,7 +1132,7 @@ static unsafe class Api
     /// If the allocation is made from a memory types that is not `HOST_COHERENT`,
     /// you also need to use vmaInvalidateAllocation() / vmaFlushAllocation(), as required by Vulkan specification.
     /// </summary>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void vmaUnmapMemory(
         VmaAllocator allocator,
         VmaAllocation allocation);
@@ -1156,7 +1155,7 @@ static unsafe class Api
     /// This function returns the `VkResult` from `vkFlushMappedMemoryRanges` if it is
     /// called, otherwise `VK_SUCCESS`.
     /// </summary>
-    [DllImport(VmaLibrary, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vmaFlushAllocation(
         VmaAllocator allocator,
         VmaAllocation allocation,

@@ -441,6 +441,13 @@ struct VkPhysicalDeviceFeatures2(nint next)
     public VkPhysicalDeviceFeatures Features;
 }
 
+struct VkPhysicalDeviceProperties2(nint next)
+{
+    public VkStructureType SType = VkStructureType.PHYSICAL_DEVICE_PROPERTIES_2;
+    public nint Next = next;
+    public VkPhysicalDeviceProperties Properties;
+}
+
 struct VkPhysicalDeviceDynamicRenderingFeatures(nint next)
 {
     public VkStructureType SType = VkStructureType.PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
@@ -1316,4 +1323,64 @@ struct VkQueryPoolCreateInfo(nint next)
     internal VkQueryType QueryType;
     internal uint QueryCount;
     internal VkQueryPipelineStatisticFlags PipelineStatistics;
+}
+
+struct VkPhysicalDeviceVulkan14Features(nint next)
+{
+    public VkStructureType SType = VkStructureType.PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
+    public nint Next = next;
+
+    public uint globalPriorityQuery;
+    public uint shaderSubgroupRotate;
+    public uint shaderSubgroupRotateClustered;
+    public uint shaderFloatControls2;
+    public uint shaderExpectAssume;
+    public uint rectangularLines;
+    public uint bresenhamLines;
+    public uint smoothLines;
+    public uint stippledRectangularLines;
+    public uint stippledBresenhamLines;
+    public uint stippledSmoothLines;
+    public uint vertexAttributeInstanceRateDivisor;
+    public uint vertexAttributeInstanceRateZeroDivisor;
+    public uint indexTypeUint8;
+    public uint dynamicRenderingLocalRead;
+    public uint maintenance5;
+    public uint maintenance6;
+    public uint pipelineProtectedAccess;
+    public uint pipelineRobustness;
+    public uint hostImageCopy;
+    public uint pushDescriptor;
+}
+
+unsafe struct VkPhysicalDeviceVulkan14Properties(nint next)
+{
+    public VkStructureType SType = VkStructureType.PHYSICAL_DEVICE_VULKAN_1_4_PROPERTIES;
+    public nint Next = next;
+
+    public uint lineSubPixelPrecisionBits;
+    public uint maxVertexAttribDivisor;
+    public uint supportsNonZeroFirstInstance;
+    public uint maxPushDescriptors;
+    public uint dynamicRenderingLocalReadDepthStencilAttachments;
+    public uint dynamicRenderingLocalReadMultisampledAttachments;
+    public uint earlyFragmentMultisampleCoverageAfterSampleCounting;
+    public uint earlyFragmentSampleMaskTestBeforeSampleCounting;
+    public uint depthStencilSwizzleOneSupport;
+    public uint polygonModePointSize;
+    public uint nonStrictSinglePixelWideLinesUseParallelogram;
+    public uint nonStrictWideLinesUseParallelogram;
+    public uint blockTexelViewCompatibleMultipleLayers;
+    public uint maxCombinedImageSamplerDescriptorCount;
+    public uint fragmentShadingRateClampCombinerInputs;
+    public uint defaultRobustnessStorageBuffers;
+    public uint defaultRobustnessUniformBuffers;
+    public uint defaultRobustnessVertexInputs;
+    public uint defaultRobustnessImages;
+    public uint copySrcLayoutCount;
+    public nint pCopySrcLayouts;
+    public uint copyDstLayoutCount;
+    public nint pCopyDstLayouts;
+    public fixed byte optimalTilingLayoutUUID[16];
+    public uint identicalMemoryTypeRequirements;
 }

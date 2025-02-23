@@ -20,6 +20,13 @@ public abstract class GfxPresenter : IDisposable
     internal abstract VkCommandBuffer GetCommandBuffer();
     public abstract PixelBuffer GetPresentationBuffer();
 
+    /// <summary>
+    /// Invalidates the presentation surface.
+    /// </summary>
+    /// <param name="width"> The new width of the surface. </param>
+    /// <param name="height"> The new height of the surface. </param>
+    public abstract void Invalidate(uint width, uint height);
+
     ~GfxPresenter()
     {
         Dispose(disposing: false);
@@ -48,6 +55,12 @@ public sealed class GfxHeadlessPresenter : GfxPresenter
         throw new NotImplementedException();
     }
 
+    public override void Invalidate(uint width, uint height)
+    {
+        throw new NotImplementedException();
+    }
+
+
     protected override void Dispose(bool disposing)
     {
 
@@ -75,6 +88,12 @@ public sealed class GfxDirectXPresenter : GfxPresenter
         throw new NotImplementedException();
     }
 
+    public override void Invalidate(uint width, uint height)
+    {
+        throw new NotImplementedException();
+    }
+
+
     protected override void Dispose(bool disposing)
     {
 
@@ -93,6 +112,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
     VkQueue deviceQueue,
     uint deviceQueueIndex,
     VkSurfaceKhr surface,
+    VkExtent2D surfaceExtent,
     Color surfaceClearColor) : GfxPresenter
 {
     readonly Logger logger = Gossamer.GetLogger(nameof(GfxSwapChainPresenter));
@@ -115,6 +135,8 @@ internal unsafe sealed class GfxSwapChainPresenter(
     readonly uint deviceQueueIndex = deviceQueueIndex;
     readonly Color surfaceClearColor = surfaceClearColor;
 
+    bool surfaceInvalidated = true;
+    VkExtent2D surfaceExtent = surfaceExtent;
     VkSurfaceKhr surface = surface;
     VkSwapChainKhr swapChain;
 
@@ -124,6 +146,12 @@ internal unsafe sealed class GfxSwapChainPresenter(
     readonly Queue<VkSemaphore> semaphores = new();
 
     readonly Stopwatch stopwatch = Stopwatch.StartNew();
+
+    public override void Invalidate(uint width, uint height)
+    {
+        surfaceInvalidated = true;
+        surfaceExtent = new VkExtent2D(width, height);
+    }
 
     internal override VkCommandBuffer GetCommandBuffer()
     {
@@ -214,6 +242,14 @@ internal unsafe sealed class GfxSwapChainPresenter(
 
     public override bool BeginFrame()
     {
+        if (surfaceInvalidated)
+        {
+            if (!Refresh(false))
+            {
+                return false;
+            }
+        }
+
         VkResult result = AcquireNextImage();
         if (result == VkResult.OUT_OF_DATE_KHR || result == VkResult.SUBOPTIMAL_KHR)
         {
@@ -251,7 +287,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
             srcStage: VkPipelineStage2.TOP_OF_PIPE,
             dstStage: VkPipelineStage2.ALL_TRANSFER);
 
-        Color clearColor = Color.UnpackRGB(0x1a1c1d);
+        Color clearColor = surfaceClearColor;
         VkClearColorValue clearColorValue = new();
         clearColorValue.Float32[0] = clearColor.R;
         clearColorValue.Float32[1] = clearColor.G;
@@ -407,6 +443,8 @@ internal unsafe sealed class GfxSwapChainPresenter(
 
     public bool Refresh(bool enableVerticalSync)
     {
+        surfaceInvalidated = false;
+
         ThrowVulkanIfFailed(vkDeviceWaitIdle(device),
             "Failed to wait for device idle.");
 
@@ -468,7 +506,10 @@ internal unsafe sealed class GfxSwapChainPresenter(
         VkExtent2D swapChainExtent = new();
         if (surfaceCapabilities.CurrentExtent.Width == uint.MaxValue)
         {
-            swapChainExtentOK = false;
+            swapChainExtentOK = true;
+            swapChainExtent.Width = Math.Max(surfaceCapabilities.MinImageExtent.Width, Math.Min(surfaceCapabilities.MaxImageExtent.Width, surfaceExtent.Width));
+            swapChainExtent.Height = Math.Max(surfaceCapabilities.MinImageExtent.Height, Math.Min(surfaceCapabilities.MaxImageExtent.Height, surfaceExtent.Height));
+            //swapChainExtentOK = false;
         }
         else if (surfaceCapabilities.CurrentExtent.Width == 0 || surfaceCapabilities.CurrentExtent.Height == 0)
         {

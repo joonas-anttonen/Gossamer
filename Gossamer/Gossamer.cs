@@ -114,14 +114,21 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
         SetSynchronizationContext(this);
 
-        NativeLibrary.SetDllImportResolver(typeof(Gossamer).Assembly, DllImportResolver);
+        NativeLibrary.SetDllImportResolver(typeof(Gossamer).Assembly, NativeImportResolver);
     }
 
     /// <summary>
     /// Custom DllImportResolver to load external libraries from the correct location based on the OS.
     /// </summary>
-    static nint DllImportResolver(string libraryName, System.Reflection.Assembly assembly, DllImportSearchPath? searchPath)
+    static nint NativeImportResolver(string libraryName, System.Reflection.Assembly assembly, DllImportSearchPath? searchPath)
     {
+        static nint Load(string name, System.Reflection.Assembly assembly)
+        {
+            string extension = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dll" : "so";
+
+            return NativeLibrary.Load($"{name}.{extension}", assembly, DllImportSearchPath.AssemblyDirectory);
+        }
+
         switch (libraryName)
         {
             case External.Vulkan.Api.BinaryName:
@@ -136,15 +143,16 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
                 break;
 
             case External.Glfw.Api.BinaryName:
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    return NativeLibrary.Load($"Gossamer.glfw.dll", assembly, DllImportSearchPath.AssemblyDirectory);
-                }
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                {
-                    return NativeLibrary.Load($"Gossamer.glfw.so", assembly, DllImportSearchPath.AssemblyDirectory);
-                }
-                break;
+                return Load(External.Glfw.Api.BinaryName, assembly);
+
+            case External.HarfBuzz.Api.BinaryName:
+                return Load(External.HarfBuzz.Api.BinaryName, assembly);
+
+            case External.FreeType.Api.BinaryName:
+                return Load(External.FreeType.Api.BinaryName, assembly);
+
+            case External.Vulkan.Vma.Api.BinaryName:
+                return Load(External.Vulkan.Vma.Api.BinaryName, assembly);
         }
 
         return nint.Zero;
@@ -197,7 +205,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             // 4. Initialize Gfx
             gfx.Create(new GfxParameters(
                 PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices()),
-                Presentation: new GfxSwapChainPresentation(Color.DarkPeriwinkle, gui)
+                Presentation: new GfxSwapChainPresentation(Color.RedOrange, gui)
             ));
 
             RunBackend(gfx);

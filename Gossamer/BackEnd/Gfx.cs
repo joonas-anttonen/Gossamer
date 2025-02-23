@@ -321,7 +321,16 @@ public unsafe class Gfx : IDisposable
 
         if (parameters.Presentation is GfxSwapChainPresentation swapChainPresentation)
         {
-            var swapChainPresenter = new GfxSwapChainPresenter(instance, physicalDevice, device, deviceQueue, deviceQueueIndex, swapChainPresentation.Gui.CreateSurface(instance), swapChainPresentation.ClearColor);
+            var swapChainSurface = swapChainPresentation.Gui.CreateSurface(instance);
+            var swapChainPresenter = new GfxSwapChainPresenter(
+                instance,
+                physicalDevice,
+                device,
+                deviceQueue,
+                deviceQueueIndex,
+                swapChainSurface.Surface,
+                swapChainSurface.Extent,
+                swapChainPresentation.ClearColor);
             presenter = swapChainPresenter;
             swapChainPresenter.Refresh(false);
         }
@@ -1085,13 +1094,9 @@ public unsafe class Gfx : IDisposable
             "Failed to get instance version.");
 
         Version availableApiVersion = ParseVersion(availableApiVersionRaw);
-
-        // Check if the available version is compatible with the required version
-        {
-            Version requiredApiVersion = new(1, 3, 0);
-            ThrowNotSupportedIf(availableApiVersion < requiredApiVersion,
-                $"Required API version {requiredApiVersion} not available.");
-        }
+        Version requiredApiVersion = new(1, 3, 0);
+        ThrowNotSupportedIf(availableApiVersion < requiredApiVersion,
+            $"Required API version {requiredApiVersion} not available.");
 
         // Get available instance layers
         {
@@ -1155,16 +1160,22 @@ public unsafe class Gfx : IDisposable
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
+                    const string VK_KHR_wayland_surface = "VK_KHR_wayland_surface";
                     const string VK_KHR_xcb_surface = "VK_KHR_xcb_surface";
 
-                    if (availableInstanceExtensions.Contains(VK_KHR_xcb_surface))
+                    if (availableInstanceExtensions.Contains(VK_KHR_wayland_surface))
+                    {
+                        enabledExtensionNames.Add(VK_KHR_wayland_surface);
+                        capabilities = capabilities with { CanSwap = true };
+                    }
+                    else if (availableInstanceExtensions.Contains(VK_KHR_xcb_surface))
                     {
                         enabledExtensionNames.Add(VK_KHR_xcb_surface);
                         capabilities = capabilities with { CanSwap = true };
                     }
                     else
                     {
-                        logger.Warning($"Swapchain is enabled but {VK_KHR_xcb_surface} is not available.");
+                        logger.Warning($"Swapchain is enabled but {VK_KHR_wayland_surface} or {VK_KHR_xcb_surface} is not available.");
                     }
                 }
                 else
@@ -1206,7 +1217,7 @@ public unsafe class Gfx : IDisposable
 
         VkApplicationInfo applicationInfo = new(default)
         {
-            ApiVersion = availableApiVersionRaw,
+            ApiVersion = MakeApiVersion(0, requiredApiVersion.Major, requiredApiVersion.Minor, requiredApiVersion.Build),
 
             ApplicationName = applicationName.DangerousGetHandle(),
             ApplicationVersion = MakeApiVersion(0, apiParameters.AppInfo.Version.Major, apiParameters.AppInfo.Version.Minor, apiParameters.AppInfo.Version.Build),
@@ -1274,6 +1285,8 @@ public unsafe class Gfx : IDisposable
         VkPhysicalDevice physicalDevice = GetVulkanPhysicalDevice(parameters.PhysicalDevice);
         this.physicalDevice = physicalDevice;
 
+        logger.Debug($"Selected physical device: {parameters.PhysicalDevice}");
+
         VkPhysicalDeviceProperties physicalDeviceProperties;
         vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
 
@@ -1339,7 +1352,8 @@ public unsafe class Gfx : IDisposable
         }
 
         // Probe for required features
-        VkPhysicalDeviceSynchronization2Features physicalDeviceSynchronization2Features = new(next: default);
+        VkPhysicalDeviceVulkan14Features physicalDeviceVulkan14Features = new(next: default);
+        VkPhysicalDeviceSynchronization2Features physicalDeviceSynchronization2Features = new(next: Next(&physicalDeviceVulkan14Features));
         VkPhysicalDeviceRobustness2FeaturesEXT physicalDeviceRobustness2Features = new(next: Next(&physicalDeviceSynchronization2Features));
         VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures physicalDeviceSubgroupExtendedTypesFeatures = new(next: Next(&physicalDeviceRobustness2Features));
         VkPhysicalDevice16BitStorageFeatures physicalDeviceFloat16StorageFeatures = new(next: Next(&physicalDeviceSubgroupExtendedTypesFeatures));
@@ -1348,6 +1362,10 @@ public unsafe class Gfx : IDisposable
 
         VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = new(next: Next(&physicalDeviceDynamicRenderingFeatures));
         vkGetPhysicalDeviceFeatures2(physicalDevice, &physicalDeviceFeatures2);
+
+        VkPhysicalDeviceVulkan14Properties physicalDeviceVulkan14Properties = new(next: default);
+        VkPhysicalDeviceProperties2 physicalDeviceProperties2 = new(next: Next(&physicalDeviceVulkan14Properties));
+        vkGetPhysicalDeviceProperties2(physicalDevice, &physicalDeviceProperties2);
 
         // Fail if required features are not supported
         {
@@ -1362,6 +1380,7 @@ public unsafe class Gfx : IDisposable
             ThrowNotSupportedIf(physicalDeviceDynamicRenderingFeatures.DynamicRendering == 0, "Required feature dynamic rendering is not supported.");
             ThrowNotSupportedIf(physicalDeviceRobustness2Features.NullDescriptor == 0, "Required feature null descriptor is not supported.");
             ThrowNotSupportedIf(physicalDeviceSynchronization2Features.Synchronization2 == 0, "Required feature synchronization2 is not supported.");
+            //ThrowNotSupportedIf(physicalDevicePushDescriptorProperties.MaxPushDescriptors == 0, "Required feature push descriptor is not supported.");
         }
 
         // Enable required features
@@ -1545,19 +1564,40 @@ public unsafe class Gfx : IDisposable
         ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices),
             "Failed to get physical devices.");
 
-        GfxPhysicalDevice[] devices = new GfxPhysicalDevice[(int)physicalDeviceCount];
         for (int i = 0; i < physicalDeviceCount; i++)
         {
-            VkPhysicalDeviceProperties properties;
-            vkGetPhysicalDeviceProperties(physicalDevices[i], &properties);
+            GfxPhysicalDevice physicalDevice = ParsePhysicalDevice(physicalDevices[i]);
 
-            if (gfxPhysicalDevice.Id == new Guid(new ReadOnlySpan<byte>(properties.PipelineCacheUuid, 16)))
+            if (gfxPhysicalDevice.Id == physicalDevice.Id)
             {
                 return physicalDevices[i];
             }
         }
 
         throw new InvalidOperationException($"Physical device {gfxPhysicalDevice} not found.");
+    }
+
+    static GfxPhysicalDevice ParsePhysicalDevice(VkPhysicalDevice physicalDevice)
+    {
+        VkPhysicalDeviceProperties properties;
+        vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+        GfxPhysicalDeviceType type = properties.DeviceType switch
+        {
+            VkPhysicalDeviceType.INTEGRATED_GPU => GfxPhysicalDeviceType.Integrated,
+            VkPhysicalDeviceType.DISCRETE_GPU => GfxPhysicalDeviceType.Discrete,
+            VkPhysicalDeviceType.VIRTUAL_GPU => GfxPhysicalDeviceType.Virtual,
+            VkPhysicalDeviceType.CPU => GfxPhysicalDeviceType.Cpu,
+            _ => GfxPhysicalDeviceType.Other
+        };
+
+        return new GfxPhysicalDevice(
+            Type: type,
+            Id: new Guid(new ReadOnlySpan<byte>(properties.PipelineCacheUuid, 16)),
+            Name: new string((sbyte*)properties.DeviceName),
+            Driver: ParseVersion(properties.DriverVersion),
+            Api: ParseVersion(properties.ApiVersion)
+        );
     }
 
     /// <summary>

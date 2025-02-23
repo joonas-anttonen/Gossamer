@@ -29,8 +29,8 @@ public class Gui : IDisposable
     bool isIconified;
     bool isMaximized;
     bool isFullscreen;
-    bool isDamaged;
-    bool useFullscreen = true;
+    //bool isDamaged;
+    readonly bool useFullscreen = true;
 
     readonly GLFWwindowrefreshfun glfwCallbackWindowRefresh;
     readonly GLFWcursorenterfun glfwCallbackMouseEnter;
@@ -81,7 +81,7 @@ public class Gui : IDisposable
         glfwTerminate();
     }
 
-    internal unsafe External.Vulkan.VkSurfaceKhr CreateSurface(External.Vulkan.VkInstance instance)
+    internal unsafe GfxSwapChainSurface CreateSurface(External.Vulkan.VkInstance instance)
     {
         Assert(isCreated);
         Assert(glfwWindow.HasValue);
@@ -89,7 +89,9 @@ public class Gui : IDisposable
         External.Vulkan.VkSurfaceKhr surface = default;
         External.Vulkan.Api.ThrowVulkanIfFailed(glfwCreateWindowSurface(instance, glfwWindow, null, &surface));
 
-        return surface;
+        glfwGetWindowSize(glfwWindow, out int ww, out int wh);
+
+        return new(surface, new((uint)ww, (uint)wh));
     }
 
     public void Create()
@@ -173,6 +175,12 @@ public class Gui : IDisposable
     {
         Assert(isCreated);
 
+        if(layoutRequested)
+        {
+            layoutRequested = false;
+            //Layout();
+        }
+
         var gfx2D = gfx.Get2D();
 
         var gfxStats = gfx.GetStatistics();
@@ -220,26 +228,26 @@ public class Gui : IDisposable
                 //cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.UnpackRGB(0x1f1e25), gfx2D.GetFont("Arial", 16));
             }
 
-            var font = gfx2D.GetFont("Arial", 12);
-            var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
-            cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
-
-            Vector2 textPosition = new(5, sizeOfFrame.Y + 200);
-            Vector2 textAvailableSize = new(400, sizeOfFrame.Y + 200);
-
-            {
-                var textToTest = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-                //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
-                var textLayout = gfx2D.CreateTextLayout(textToTest,
-                    textAvailableSize,
-                    wordWrap: true);
-
-                cmdBuffer.DrawText(textLayout, textPosition, Color.White, parameters.ColorOfBackground);
-                cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, Color.HighlighterRed);
-                cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, Color.MintyGreen);
-
-                gfx2D.DestroyTextLayout(textLayout);
-            }
+            //var font = gfx2D.GetFont("Arial", 12);
+            //var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
+            //cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
+            //
+            //Vector2 textPosition = new(5, sizeOfFrame.Y + 200);
+            //Vector2 textAvailableSize = new(400, sizeOfFrame.Y + 200);
+            //
+            //{
+            //    var textToTest = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+            //    //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
+            //    var textLayout = gfx2D.CreateTextLayout(textToTest,
+            //        textAvailableSize,
+            //        wordWrap: true);
+            //
+            //    cmdBuffer.DrawText(textLayout, textPosition, Color.White, parameters.ColorOfBackground);
+            //    cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, Color.HighlighterRed);
+            //    cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, Color.MintyGreen);
+            //
+            //    gfx2D.DestroyTextLayout(textLayout);
+            //}
 
             cmdBuffer.EndBatch();
         }
@@ -269,6 +277,8 @@ public class Gui : IDisposable
     void Callback_WindowSize(GlfwWindow window, int w, int h)
     {
         messageQueue.PostSurfaceLost();
+
+        gfx.GetPresenter().Invalidate((uint)w, (uint)h);
     }
 
     void Callback_WindowIconify(GlfwWindow window, int iconified)
@@ -290,7 +300,7 @@ public class Gui : IDisposable
 
         Vector4 sizeOfFrame = parameters.SizeOfFrame;
 
-        Vector2 mouseOnWindow = new((float)x, (float)y);
+        Vector2 mouseOnWindow = new((int)x, (int)y);
 
         glfwGetWindowSize(glfwWindow, out int ww, out int wh);
 
@@ -342,7 +352,7 @@ public class Gui : IDisposable
         if (iButton == InputButton.Left)
         {
             glfwGetCursorPos(glfwWindow, out double x, out double y);
-            mousePressedPosition = new Vector2((float)x, (float)y);
+            mousePressedPosition = new Vector2((int)x, (int)y);
 
             mouseIsFrameDragging = iAction != InputAction.Release && mode == FrameMode.Full && IsPositionOnFrame(mousePressedPosition);
         }

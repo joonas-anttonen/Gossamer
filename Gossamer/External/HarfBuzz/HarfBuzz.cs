@@ -1,13 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+#pragma warning disable CS0649, IDE1006, SYSLIB1054
+
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Gossamer.External.HarfBuzz;
-
-#pragma warning disable SYSLIB1054, CS0649 // Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time
 
 public enum Direction
 {
@@ -177,83 +172,84 @@ enum hb_buffer_flags_t : uint
     HB_BUFFER_FLAG_DEFINED = 0x000000FFu
 }
 
+[System.Security.SuppressUnmanagedCodeSecurity]
 unsafe class Api
 {
-    const string HarfBuzzDll = "Gossamer.HarfBuzz.dll";
+    public const string BinaryName = "External/libgossamer-harfbuzz";
 
     const CallingConvention CallConvention = CallingConvention.Cdecl;
 
     internal delegate uint hb_buffer_message_func_t(nint buffer, nint font, nint message, nint user_data);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern hb_buffer_flags_t hb_buffer_get_flags(nint buffer);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern void hb_buffer_set_flags(nint buffer, hb_buffer_flags_t flags);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern void hb_buffer_set_content_type(nint buffer, hb_buffer_content_type_t content_type);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern hb_buffer_content_type_t hb_buffer_get_content_type(nint buffer);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern void hb_buffer_guess_segment_properties(nint buffer);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern void hb_buffer_set_message_func(nint buffer, nint func, nint user_data, nint destroy);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_ft_font_set_load_flags(nint font, FreeType.FT_Load load_flags);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void hb_buffer_set_language(nint buffer, nint language);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_language_from_string([MarshalAs(UnmanagedType.LPUTF8Str)] string str, int len);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void hb_font_set_ptem(nint font, float ptem);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_buffer_create();
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_buffer_destroy(nint hb_buffer);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_font_destroy(nint hb_font);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void hb_ft_font_changed(nint hb_font);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_ft_font_create_referenced(nint ft_face);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void hb_buffer_reset(nint buffer);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void hb_buffer_clear_contents(nint buffer);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void hb_buffer_set_direction(nint buffer, Direction direction);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void hb_buffer_set_script(nint ptr, Script script);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public unsafe static extern void hb_buffer_add_codepoints(nint buffer, uint* text, int text_length, uint item_offset, int item_length);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public unsafe static extern void hb_buffer_add_utf16(nint buffer, ushort* text, int text_length, uint item_offset, int item_length);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void hb_shape(nint font, nint buffer, nint features, int num_features);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_buffer_get_glyph_infos(nint buf, out int length);
 
-    [DllImport(HarfBuzzDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_buffer_get_glyph_positions(nint buf, out int length);
 }

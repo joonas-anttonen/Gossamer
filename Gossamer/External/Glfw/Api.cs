@@ -8,7 +8,7 @@ namespace Gossamer.External.Glfw;
 [SuppressUnmanagedCodeSecurity]
 unsafe static class Api
 {
-    public const string BinaryName = "Gossamer.glfw";
+    public const string BinaryName = "External/libgossamer-glfw";
     public const CallingConvention CallConvention = CallingConvention.Cdecl;
 
     public static class Constants
@@ -487,6 +487,14 @@ unsafe static class Api
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern GLFWjoystickfun glfwSetJoystickCallback(GLFWjoystickfun cbfun);
 
+    /// <summary>
+    /// Creates a Vulkan surface for the specified window. 
+    /// </summary>
+    /// <param name="instance"></param>
+    /// <param name="window"></param>
+    /// <param name="allocator"></param>
+    /// <param name="surface"></param>
+    /// <returns></returns>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern Vulkan.VkResult glfwCreateWindowSurface(Vulkan.VkInstance instance, GlfwWindow window, Vulkan.VkAllocationCallbacks* allocator, Vulkan.VkSurfaceKhr* surface);
 
@@ -525,6 +533,12 @@ unsafe static class Api
     }
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwShowWindow(GlfwWindow window);
+    
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwHideWindow(GlfwWindow window);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint glfwRequestWindowAttention(GlfwWindow window);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
@@ -542,6 +556,12 @@ unsafe static class Api
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void glfwGetWindowPos(GlfwWindow window, out int xpos, out int ypos);
 
+    /// <summary>
+    /// Retrieves the size of the client area of the specified window.
+    /// </summary>
+    /// <param name="window"></param>
+    /// <param name="width"></param>
+    /// <param name="height"></param>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void glfwGetWindowSize(GlfwWindow window, out int width, out int height);
 

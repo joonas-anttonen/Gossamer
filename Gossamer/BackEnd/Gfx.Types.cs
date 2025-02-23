@@ -2,11 +2,15 @@
     Simple types for the graphics backend. Collected in one file for convenience.
 */
 
+using Gossamer.External.Vulkan;
+
 namespace Gossamer.Backend;
 
 public record class GfxPresentation(Color ClearColor);
 public record class GfxSwapChainPresentation(Color ClearColor, Frontend.Gui Gui) : GfxPresentation(ClearColor);
 public record class GfxDirectXPresentation(Color ClearColor, nint Handle, GfxFormat Format, uint Width, uint Height) : GfxPresentation(ClearColor);
+
+internal record class GfxSwapChainSurface(VkSurfaceKhr Surface, VkExtent2D Extent);
 
 public enum GfxPresentationMode
 {

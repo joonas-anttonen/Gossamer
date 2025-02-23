@@ -1,11 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+#pragma warning disable CS0649, IDE1006, SYSLIB1054
 
-#pragma warning disable SYSLIB1054 // Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time
+using System.Runtime.InteropServices;
 
 namespace Gossamer.External.FreeType;
 
@@ -923,63 +918,64 @@ public enum FtRenderMode
     VerticalLcd,
 }
 
+[System.Security.SuppressUnmanagedCodeSecurity]
 unsafe class Api
 {
-    const string FreetypeDll = "Gossamer.FreeType.dll";
+    public const string BinaryName = "External/libgossamer-freetype";
 
     const CallingConvention CallConvention = CallingConvention.Cdecl;
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Set_Char_Size(nint face, int char_width, int char_height, uint horz_resolution, uint vert_resolution);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Set_Pixel_Sizes(nint face, uint pixel_width, uint pixel_height);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Load_Glyph(nint face, uint glyph_index, int load_flags);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Load_Char(nint face, uint char_code, FT_Load load_flags);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Render_Glyph(nint slot, FtRenderMode render_mode);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Get_Glyph(nint slot, out nint aglyph);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Init_FreeType(out nint alibrary);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Done_FreeType(nint library);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_New_Memory_Face(nint library, nint file_base, int file_size, int face_index, out nint aface);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void FT_Done_Glyph(nint glyph);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern FT_Error FT_Done_Face(nint face);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern uint FT_Get_Char_Index(nint face, uint charcode);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern uint FT_Get_First_Char(nint face, out uint agindex);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern uint FT_Get_Next_Char(nint face, uint char_code, out uint agindex);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern FT_Error FT_Get_Multi_Master(nint face, out nint amaster);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern FT_Error FT_Get_MM_Var(nint face, out nint amaster);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern FT_Error FT_Done_MM_Var(nint library, nint amaster);
 
-    [DllImport(FreetypeDll, CallingConvention = CallConvention)]
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
     internal static extern FT_Error FT_Set_Named_Instance(nint face, uint instance_index);
 }

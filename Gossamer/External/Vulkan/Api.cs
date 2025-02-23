@@ -51,7 +51,7 @@ unsafe static class Api
     {
         if (result != VkResult.SUCCESS)
         {
-            throw new VulkanException($"{result}: {message}");
+            throw new VulkanException($"{message}: {result}");
         }
     }
 
@@ -110,6 +110,9 @@ unsafe static class Api
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceFeatures2* pFeatures);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void vkGetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties2* pFeatures);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkCreateInstance(VkInstanceCreateInfo* pCreateInfo, VkAllocationCallbacks* pAllocator, VkInstance* pInstance);
