@@ -12,9 +12,31 @@ namespace Gossamer.Frontend;
 
 public class Gui : IDisposable
 {
+    public enum Platform
+    {
+        /// <summary>
+        /// Automatically choose the best platform for the current OS.
+        /// </summary>
+        Auto,
+        /// <summary>
+        /// Use the Win32 platform. Only valid on Windows.
+        /// </summary>
+        Win32,
+        /// <summary>
+        /// Use the Wayland platform. Only valid on Linux.
+        /// </summary>
+        Wayland,
+        /// <summary>
+        /// Use the X11 platform. Only valid on Linux.
+        /// </summary>
+        X11,
+    }
+
     const float ControlsOffFromFrameSide = 7f;
     const float ControlButtonWidth = 40f;
     const float ControlsButtonSeparation = 2f;
+
+    readonly Platform platform = Platform.Auto;
 
     readonly Logger logger = Gossamer.GetLogger(nameof(Gui));
 
@@ -50,10 +72,51 @@ public class Gui : IDisposable
         get => glfwWindowShouldClose(glfwWindow) == 1;
     }
 
-    internal Gui(Gfx gfx, BackendMessageQueue messageQueue)
+    internal Gui(Gossamer.Parameters parameters, Gfx gfx, BackendMessageQueue messageQueue)
     {
         this.gfx = gfx;
         this.messageQueue = messageQueue;
+
+        var wantedPlatform = parameters.Platform;
+
+        // If platform is not specified, choose the best one for the current OS
+        if (wantedPlatform == Platform.Auto)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                wantedPlatform = Platform.Win32;
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                wantedPlatform = Platform.Wayland;
+            }
+            else
+            {
+                throw new PlatformNotSupportedException("Unsupported platform.");
+            }
+        }
+
+        // Set appropriate platform hint for GLFW
+        switch (wantedPlatform)
+        {
+            case Platform.Win32:
+                ThrowInvalidOperationIf(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Win32 GUI platform is only supported on Windows.");
+                platform = Platform.Win32;
+                glfwInitHint(Constants.GLFW_PLATFORM, Constants.GLFW_PLATFORM_WIN32);
+                break;
+            case Platform.Wayland:
+                ThrowInvalidOperationIf(!RuntimeInformation.IsOSPlatform(OSPlatform.Linux), "Wayland GUI platform is only supported on Linux.");
+                platform = Platform.Wayland;
+                glfwInitHint(Constants.GLFW_PLATFORM, Constants.GLFW_PLATFORM_WAYLAND);
+                break;
+            case Platform.X11:
+                ThrowInvalidOperationIf(!RuntimeInformation.IsOSPlatform(OSPlatform.Linux), "X11 GUI platform is only supported on Linux.");
+                platform = Platform.X11;
+                glfwInitHint(Constants.GLFW_PLATFORM, Constants.GLFW_PLATFORM_X11);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(parameters.Platform));
+        }
 
         ThrowIf(glfwInit() != 1, "Failed to initialize GLFW.");
 
@@ -68,9 +131,8 @@ public class Gui : IDisposable
         glfwCallbackWindowIconify = Callback_WindowIconify;
         glfwCallbackWindowClose = Callback_WindowClose;
 
-        // Restrict frame dragging to Windows only
         // Wayland does not allow application to move its own window
-        isFrameDraggingEnabled = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        isWindowPositionable = platform != Platform.Wayland;
     }
 
     public void Dispose()
@@ -90,6 +152,23 @@ public class Gui : IDisposable
     {
         Assert(isCreated);
         Assert(glfwWindow.HasValue);
+
+        uint extensionNamesCount = 0;
+        byte** extensionNames = glfwGetRequiredInstanceExtensions(&extensionNamesCount);
+
+        byte* errorMessage = null;
+        int error = glfwGetError(&errorMessage);
+        if (error != 0)
+        {
+            logger.Error($"GLFW error: [{error:X}] {Marshal.PtrToStringAnsi((IntPtr)errorMessage)}");
+        }
+
+        logger.Error($"Required instance extensions: {extensionNamesCount}");
+
+        for (uint i = 0; i < extensionNamesCount; i++)
+        {
+            logger.Debug($"Required instance extension: {Marshal.PtrToStringAnsi((IntPtr)extensionNames[i])}");
+        }
 
         External.Vulkan.VkSurfaceKhr surface = default;
         External.Vulkan.Api.ThrowVulkanIfFailed(glfwCreateWindowSurface(instance, glfwWindow, null, &surface));
@@ -123,8 +202,11 @@ public class Gui : IDisposable
         glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, "Gossamer");
         ThrowIf(!glfwWindow.HasValue, "Failed to create GLFW window.");
 
-        glfwSetWindowPos(glfwWindow, (int)windowPosition.X, (int)windowPosition.Y);
         glfwSetWindowSizeLimits(glfwWindow, 256, 144, -1, -1);
+        if (isWindowPositionable)
+        {
+            glfwSetWindowPos(glfwWindow, (int)windowPosition.X, (int)windowPosition.Y);
+        }
 
         glfwSetWindowRefreshCallback(glfwWindow, glfwCallbackWindowRefresh);
         glfwSetCursorEnterCallback(glfwWindow, glfwCallbackMouseEnter);
@@ -158,7 +240,7 @@ public class Gui : IDisposable
     bool mouseOnMinimize;
     bool mouseOnFrameControls;
 
-    readonly bool isFrameDraggingEnabled = true;
+    readonly bool isWindowPositionable = true;
     bool isFrameDragging;
     Vector2 frameDraggingStartPosition;
 
@@ -310,7 +392,7 @@ public class Gui : IDisposable
 
         Vector2 mouseOnWindow = new((int)x, (int)y);
 
-        if (isFrameDraggingEnabled && isFrameDragging)
+        if (isWindowPositionable && isFrameDragging)
         {
             glfwGetWindowPos(glfwWindow, out int wx, out int wy);
             Vector2 windowPosition = new(wx, wy);
@@ -358,7 +440,7 @@ public class Gui : IDisposable
         {
             if (iAction == InputAction.Press)
             {
-                if (isFrameDraggingEnabled)
+                if (isWindowPositionable)
                 {
                     glfwGetCursorPos(glfwWindow, out double x, out double y);
                     frameDraggingStartPosition = new Vector2((int)x, (int)y);
@@ -437,8 +519,11 @@ public class Gui : IDisposable
                 isFullscreen = false;
                 glfwSetWindowMonitor(glfwWindow, default, normalWindowX, normalWindowY, normalWindowW, normalWindowH, default);
 
-                // Window size callback is not called when restoring from fullscreen - call it manually
-                Callback_WindowSize(glfwWindow, normalWindowW, normalWindowH);
+                // Window size callback is not called on Wayland when restoring from fullscreen - call it manually
+                if (platform == Platform.Wayland)
+                {
+                    Callback_WindowSize(glfwWindow, normalWindowW, normalWindowH);
+                }
             }
             else
             {

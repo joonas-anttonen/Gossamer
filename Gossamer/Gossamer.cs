@@ -26,7 +26,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         }
     }
 
-    public record class Parameters(bool EnableDebugging = false)
+    public record class Parameters(bool EnableDebugging = false, Gui.Platform Platform = Gui.Platform.Auto)
     {
         public static Parameters FromArgs(string[] args)
         {
@@ -36,18 +36,19 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
                 string arg = args[i];
                 if (arg.StartsWith("--"))
                 {
-                    string key = arg[2..];
-                    string value = i + 1 < args.Length ? args[i + 1] : string.Empty;
-                    if (!string.IsNullOrEmpty(value) && !value.StartsWith("--"))
+                    string argKey = arg[2..];
+                    string argValue = i + 1 < args.Length ? args[i + 1] : string.Empty;
+                    if (!string.IsNullOrEmpty(argValue) && !argValue.StartsWith("--"))
                     {
                         i++;
                     }
-                    argMap[key] = value;
+                    argMap[argKey] = argValue;
                 }
             }
 
             return new Parameters(
-                EnableDebugging: argMap.ContainsKey("debug")
+                EnableDebugging: argMap.ContainsKey("debug"),
+                Platform: argMap.TryGetValue("platform", out string? platformArg) ? Enum.Parse<Gui.Platform>(platformArg, ignoreCase: true) : Gui.Platform.Auto
             );
         }
     }
@@ -197,7 +198,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             ));
 
             // 2. Create Gui
-            using Gui gui = new(gfx, backendMessageQueue);
+            using Gui gui = new(parameters, gfx, backendMessageQueue);
 
             // 3. Initialize Gui
             gui.Create();

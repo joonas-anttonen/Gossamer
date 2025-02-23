@@ -1162,20 +1162,27 @@ public unsafe class Gfx : IDisposable
                 {
                     const string VK_KHR_wayland_surface = "VK_KHR_wayland_surface";
                     const string VK_KHR_xcb_surface = "VK_KHR_xcb_surface";
+                    const string VK_KHR_xlib_surface = "VK_KHR_xlib_surface";
 
                     if (availableInstanceExtensions.Contains(VK_KHR_wayland_surface))
                     {
                         enabledExtensionNames.Add(VK_KHR_wayland_surface);
                         capabilities = capabilities with { CanSwap = true };
                     }
-                    else if (availableInstanceExtensions.Contains(VK_KHR_xcb_surface))
+                    if (availableInstanceExtensions.Contains(VK_KHR_xcb_surface))
                     {
                         enabledExtensionNames.Add(VK_KHR_xcb_surface);
                         capabilities = capabilities with { CanSwap = true };
                     }
-                    else
+                    if (availableInstanceExtensions.Contains(VK_KHR_xlib_surface))
                     {
-                        logger.Warning($"Swapchain is enabled but {VK_KHR_wayland_surface} or {VK_KHR_xcb_surface} is not available.");
+                        enabledExtensionNames.Add(VK_KHR_xlib_surface);
+                        capabilities = capabilities with { CanSwap = true };
+                    }
+                    
+                    if(!capabilities.CanSwap)
+                    {
+                        logger.Warning($"Swapchain is enabled but {VK_KHR_wayland_surface} or {VK_KHR_xcb_surface} or {VK_KHR_xlib_surface} is not available.");
                     }
                 }
                 else

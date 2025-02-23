@@ -241,6 +241,17 @@ unsafe static class Api
         public const int GLFW_VRESIZE_CURSOR = 0x00036006;
         public const int GLFW_CONNECTED = 0x00040001;
         public const int GLFW_DISCONNECTED = 0x00040002;
+
+        public const int GLFW_WAYLAND_LIBDECOR = 0x00053001;
+        public const int GLFW_X11_XCB_VULKAN_SURFACE = 0x00052001;
+
+        public const int GLFW_PLATFORM = 0x00050003;
+        public const int GLFW_ANY_PLATFORM = 0x00060000;
+        public const int GLFW_PLATFORM_WIN32 = 0x00060001;
+        public const int GLFW_PLATFORM_COCOA = 0x00060002;
+        public const int GLFW_PLATFORM_WAYLAND = 0x00060003;
+        public const int GLFW_PLATFORM_X11 = 0x00060004;
+        public const int GLFW_PLATFORM_NULL = 0x00060005;
     }
 
     /// <summary>
@@ -299,6 +310,9 @@ unsafe static class Api
     /// <param name="rev"></param>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void glfwGetVersion(int* major, int* minor, int* rev);
+
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern int glfwGetPlatform();
 
     /// <summary>
     /// Returns a string describing the compile-time configuration.
@@ -499,6 +513,12 @@ unsafe static class Api
     public static extern Vulkan.VkResult glfwCreateWindowSurface(Vulkan.VkInstance instance, GlfwWindow window, Vulkan.VkAllocationCallbacks* allocator, Vulkan.VkSurfaceKhr* surface);
 
     [DllImport(BinaryName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern byte** glfwGetRequiredInstanceExtensions(uint* count);
+
+    [DllImport(BinaryName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int glfwGetError(byte** description);
+
+    [DllImport(BinaryName, CallingConvention = CallingConvention.Cdecl)]
     static extern string glfwGetClipboardString(IntPtr window);
 
     public static string glfwGetClipboardString() => glfwGetClipboardString(IntPtr.Zero);
@@ -534,7 +554,7 @@ unsafe static class Api
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void glfwShowWindow(GlfwWindow window);
-    
+
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void glfwHideWindow(GlfwWindow window);
 
