@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 
 using Gossamer.External.FreeType;
 using Gossamer.External.HarfBuzz;
@@ -183,7 +182,7 @@ public sealed class GfxGlyphCollection(FreeTypeGlyph[] glyphs) : IDisposable
     public int CalculateSizeRequired()
     {
         int atlasSize = 128;
-        int padding = 1;
+        int padding = 0;
 
         while (true)
         {
@@ -289,13 +288,15 @@ public sealed class GfxFont : IDisposable
 
         ftBlob = fontBlob;
         ftFace = face;
-        var ftError = FT_Set_Char_Size(ftFace, pixelSize * 64, pixelSize * 64, 0, 0);
+        var ftError = FT_Set_Char_Size(ftFace, pixelSize * 64, pixelSize * 64, 72, 72);
         //var ftError = FT_Set_Pixel_Sizes(ftFace, 0, (uint)pixelSize);
         ThrowIf(ftError != FT_Error.Ok, "Failed to set pixel sizes.");
 
         hbBuffer = hb_buffer_create();
         hbFont = hb_ft_font_create_referenced(ftFace);
         hb_ft_font_set_load_flags(hbFont, FT_Load.LOAD_TARGET_LCD);
+        hb_ft_font_set_funcs(hbFont);
+        hb_ft_font_changed(hbFont);
         //hb_font_set_ptem(hbFont, pixelSize * 64);
 
         unsafe
@@ -355,7 +356,8 @@ public sealed class GfxFont : IDisposable
             hb_buffer_guess_segment_properties(hbBuffer);
         }
 
-        hb_shape(hbFont, hbBuffer, default, default);
+        hb_feature_t enableKerning = hb_feature_t.EnableKerning;
+        hb_shape(hbFont, hbBuffer, (nint)(&enableKerning), 1);
 
         shapedGlyphInfos = hb_buffer_get_glyph_infos(hbBuffer, out int infosLength);
         shapedGlyphPositions = hb_buffer_get_glyph_positions(hbBuffer, out int positionsLength);
@@ -372,7 +374,8 @@ public sealed class GfxFont : IDisposable
             hb_buffer_guess_segment_properties(hbBuffer);
         }
 
-        hb_shape(hbFont, hbBuffer, default, default);
+        hb_feature_t enableKerning = hb_feature_t.EnableKerning;
+        hb_shape(hbFont, hbBuffer, (nint)(&enableKerning), 1);
 
         shapedGlyphInfos = hb_buffer_get_glyph_infos(hbBuffer, out int infosLength);
         shapedGlyphPositions = hb_buffer_get_glyph_positions(hbBuffer, out int positionsLength);
@@ -458,7 +461,7 @@ public sealed class GfxFont : IDisposable
     public byte[] BuildBitmap(GfxGlyphCollection glyphs, int atlasSize)
     {
         const int Channels = 4;
-        const int Padding = 1;
+        const int Padding = 0;
 
         var bitmap = new byte[atlasSize * atlasSize * Channels];
 

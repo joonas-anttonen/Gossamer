@@ -585,7 +585,7 @@ class Gfx2D(Gfx gfx) : IDisposable
         };
         drawSampler = gfx.CreateSampler(samplerCreateInfo);
 
-        (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 24, CharacterSet.Full);
+        (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 64, CharacterSet.Full);
 
         PixelBuffer fontTexture = gfx.CreatePixelBuffer(
             width: fontAtlas.Width,
@@ -1255,10 +1255,13 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         void ConsumeRunes(GfxFont font, TextLayout layout, float cursorY)
         {
+            const float scale = 1f;
             float cursorX = 0;
 
             foreach (ShapedGlyph shapedGlyph in font.ShapeText(scratchRunes.AsSpan(0, scratchRunesCount)))
             {
+                //logger.Debug($"Shaped glyph: {shapedGlyph}");
+
                 float x = cursorX + shapedGlyph.XOffset + shapedGlyph.Glyph.BearingX;
                 float y = cursorY + shapedGlyph.YOffset - shapedGlyph.Glyph.BearingY;
 
@@ -1273,8 +1276,8 @@ class Gfx2D(Gfx gfx) : IDisposable
                 if (isWithinBounds)
                 {
                     TextLayout.LayoutGlyph layoutGlyph = new(
-                        new(x, y),
-                        new(shapedGlyph.Glyph.Width, shapedGlyph.Glyph.Height),
+                        new(x * scale, y * scale),
+                        new(shapedGlyph.Glyph.Width * scale, shapedGlyph.Glyph.Height * scale),
                         new(shapedGlyph.Glyph.U0, shapedGlyph.Glyph.V0),
                         new(shapedGlyph.Glyph.U1, shapedGlyph.Glyph.V1),
                         Color.RedOrange);

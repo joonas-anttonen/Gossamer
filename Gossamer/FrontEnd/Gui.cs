@@ -319,21 +319,21 @@ public class Gui : IDisposable
 
             var font = gfx2D.GetFont("Arial", 12);
             var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
-            cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
+            //cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
 
             Vector2 textPosition = new(5, sizeOfFrame.Y + 200);
             Vector2 textAvailableSize = new(400, sizeOfFrame.Y + 200);
 
             {
-                var textToTest = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+                var textToTest = "Ipsum";
                 //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
                 var textLayout = gfx2D.CreateTextLayout(textToTest,
                     textAvailableSize,
                     wordWrap: true);
 
                 cmdBuffer.DrawText(textLayout, textPosition, Color.White, parameters.ColorOfBackground);
-                cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, Color.HighlighterRed);
-                cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, Color.MintyGreen);
+                //cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, Color.HighlighterRed);
+                //cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, Color.MintyGreen);
 
                 gfx2D.DestroyTextLayout(textLayout);
             }
