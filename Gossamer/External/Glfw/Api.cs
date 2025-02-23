@@ -371,6 +371,25 @@ unsafe static class Api
     public static extern void glfwDestroyWindow(GlfwWindow window);
 
     /// <summary>
+    /// This function returns the opacity of the window, including any decorations.
+    /// </summary>
+    /// <param name="window"></param>
+    /// <returns></returns>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern float glfwGetWindowOpacity(GlfwWindow window);
+
+    /// <summary>
+    /// This function sets the opacity of the window, including any decorations.
+    /// The opacity (or alpha) value is a positive finite number between zero and one, where zero is fully transparent and one is fully opaque.
+    /// The initial opacity value for newly created windows is one.
+    /// A window created with framebuffer transparency may not use whole window transparency. The results of doing this are undefined.
+    /// </summary>
+    /// <param name="window"></param>
+    /// <param name="opacity"></param>
+    [DllImport(BinaryName, CallingConvention = CallConvention)]
+    public static extern void glfwSetWindowOpacity(GlfwWindow window, float opacity);
+
+    /// <summary>
     /// This function returns the value of an attribute of the specified window
     /// </summary>
     /// <param name="window"></param>

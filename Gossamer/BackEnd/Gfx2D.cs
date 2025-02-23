@@ -2,6 +2,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using Gossamer.BackEnd.Text;
+
 using Gossamer.Collections;
 using Gossamer.External.Vulkan;
 using Gossamer.Logging;
@@ -31,7 +33,7 @@ readonly struct PerCommandData(Vector2 scale, Vector2 translation, Vector3 color
     readonly float _padding;
 }
 
-record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, GfxFont? Font, Vector3 Color);
+record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, Font? Font, Vector3 Color);
 
 record struct CommandBatch(int FirstCommandIndex, int CommandCount, PixelBuffer? Surface);
 
@@ -124,14 +126,14 @@ class Gfx2DCommandBuffer
     public void DrawText(TextLayout layout, Vector2 position, Color color, Color backgroundColor)
     {
         Assert(batchInProgress);
-
+        //
         ref Command newCommand = ref BeginCommand();
         newCommand.Font = layout.Font;
         newCommand.Color = backgroundColor.ToVector3();
 
         for (int i = 0; i < layout.GlyphCount; i++)
         {
-            TextLayout.LayoutGlyph glyph = layout.Glyphs[i];
+            var glyph = layout.Glyphs[i];
             Vector2 a = position + glyph.Position;
             Vector2 c = a + glyph.Size;
 
@@ -139,20 +141,21 @@ class Gfx2DCommandBuffer
         }
     }
 
-    public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color, Color backgroundColor, GfxFont font)
+    public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color, Color backgroundColor, Font font)
     {
         ref Command newCommand = ref BeginCommand();
         newCommand.Font = font;
         newCommand.Color = backgroundColor.ToVector3();
 
+        Font.Metrics fontMetrics = font.GetMetrics();
         float cursorX = position.X;
-        float cursorY = position.Y + font.GetMetrics().Ascender;
+        float cursorY = position.Y + fontMetrics.Ascender;
 
         foreach (var line in text.EnumerateLines())
         {
             foreach (ShapedGlyph shapedGlyph in font.ShapeText(line))
             {
-                Glyph glyph = shapedGlyph.Glyph;
+                FontGlyph glyph = shapedGlyph.Glyph;
 
                 float x = cursorX + shapedGlyph.XOffset + glyph.BearingX;
                 float y = cursorY + shapedGlyph.YOffset - glyph.BearingY;
@@ -169,7 +172,7 @@ class Gfx2DCommandBuffer
             }
 
             cursorX = position.X;
-            cursorY += font.GetMetrics().Height;
+            cursorY += fontMetrics.Height;
         }
     }
 
@@ -490,7 +493,7 @@ class Gfx2D(Gfx gfx) : IDisposable
 
     readonly Gfx gfx = gfx;
 
-    readonly GfxFontCache fontCache = new();
+    readonly FontCollection fontCache = new();
 
     bool renderingInitialized;
 
@@ -507,14 +510,15 @@ class Gfx2D(Gfx gfx) : IDisposable
     MemoryBuffer<Vertex2D>? vertexBuffer;
     MemoryBuffer<ushort>? indexBuffer;
 
-    readonly Dictionary<GfxFont, int> fontTextureIndices = [];
+    readonly Dictionary<Font, int> fontTextureIndices = [];
     PixelBuffer[] fontTextures = [];
 
     bool frameInProgress = false;
 
+    // OPTIMIZATION: Assumption is that text layouts are created and destroyed very frequently.
+    //               Therefore, we use a pool to avoid unnecessary allocations.
     readonly ConcurrentObjectPool<TextLayout> textLayoutPool = new(initialCapacity: 16);
 
-    int scratchRunesCount;
     readonly uint[] scratchRunes = new uint[1024];
     readonly Range[] scratchWordRanges = new Range[1024];
 
@@ -527,9 +531,9 @@ class Gfx2D(Gfx gfx) : IDisposable
     ulong frameCounter;
     Statistics frameStatistics;
 
-    public GfxFont GetFont(string name, int size)
+    public Font GetFont(string name, int size)
     {
-        fontCache.TryGetFontOrDefault(name, size, out GfxFont? font);
+        fontCache.TryGetFontOrDefault(name, size, out Font? font);
         return font;
     }
 
@@ -585,7 +589,10 @@ class Gfx2D(Gfx gfx) : IDisposable
         };
         drawSampler = gfx.CreateSampler(samplerCreateInfo);
 
-        (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 64, CharacterSet.Full);
+        //GfxFont font  = fontCache.LoadFont("Iceland.ttf", 32);
+        Font font = fontCache.LoadFont("/home/jant/.local/share/fonts/CascadiaCode.ttf", 22, 24);
+        //GfxFont font  = fontCache.LoadFont("/home/jant/.local/share/fonts/SourceCodePro-Regular.ttf", 16);
+        Font.Atlas fontAtlas = font.GetAtlas();
 
         PixelBuffer fontTexture = gfx.CreatePixelBuffer(
             width: fontAtlas.Width,
@@ -1134,78 +1141,65 @@ class Gfx2D(Gfx gfx) : IDisposable
         renderingInitialized = true;
     }
 
-    public void DestroyTextLayout(TextLayout layout)
+    /// <summary>
+    /// Computes the layout of a text string using the specified font and available size. Layouts are returned from a pool to avoid unnecessary allocations.
+    /// </summary>
+    /// <param name="font"></param>
+    /// <param name="text"></param>
+    /// <param name="availableSize"></param>
+    /// <param name="wordWrap"></param>
+    public TextLayout ComputeTextLayout(ReadOnlySpan<char> text, Font font, Vector2 availableSize, bool wordWrap)
     {
-        layout.Reset();
-        textLayoutPool.Return(layout);
-    }
-
-    public TextLayout CreateTextLayout(ReadOnlySpan<char> text, Vector2 availableSize, bool wordWrap, GfxFont? font = default)
-    {
-        const float glyphHorizontalPadding = 4;
-
-        Assert(scratchRunesCount == 0);
-
-        font ??= fontCache.GetDefaultFont();
-        GfxFont.Metrics fontMetrics = font.GetMetrics();
+        const int spaceCodepoint = 32;
 
         TextLayout layout = textLayoutPool.Rent();
         layout.Font = font;
 
+        Font.Metrics fontMetrics = font.GetMetrics();
+        float spaceRuneWidth = font.GetSpaceGlyph().Width;
+        float fontLineHeight = fontMetrics.Height;
+        float cursorY = fontMetrics.Ascender;
         float totalWidth = 0;
         float totalHeight = 0;
-
-        float cursorY = fontMetrics.Ascender;
-
         int wordCountOnLine = 0;
+        int scratchRunesCount = 0;
 
-        Rune spaceRune = new(' ');
-        float spaceRuneWidth = font.GetGlyph((uint)spaceRune.Value).Width;
-
-        Vector2 MeasureText(ReadOnlySpan<char> word)
-        {
-            float width = 0;
-            float height = fontMetrics.Height;
-
-            foreach (var rune in word.EnumerateRunes())
-            {
-                Glyph glyph = font.GetGlyph((uint)rune.Value);
-
-                width += glyph.Width + glyphHorizontalPadding;
-            }
-
-            return new(width, height);
-        }
-
-        foreach (var line in text.EnumerateLines())
+        // 1. Split the text into lines
+        foreach (ReadOnlySpan<char> line in text.EnumerateLines())
         {
             float remainingWidth = availableSize.X;
 
+            // 2. Split the line into "words" (ranges of characters separated by spaces)
             int wordCount = line.Split(scratchWordRanges.AsSpan(), ' ', StringSplitOptions.None);
             ThrowNotSupportedIf(wordCount >= scratchWordRanges.Length, "Too many words in a line");
 
+            // 3. For each word, try to fit it on the current line
+            //    Without word wrapping, word will always fit on the line
+            //    With word wrapping, any word that overflows the line will begin a new line
             for (int i = 0; i < wordCount; i++)
             {
-                Range wordRange = scratchWordRanges[i];
-                ReadOnlySpan<char> word = line[wordRange];
+                bool spaceAfterWord = i > 0;
 
-                Vector2 wordSize = MeasureText(word);
+                ReadOnlySpan<char> word = line[scratchWordRanges[i]];
+                Vector2 wordSize = EstimateWordSize(word);
 
-                if (i > 0)
+                if (spaceAfterWord)
                 {
                     wordSize.X += spaceRuneWidth;
                 }
 
-                if (wordWrap && remainingWidth < wordSize.X)
+                bool wordOverflowsLine = remainingWidth < wordSize.X;
+                if (wordOverflowsLine && wordWrap)
                 {
+                    // 3.1 Word overflows the line, start a new line and place the word there
                     if (wordCountOnLine > 0)
                     {
                         ConsumeRunes(font, layout, cursorY);
 
                         remainingWidth = availableSize.X;
-                        cursorY += fontMetrics.Height;
+                        cursorY += fontLineHeight;
 
-                        foreach (var rune in word.EnumerateRunes())
+                        foreach (Rune rune in word.EnumerateRunes())
                         {
                             scratchRunes[scratchRunesCount++] = (uint)rune.Value;
                         }
@@ -1213,26 +1207,35 @@ class Gfx2D(Gfx gfx) : IDisposable
                         wordCountOnLine = 1;
                         remainingWidth -= wordSize.X;
                     }
+                    // 3.2 Word is too long to fit on a single line, place it on the current line anyway
+                    //     Maybe in the future we can split the word into multiple lines
                     else
                     {
-                        if (i > 0)
-                            scratchRunes[scratchRunesCount++] = (uint)spaceRune.Value;
-                        foreach (var rune in word.EnumerateRunes())
+                        if (spaceAfterWord)
+                        {
+                            scratchRunes[scratchRunesCount++] = spaceCodepoint;
+                        }
+
+                        foreach (Rune rune in word.EnumerateRunes())
                         {
                             scratchRunes[scratchRunesCount++] = (uint)rune.Value;
                         }
                         ConsumeRunes(font, layout, cursorY);
 
                         remainingWidth = availableSize.X;
-                        cursorY += fontMetrics.Height;
+                        cursorY += fontLineHeight;
                         wordCountOnLine = 0;
                     }
                 }
                 else
                 {
-                    if (i > 0)
-                        scratchRunes[scratchRunesCount++] = (uint)spaceRune.Value;
-                    foreach (var rune in word.EnumerateRunes())
+                    // 3.3 Word fits on the line or no word wrapping, append to current line
+                    if (spaceAfterWord)
+                    {
+                        scratchRunes[scratchRunesCount++] = spaceCodepoint;
+                    }
+
+                    foreach (Rune rune in word.EnumerateRunes())
                     {
                         scratchRunes[scratchRunesCount++] = (uint)rune.Value;
                     }
@@ -1247,52 +1250,70 @@ class Gfx2D(Gfx gfx) : IDisposable
                 ConsumeRunes(font, layout, cursorY);
             }
 
-            cursorY += fontMetrics.Height;
+            cursorY += fontLineHeight;
         }
 
         layout.Size = new(totalWidth, totalHeight);
         return layout;
 
-        void ConsumeRunes(GfxFont font, TextLayout layout, float cursorY)
+        Vector2 EstimateWordSize(ReadOnlySpan<char> word)
+        {
+            // Empirically determined padding between glyphs to give results that are "close enough"
+            // This is terrible. Replace with proper glyph spacing calculation.
+            const float glyphHorizontalPadding = 4;
+
+            float width = 0;
+            float height = fontLineHeight;
+
+            foreach (var rune in word.EnumerateRunes())
+            {
+                FontGlyph glyph = font.GetGlyphByCodepoint((uint)rune.Value);
+
+                width += glyph.Width + glyphHorizontalPadding;
+            }
+
+            return new(width, height);
+        }
+
+        void ConsumeRunes(Font font, TextLayout layout, float cursorY)
         {
             const float scale = 1f;
             float cursorX = 0;
 
-            foreach (ShapedGlyph shapedGlyph in font.ShapeText(scratchRunes.AsSpan(0, scratchRunesCount)))
+            foreach (var shapedGlyph in font.ShapeText(scratchRunes.AsSpan(0, scratchRunesCount)))
             {
-                //logger.Debug($"Shaped glyph: {shapedGlyph}");
+                FontGlyph glyph = shapedGlyph.Glyph;
 
-                float x = cursorX + shapedGlyph.XOffset + shapedGlyph.Glyph.BearingX;
-                float y = cursorY + shapedGlyph.YOffset - shapedGlyph.Glyph.BearingY;
+                float x = cursorX + shapedGlyph.XOffset + glyph.BearingX;
+                float y = cursorY + shapedGlyph.YOffset - glyph.BearingY;
+
+                cursorX += shapedGlyph.XAdvance;
 
                 // Expand total size of the layout based on the bottom right corner of the glyph
-                float farX = x + shapedGlyph.Glyph.Width;
-                float farY = y + shapedGlyph.Glyph.Height;
+                float farX = x + glyph.Width;
+                float farY = y + glyph.Height;
                 totalWidth = Math.Max(totalWidth, farX);
                 totalHeight = Math.Max(totalHeight, farY);
 
+                // OPTIMIZATION: Only append the glyph if it is within the available size
                 bool isWithinBounds = x <= availableSize.X && y <= availableSize.Y;
-
                 if (isWithinBounds)
                 {
-                    TextLayout.LayoutGlyph layoutGlyph = new(
-                        new(x * scale, y * scale),
-                        new(shapedGlyph.Glyph.Width * scale, shapedGlyph.Glyph.Height * scale),
-                        new(shapedGlyph.Glyph.U0, shapedGlyph.Glyph.V0),
-                        new(shapedGlyph.Glyph.U1, shapedGlyph.Glyph.V1),
-                        Color.RedOrange);
-
-                    layout.Append(layoutGlyph);
-                }
-
-                cursorX += shapedGlyph.XAdvance;
-                if (shapedGlyph.XAdvance == 0)
-                {
-                    cursorX += shapedGlyph.Glyph.Width;
+                    layout.Append(new(x, y), glyph);
                 }
             }
 
             scratchRunesCount = 0;
         }
+    }
+
+    /// <summary>
+    /// Releases a <see cref="TextLayout"/> back to the pool.
+    /// </summary>
+    /// <param name="layout"></param>
+    public void ReleaseTextLayout(TextLayout layout)
+    {
+        layout.Reset();
+        textLayoutPool.Return(layout);
     }
 }

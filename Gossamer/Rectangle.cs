@@ -26,6 +26,7 @@ public readonly record struct Rectangle(float Left, float Top, float Right, floa
     public Rectangle Move(float x, float y) => new(Left + x, Top + y, Right + x, Bottom + y);
     public Rectangle Clamp(Rectangle other) => new(MathF.Max(Left, other.Left), MathF.Max(Top, other.Top), MathF.Min(Right, other.Right), MathF.Min(Bottom, other.Bottom));
 
+    public static Rectangle FromPositionSize(Vector2 position, Vector2 size) => new(position.X, position.Y, position.X + size.X, position.Y + size.Y);
     public static Rectangle FromXYWH(float x, float y, float w, float h) => new(x, y, x + w, y + h);
     public static Rectangle FromLTRB(float l, float t, float r, float b) => new(l, t, r, b);
 }

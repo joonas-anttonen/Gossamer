@@ -10,6 +10,7 @@ public struct Color : IEquatable<Color>
     public float B;
     public float A;
 
+    public readonly Color WithAlpha(float a) => new(R, G, B, a);
     public readonly Vector3 ToVector3() => new(R, G, B);
     public readonly Vector4 ToVector4() => new(R, G, B, A);
 

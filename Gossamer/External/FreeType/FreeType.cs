@@ -530,7 +530,7 @@ internal struct GlyphSlotRec64
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct FaceRec
+internal unsafe struct FaceRec
 {
     internal int num_faces;
     internal int face_index;
@@ -564,7 +564,7 @@ internal struct FaceRec
     internal short underline_position;
     internal short underline_thickness;
 
-    internal nint glyph;
+    internal GlyphSlotRec* glyph;
     internal nint size;
     internal nint charmap;
 
@@ -1093,7 +1093,7 @@ unsafe class Api
     public static extern FT_Error FT_Set_Pixel_Sizes(nint face, uint pixel_width, uint pixel_height);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern FT_Error FT_Load_Glyph(nint face, uint glyph_index, int load_flags);
+    public static extern FT_Error FT_Load_Glyph(nint face, uint glyph_index, FT_Load load_flags);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Load_Char(nint face, uint char_code, FT_Load load_flags);
