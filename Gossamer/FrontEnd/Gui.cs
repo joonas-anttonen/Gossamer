@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 using Gossamer.Backend;
 using Gossamer.External.Glfw;
 using Gossamer.Logging;
@@ -53,8 +55,7 @@ public class Gui : IDisposable
         this.gfx = gfx;
         this.messageQueue = messageQueue;
 
-        var glfwResult = glfwInit();
-        ThrowIf(glfwResult != 1, "Failed to initialize GLFW.");
+        ThrowIf(glfwInit() != 1, "Failed to initialize GLFW.");
 
         glfwCallbackWindowRefresh = Callback_WindowRefresh;
         glfwCallbackMouseEnter = Callback_MouseEnter;
@@ -66,6 +67,10 @@ public class Gui : IDisposable
         glfwCallbackKeyboardChar = Callback_KeyboardChar;
         glfwCallbackWindowIconify = Callback_WindowIconify;
         glfwCallbackWindowClose = Callback_WindowClose;
+
+        // Restrict frame dragging to Windows only
+        // Wayland does not allow application to move its own window
+        isFrameDraggingEnabled = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     }
 
     public void Dispose()
@@ -112,7 +117,7 @@ public class Gui : IDisposable
         glfwGetMonitorPhysicalSize(monitor, out int mpw, out int mph);
         GlfwVideoMode monitorVideoMode = glfwGetVideoMode(monitor);
 
-        Vector2 windowSize = parameters.Size ?? new Vector2((int)(monitorVideoMode.Width * 0.75f), (int)(monitorVideoMode.Height * 0.75f));
+        Vector2 windowSize = parameters.Size ?? new Vector2(Math.Min(2560, (int)(monitorVideoMode.Width * 0.75f)), Math.Min(1440, (int)(monitorVideoMode.Height * 0.75f)));
         Vector2 windowPosition = parameters.Position ?? new Vector2(mx + (int)((mw - windowSize.X) / 2.0f), my + (int)((mh - windowSize.Y) / 2.0f));
 
         glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, "Gossamer");
@@ -152,8 +157,10 @@ public class Gui : IDisposable
     bool mouseOnMaximize;
     bool mouseOnMinimize;
     bool mouseOnFrameControls;
-    bool mouseIsFrameDragging;
-    Vector2 mousePressedPosition;
+
+    readonly bool isFrameDraggingEnabled = true;
+    bool isFrameDragging;
+    Vector2 frameDraggingStartPosition;
 
     Rectangle controlsCloseRect;
     Rectangle controlsCloseIconRect;
@@ -175,7 +182,7 @@ public class Gui : IDisposable
     {
         Assert(isCreated);
 
-        if(layoutRequested)
+        if (layoutRequested)
         {
             layoutRequested = false;
             //Layout();
@@ -228,26 +235,26 @@ public class Gui : IDisposable
                 //cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.UnpackRGB(0x1f1e25), gfx2D.GetFont("Arial", 16));
             }
 
-            //var font = gfx2D.GetFont("Arial", 12);
-            //var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
-            //cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
-            //
-            //Vector2 textPosition = new(5, sizeOfFrame.Y + 200);
-            //Vector2 textAvailableSize = new(400, sizeOfFrame.Y + 200);
-            //
-            //{
-            //    var textToTest = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-            //    //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
-            //    var textLayout = gfx2D.CreateTextLayout(textToTest,
-            //        textAvailableSize,
-            //        wordWrap: true);
-            //
-            //    cmdBuffer.DrawText(textLayout, textPosition, Color.White, parameters.ColorOfBackground);
-            //    cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, Color.HighlighterRed);
-            //    cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, Color.MintyGreen);
-            //
-            //    gfx2D.DestroyTextLayout(textLayout);
-            //}
+            var font = gfx2D.GetFont("Arial", 12);
+            var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
+            cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
+
+            Vector2 textPosition = new(5, sizeOfFrame.Y + 200);
+            Vector2 textAvailableSize = new(400, sizeOfFrame.Y + 200);
+
+            {
+                var textToTest = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+                //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
+                var textLayout = gfx2D.CreateTextLayout(textToTest,
+                    textAvailableSize,
+                    wordWrap: true);
+
+                cmdBuffer.DrawText(textLayout, textPosition, Color.White, parameters.ColorOfBackground);
+                cmdBuffer.DrawRectangle(textPosition, textPosition + textAvailableSize, Color.HighlighterRed);
+                cmdBuffer.DrawRectangle(textPosition, textPosition + textLayout.Size, Color.MintyGreen);
+
+                gfx2D.DestroyTextLayout(textLayout);
+            }
 
             cmdBuffer.EndBatch();
         }
@@ -278,6 +285,7 @@ public class Gui : IDisposable
     {
         messageQueue.PostSurfaceLost();
 
+        logger.Debug($"Window resized to {w}x{h}.");
         gfx.GetPresenter().Invalidate((uint)w, (uint)h);
     }
 
@@ -302,15 +310,12 @@ public class Gui : IDisposable
 
         Vector2 mouseOnWindow = new((int)x, (int)y);
 
-        glfwGetWindowSize(glfwWindow, out int ww, out int wh);
-
-        if (mouseIsFrameDragging)
+        if (isFrameDraggingEnabled && isFrameDragging)
         {
             glfwGetWindowPos(glfwWindow, out int wx, out int wy);
             Vector2 windowPosition = new(wx, wy);
 
-            Vector2 mouseDelta = mouseOnWindow - mousePressedPosition;
-            windowPosition += mouseDelta;
+            windowPosition += mouseOnWindow - frameDraggingStartPosition;
             glfwSetWindowPos(glfwWindow, (int)windowPosition.X, (int)windowPosition.Y);
         }
 
@@ -351,27 +356,34 @@ public class Gui : IDisposable
 
         if (iButton == InputButton.Left)
         {
-            glfwGetCursorPos(glfwWindow, out double x, out double y);
-            mousePressedPosition = new Vector2((int)x, (int)y);
+            if (iAction == InputAction.Press)
+            {
+                if (isFrameDraggingEnabled)
+                {
+                    glfwGetCursorPos(glfwWindow, out double x, out double y);
+                    frameDraggingStartPosition = new Vector2((int)x, (int)y);
+                    isFrameDragging = IsPositionOnFrame(frameDraggingStartPosition);
+                }
+            }
+            else if (iAction == InputAction.Release)
+            {
+                isFrameDragging = false;
 
-            mouseIsFrameDragging = iAction != InputAction.Release && mode == FrameMode.Full && IsPositionOnFrame(mousePressedPosition);
+                if (mouseOnClose)
+                {
+                    glfwSetWindowShouldClose(window, true);
+                }
+                else if (mouseOnMaximize)
+                {
+                    CommitMaximize();
+                }
+                else if (mouseOnMinimize)
+                {
+                    glfwIconifyWindow(glfwWindow);
+                }
+            }
         }
 
-        if (iButton == InputButton.Left && iAction == InputAction.Release)
-        {
-            if (mouseOnClose)
-            {
-                glfwSetWindowShouldClose(window, true);
-            }
-            else if (mouseOnMaximize)
-            {
-                CommitMaximize();
-            }
-            else if (mouseOnMinimize)
-            {
-                glfwIconifyWindow(glfwWindow);
-            }
-        }
     }
 
     void Callback_MouseScroll(GlfwWindow window, double x, double y)
@@ -424,6 +436,9 @@ public class Gui : IDisposable
             {
                 isFullscreen = false;
                 glfwSetWindowMonitor(glfwWindow, default, normalWindowX, normalWindowY, normalWindowW, normalWindowH, default);
+
+                // Window size callback is not called when restoring from fullscreen - call it manually
+                Callback_WindowSize(glfwWindow, normalWindowW, normalWindowH);
             }
             else
             {

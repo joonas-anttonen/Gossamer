@@ -559,7 +559,7 @@ class Gfx2D(Gfx gfx) : IDisposable
         }
     }
 
-    public void Create()
+    public unsafe void Create()
     {
         AssertIsNull(uniformBuffer);
         AssertIsNull(vertexBuffer);
@@ -585,80 +585,58 @@ class Gfx2D(Gfx gfx) : IDisposable
         };
         drawSampler = gfx.CreateSampler(samplerCreateInfo);
 
-        if (false)
+        (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 24, CharacterSet.Full);
+
+        PixelBuffer fontTexture = gfx.CreatePixelBuffer(
+            width: fontAtlas.Width,
+            height: fontAtlas.Height,
+            format: GfxFormat.Rgba8,
+            usage: GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferDst,
+            aspect: GfxAspect.Color,
+            samples: GfxSamples.X1);
+
+        MemoryBuffer<byte> fontStagingBuffer = gfx.CreateDynamicMemoryBuffer<byte>(length: fontAtlas.Pixels.Length, GfxMemoryBufferUsage.TransferSrc);
+        gfx.UpdateDynamicBuffer(fontStagingBuffer, fontAtlas.Pixels);
+
+        GfxSingleCommand fontStagingCommand = gfx.BeginSingleCommand();
+
+        gfx.PixelBufferBarrier(
+            fontStagingCommand.CommandBuffer,
+            pixelBuffer: fontTexture,
+            srcLayout: VkImageLayout.UNDEFINED,
+            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+
+        VkBufferImageCopy bufferImageCopy = new()
         {
-            /*unsafe
+            BufferOffset = 0,
+            BufferRowLength = 0,
+            BufferImageHeight = 0,
+            ImageSubresource = new()
             {
-                (GfxFont font, GfxFontAtlas fontAtlas) = fontCache.LoadFont("Iceland.ttf", 24, CharacterSet.Full);
+                Aspect = VkImageAspect.COLOR,
+                MipLevel = 0,
+                BaseArrayLayer = 0,
+                LayerCount = 1,
+            },
+            ImageOffset = new(0, 0, 0),
+            ImageExtent = new(fontAtlas.Width, fontAtlas.Height, 1),
+        };
 
-                PixelBuffer fontTexture = gfx.CreatePixelBuffer(
-                    width: fontAtlas.Width,
-                    height: fontAtlas.Height,
-                    format: GfxFormat.Rgba8,
-                    usage: GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferDst,
-                    aspect: GfxAspect.Color,
-                    samples: GfxSamples.X1);
+        vkCmdCopyBufferToImage(fontStagingCommand.CommandBuffer, fontStagingBuffer.Buffer, fontTexture.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
 
-                MemoryBuffer<byte> fontStagingBuffer = gfx.CreateDynamicMemoryBuffer<byte>(length: fontAtlas.Pixels.Length, GfxMemoryBufferUsage.TransferSrc);
-                gfx.UpdateDynamicBuffer(fontStagingBuffer, fontAtlas.Pixels);
+        gfx.PixelBufferBarrier(
+            fontStagingCommand.CommandBuffer,
+            pixelBuffer: fontTexture,
+            srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
+            dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
 
-                GfxSingleCommand fontStagingCommand = gfx.BeginSingleCommand();
+        gfx.SubmitSingleCommand(fontStagingCommand);
+        gfx.EndSingleCommand(fontStagingCommand);
 
-                gfx.PixelBufferBarrier(
-                    fontStagingCommand.CommandBuffer,
-                    pixelBuffer: fontTexture,
-                    srcLayout: VkImageLayout.UNDEFINED,
-                    dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+        fontTextureIndices[font] = fontTextures.Length;
+        ArrayUtilities.Append(ref fontTextures, fontTexture);
 
-                VkBufferImageCopy bufferImageCopy = new()
-                {
-                    BufferOffset = 0,
-                    BufferRowLength = 0,
-                    BufferImageHeight = 0,
-                    ImageSubresource = new()
-                    {
-                        Aspect = VkImageAspect.COLOR,
-                        MipLevel = 0,
-                        BaseArrayLayer = 0,
-                        LayerCount = 1,
-                    },
-                    ImageOffset = new(0, 0, 0),
-                    ImageExtent = new(fontAtlas.Width, fontAtlas.Height, 1),
-                };
-
-                vkCmdCopyBufferToImage(fontStagingCommand.CommandBuffer, fontStagingBuffer.Buffer, fontTexture.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
-
-                gfx.PixelBufferBarrier(
-                    fontStagingCommand.CommandBuffer,
-                    pixelBuffer: fontTexture,
-                    srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
-                    dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
-
-                gfx.SubmitSingleCommand(fontStagingCommand);
-                gfx.EndSingleCommand(fontStagingCommand);
-
-                fontTextureIndices[font] = fontTextures.Length;
-                ArrayUtilities.Append(ref fontTextures, fontTexture);
-
-                gfx.DestroyMemoryBuffer(fontStagingBuffer);
-            }*/
-        }
-        else
-        {
-            PixelBuffer dummyTexture = gfx.CreatePixelBuffer(1, 1, GfxFormat.Rgba32, GfxPixelBufferUsage.Sampled, GfxAspect.Color, GfxSamples.X1);
-            ArrayUtilities.Append(ref fontTextures, dummyTexture);
-
-            GfxSingleCommand fontStagingCommand = gfx.BeginSingleCommand();
-
-            gfx.PixelBufferBarrier(
-                fontStagingCommand.CommandBuffer,
-                pixelBuffer: dummyTexture,
-                srcLayout: VkImageLayout.UNDEFINED,
-                dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
-
-            gfx.SubmitSingleCommand(fontStagingCommand);
-            gfx.EndSingleCommand(fontStagingCommand);
-        }
+        gfx.DestroyMemoryBuffer(fontStagingBuffer);
     }
 
     public void Dispose()

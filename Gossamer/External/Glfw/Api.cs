@@ -594,6 +594,13 @@ unsafe static class Api
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void glfwSetWindowTitle(GlfwWindow window, string title);
 
+    /// <summary>
+    /// Sets the position of the client area of the specified window.
+    /// Wayland: There is no way for an application to set the global position of its windows.
+    /// </summary>
+    /// <param name="window"></param>
+    /// <param name="xpos"></param>
+    /// <param name="ypos"></param>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern void glfwSetWindowPos(GlfwWindow window, int xpos, int ypos);
 }

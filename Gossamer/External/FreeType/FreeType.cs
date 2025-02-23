@@ -279,11 +279,29 @@ public readonly struct BBox
     public readonly int xMax, yMax;
 }
 
+/// <summary>
+/// A structure used to hold an outline's bounding box, i.e., the
+/// coordinates of its extrema in the horizontal and vertical directions.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public readonly struct BBox64
+{
+    public readonly long xMin, yMin;
+    public readonly long xMax, yMax;
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct FTVector26Dot6
 {
     public readonly int x;
     public readonly int y;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public readonly struct FTVector26Dot664
+{
+    public readonly long x;
+    public readonly long y;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -425,6 +443,21 @@ internal struct GlyphMetricsRec
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct GlyphMetricsRec64
+{
+    internal long width;
+    internal long height;
+
+    internal long horiBearingX;
+    internal long horiBearingY;
+    internal long horiAdvance;
+
+    internal long vertBearingX;
+    internal long vertBearingY;
+    internal long vertAdvance;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct GlyphSlotRec
 {
     internal nint library;
@@ -434,8 +467,8 @@ internal struct GlyphSlotRec
     internal GenericRec generic;
 
     internal GlyphMetricsRec metrics;
-    internal uint linearHoriAdvance;
-    internal uint linearVertAdvance;
+    internal int linearHoriAdvance;
+    internal int linearVertAdvance;
     internal FTVector26Dot6 advance;
 
     internal GlyphFormat format;
@@ -460,7 +493,42 @@ internal struct GlyphSlotRec
     private readonly nint @internal;
 }
 
-/// </remarks>
+[StructLayout(LayoutKind.Sequential)]
+internal struct GlyphSlotRec64
+{
+    internal nint library;
+    internal nint face;
+    internal nint next;
+    internal uint glyph_index;
+    internal GenericRec generic;
+
+    internal GlyphMetricsRec64 metrics;
+    internal long linearHoriAdvance;
+    internal long linearVertAdvance;
+    internal FTVector26Dot664 advance;
+
+    internal GlyphFormat format;
+
+    internal BitmapRec bitmap;
+    internal int bitmap_left;
+    internal int bitmap_top;
+
+    internal OutlineRec outline;
+
+    internal uint num_subglyphs;
+    internal nint subglyphs;
+
+    internal nint control_data;
+    internal uint control_len;
+
+    internal long lsb_delta;
+    internal long rsb_delta;
+
+    internal nint other;
+
+    private readonly nint @internal;
+}
+
 [StructLayout(LayoutKind.Sequential)]
 internal struct FaceRec
 {
@@ -514,6 +582,58 @@ internal struct FaceRec
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal unsafe struct FaceRec64
+{
+    internal long num_faces;
+    internal long face_index;
+
+    internal long face_flags;
+    internal long style_flags;
+
+    internal long num_glyphs;
+
+    internal nint family_name;
+    internal nint style_name;
+
+    internal long num_fixed_sizes;
+    internal nint available_sizes;
+
+    internal int num_charmaps;
+    internal nint charmaps;
+
+    internal GenericRec generic;
+
+    internal BBox64 bbox;
+
+    internal ushort units_per_EM;
+    internal short ascender;
+    internal short descender;
+    internal short height;
+
+    internal short max_advance_width;
+    internal short max_advance_height;
+
+    internal short underline_position;
+    internal short underline_thickness;
+
+    internal GlyphSlotRec64* glyph;
+    internal SizeRec64* size;
+    internal nint charmap;
+
+    private readonly nint driver;
+    private readonly nint memory;
+    private readonly nint stream;
+
+    private readonly nint sizes_list;
+    private GenericRec autohint;
+    private readonly nint extensions;
+
+    private readonly nint @internal;
+
+    internal static int SizeInBytes { get { return Marshal.SizeOf(typeof(FaceRec)); } }
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct GenericRec
 {
     internal nint data;
@@ -544,6 +664,29 @@ internal struct SizeRec
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct SizeMetricsRec64
+{
+    internal ushort x_ppem;
+    internal ushort y_ppem;
+
+    internal long x_scale;
+    internal long y_scale;
+    internal long ascender;
+    internal long descender;
+    internal long height;
+    internal long max_advance;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct SizeRec64
+{
+    internal nint face;
+    internal GenericRec generic;
+    internal SizeMetricsRec64 metrics;
+    private readonly nint @internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct GlyphRec
 {
     internal nint library;
@@ -553,9 +696,27 @@ internal struct GlyphRec
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct GlyphRec64
+{
+    internal nint library;
+    internal nint clazz;
+    internal uint format;
+    internal FTVector26Dot664 advance;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct BitmapGlyphRec
 {
     internal GlyphRec root;
+    internal int left;
+    internal int top;
+    internal BitmapRec bitmap;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct BitmapGlyphRec64
+{
+    internal GlyphRec64 root;
     internal int left;
     internal int top;
     internal BitmapRec bitmap;

@@ -300,13 +300,26 @@ public sealed class GfxFont : IDisposable
 
         unsafe
         {
-            FaceRec* faceData = (FaceRec*)ftFace;
-            SizeRec* sizeData = (SizeRec*)faceData->size;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                FaceRec* faceData = (FaceRec*)ftFace;
+                SizeRec* sizeData = (SizeRec*)faceData->size;
 
-            metrics = new(
-                Ascender: sizeData->metrics.ascender / 64,
-                Descender: sizeData->metrics.descender / 64,
-                Height: sizeData->metrics.height / 64);
+                metrics = new(
+                    Ascender: sizeData->metrics.ascender / 64,
+                    Descender: sizeData->metrics.descender / 64,
+                    Height: sizeData->metrics.height / 64);
+            }
+            else
+            {
+                FaceRec64* faceData = (FaceRec64*)ftFace;
+                SizeRec64* sizeData = faceData->size;
+
+                metrics = new(
+                    Ascender: (int)sizeData->metrics.ascender / 64,
+                    Descender: (int)sizeData->metrics.descender / 64,
+                    Height: (int)sizeData->metrics.height / 64);
+            }
         }
     }
 
@@ -624,42 +637,82 @@ public class FreeTypeGlyph : IDisposable
         return new ColorRgba8(r, g, b, a);
     }
 
-    public FreeTypeGlyph(nint face, uint codepoint)
+    unsafe public FreeTypeGlyph(nint face, uint codepoint)
     {
-        FaceRec faceData = Marshal.PtrToStructure<FaceRec>(face);
-
-        var ftError = FT_Load_Char(face, codepoint, FT_Load.LOAD_TARGET_LCD);
-        ThrowIf(ftError != FT_Error.Ok, "Failed to load glyph.");
-        ftError = FT_Render_Glyph(faceData.glyph, FtRenderMode.LCD);
-        ThrowIf(ftError != FT_Error.Ok, "Failed to render glyph.");
-        ftError = FT_Get_Glyph(faceData.glyph, out nint glyphPtr);
-        ThrowIf(ftError != FT_Error.Ok, "Failed to get glyph.");
-
-        GlyphSlotRec glyphSlotData = Marshal.PtrToStructure<GlyphSlotRec>(faceData.glyph);
-        BitmapGlyphRec glyphBitmapData = Marshal.PtrToStructure<BitmapGlyphRec>(glyphPtr);
-
-        glyphPointer = glyphPtr;
-        bitmapPointer = glyphBitmapData.bitmap.buffer;
-
-        Codepoint = codepoint;
-        Index = glyphSlotData.glyph_index;
-
-        BearingX = (int)(glyphSlotData.metrics.horiBearingX / 64);
-        BearingY = (int)(glyphSlotData.metrics.horiBearingY / 64);
-
-        if (BearingX > 10_000)
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            const uint V = (uint.MaxValue / 64);
-            uint v = glyphSlotData.metrics.horiBearingX / 64;
-            BearingX = BearingX = (int)(V - v);
+            FaceRec faceData = Marshal.PtrToStructure<FaceRec>(face);
+
+            var ftError = FT_Load_Char(face, codepoint, FT_Load.LOAD_TARGET_LCD);
+            ThrowIf(ftError != FT_Error.Ok, "Failed to load glyph.");
+            ftError = FT_Render_Glyph(faceData.glyph, FtRenderMode.LCD);
+            ThrowIf(ftError != FT_Error.Ok, "Failed to render glyph.");
+            ftError = FT_Get_Glyph(faceData.glyph, out nint glyphPtr);
+            ThrowIf(ftError != FT_Error.Ok, "Failed to get glyph.");
+
+            GlyphSlotRec glyphSlotData = Marshal.PtrToStructure<GlyphSlotRec>(faceData.glyph);
+            BitmapGlyphRec glyphBitmapData = Marshal.PtrToStructure<BitmapGlyphRec>(glyphPtr);
+
+            glyphPointer = glyphPtr;
+            bitmapPointer = glyphBitmapData.bitmap.buffer;
+
+            Codepoint = codepoint;
+            Index = glyphSlotData.glyph_index;
+
+            BearingX = (int)(glyphSlotData.metrics.horiBearingX / 64);
+            BearingY = (int)(glyphSlotData.metrics.horiBearingY / 64);
+
+            if (BearingX > 10_000)
+            {
+                const uint V = (uint.MaxValue / 64);
+                uint v = glyphSlotData.metrics.horiBearingX / 64;
+                BearingX = BearingX = (int)(V - v);
+            }
+
+            BitmapRec bitmapData = glyphSlotData.bitmap;
+            pixelMode = bitmapData.pixel_mode;
+            pitch = bitmapData.pitch;
+
+            Width = pixelMode == PixelMode.Lcd ? bitmapData.width / 3 : bitmapData.width;
+            Height = bitmapData.rows;
         }
+        else
+        {
+            FaceRec64 faceData = Marshal.PtrToStructure<FaceRec64>(face);
 
-        BitmapRec bitmapData = glyphSlotData.bitmap;
-        pixelMode = bitmapData.pixel_mode;
-        pitch = bitmapData.pitch;
+            var ftError = FT_Load_Char(face, codepoint, FT_Load.LOAD_TARGET_LCD);
+            ThrowIf(ftError != FT_Error.Ok, "Failed to load glyph.");
+            ftError = FT_Render_Glyph((nint)faceData.glyph, FtRenderMode.LCD);
+            ThrowIf(ftError != FT_Error.Ok, "Failed to render glyph.");
+            ftError = FT_Get_Glyph((nint)faceData.glyph, out nint glyphPtr);
+            ThrowIf(ftError != FT_Error.Ok, "Failed to get glyph.");
 
-        Width = pixelMode == PixelMode.Lcd ? bitmapData.width / 3 : bitmapData.width;
-        Height = bitmapData.rows;
+            GlyphSlotRec64 glyphSlotData = *faceData.glyph;
+            BitmapGlyphRec64 glyphBitmapData = Marshal.PtrToStructure<BitmapGlyphRec64>(glyphPtr);
+
+            glyphPointer = glyphPtr;
+            bitmapPointer = glyphBitmapData.bitmap.buffer;
+
+            Codepoint = codepoint;
+            Index = glyphSlotData.glyph_index;
+
+            BearingX = (int)(glyphSlotData.metrics.horiBearingX / 64);
+            BearingY = (int)(glyphSlotData.metrics.horiBearingY / 64);
+
+            if (BearingX > 10_000)
+            {
+                const uint V = (uint.MaxValue / 64);
+                uint v = (uint)glyphSlotData.metrics.horiBearingX / 64;
+                BearingX = BearingX = (int)(V - v);
+            }
+
+            BitmapRec bitmapData = glyphSlotData.bitmap;
+            pixelMode = bitmapData.pixel_mode;
+            pitch = bitmapData.pitch;
+
+            Width = pixelMode == PixelMode.Lcd ? bitmapData.width / 3 : bitmapData.width;
+            Height = bitmapData.rows;
+        }
     }
 
     ~FreeTypeGlyph()
