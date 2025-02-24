@@ -153,23 +153,6 @@ public class Gui : IDisposable
         Assert(isCreated);
         Assert(glfwWindow.HasValue);
 
-        uint extensionNamesCount = 0;
-        byte** extensionNames = glfwGetRequiredInstanceExtensions(&extensionNamesCount);
-
-        byte* errorMessage = null;
-        int error = glfwGetError(&errorMessage);
-        if (error != 0)
-        {
-            logger.Error($"GLFW error: [{error:X}] {Marshal.PtrToStringAnsi((IntPtr)errorMessage)}");
-        }
-
-        logger.Error($"Required instance extensions: {extensionNamesCount}");
-
-        for (uint i = 0; i < extensionNamesCount; i++)
-        {
-            logger.Debug($"Required instance extension: {Marshal.PtrToStringAnsi((IntPtr)extensionNames[i])}");
-        }
-
         External.Vulkan.VkSurfaceKhr surface = default;
         External.Vulkan.Api.ThrowVulkanIfFailed(glfwCreateWindowSurface(instance, glfwWindow, null, &surface));
 
@@ -400,8 +383,10 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
     {
         messageQueue.PostSurfaceLost();
 
-        logger.Debug($"Window resized to {w}x{h}.");
-        gfx.GetPresenter().Invalidate((uint)w, (uint)h);
+        if (platform != Platform.Win32)
+        {
+            gfx.GetPresenter().Invalidate((uint)w, (uint)h);
+        }
     }
 
     void Callback_WindowIconify(GlfwWindow window, int iconified)
