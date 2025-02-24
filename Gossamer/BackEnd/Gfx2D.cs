@@ -1277,7 +1277,6 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         void ConsumeRunes(Font font, TextLayout layout, float cursorY)
         {
-            const float scale = 1f;
             float cursorX = 0;
 
             foreach (var shapedGlyph in font.ShapeText(scratchRunes.AsSpan(0, scratchRunesCount)))

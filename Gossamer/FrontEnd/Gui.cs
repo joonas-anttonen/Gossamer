@@ -319,7 +319,7 @@ public class Gui : IDisposable
 
             var font = gfx2D.GetFont("Arial", 12);
             var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
-            //cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
+            cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
 
             Vector2 textPosition = new(6.0f, sizeOfFrame.Y + 200);
             Vector2 textAvailableSize = new(ww, wh);

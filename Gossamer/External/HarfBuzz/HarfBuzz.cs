@@ -198,9 +198,6 @@ unsafe class Api
     public static uint HB_TAG(byte c1, byte c2, byte c3, byte c4)
         => (((uint)c1 & 0xFF) << 24) | (((uint)c2 & 0xFF) << 16) | (((uint)c3 & 0xFF) << 8) | ((uint)c4 & 0xFF);
 
-    public static uint HB_TAG(byte c1, byte c2, byte c3, byte c4)
-        => (((uint)c1 & 0xFF) << 24) | (((uint)c2 & 0xFF) << 16) | (((uint)c3 & 0xFF) << 8) | ((uint)c4 & 0xFF);
-
     internal delegate uint hb_buffer_message_func_t(nint buffer, nint font, nint message, nint user_data);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
@@ -223,24 +220,6 @@ unsafe class Api
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern nint hb_ft_font_set_load_flags(nint font, FreeType.FT_Load load_flags);
-
-    /// <summary>
-    /// Set the FreeType font functions for the HarfBuzz font.
-    /// </summary>
-    /// <param name="font"></param>
-    /// <returns></returns>
-    [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void hb_ft_font_set_funcs(nint font);
-
-    /// <summary>
-    /// Refreshes the state of the underlying FT_Face of font when the hb_font_t font has changed. 
-    /// This function should be called after changing the size or variation-axis settings on the font.
-    /// This call is fast if nothing has changed on font.
-    /// </summary>
-    /// <param name="font"></param>
-    /// <returns>true if changed, false otherwise</returns>
-    [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern bool hb_ft_hb_font_changed(nint font);
 
     /// <summary>
     /// Set the FreeType font functions for the HarfBuzz font.
