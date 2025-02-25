@@ -1,6 +1,6 @@
 using Gossamer.Utilities;
 
-namespace Gossamer.BackEnd.Text;
+namespace Gossamer.Backend.Text;
 
 /// <summary>
 /// A pre-computed block of text.

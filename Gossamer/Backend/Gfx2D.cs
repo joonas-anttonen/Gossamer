@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
-using Gossamer.BackEnd.Text;
+using Gossamer.Backend.Text;
 
 using Gossamer.Collections;
 using Gossamer.External.Vulkan;

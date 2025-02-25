@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.Marshalling;
 using Gossamer.External.Vulkan;
 using Gossamer.External.Vulkan.Vma;
 using Gossamer.Logging;
+using Gossamer.Utilities;
 
 using static Gossamer.External.Vulkan.Api;
 using static Gossamer.External.Vulkan.Vma.Api;

@@ -1,6 +1,6 @@
 using static Gossamer.External.FreeType.Api;
 
-namespace Gossamer.BackEnd.Text;
+namespace Gossamer.Backend.Text;
 
 public sealed class FontCollection : IDisposable
 {
@@ -44,7 +44,7 @@ public sealed class FontCollection : IDisposable
         // Load the default embedded font
         defaultFont = LoadFontFromBytes(
             "ProggyClean",
-            Utilities.ReflectionUtilities.LoadEmbeddedResource("Gossamer.BackEnd.Text.ProggyClean.ttf"),
+            Utilities.ReflectionUtilities.LoadEmbeddedResource("Gossamer.Backend.Text.ProggyClean.ttf"),
             32, 32);
     }
 

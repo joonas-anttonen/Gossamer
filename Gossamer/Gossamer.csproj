@@ -18,7 +18,7 @@
 
   <!-- Embedded -->
   <ItemGroup>
-    <EmbeddedResource Include="BackEnd/Text/ProggyClean.ttf" />
+    <EmbeddedResource Include="Backend/Text/ProggyClean.ttf" />
   </ItemGroup>
 
   <!-- Dependency binaries -->

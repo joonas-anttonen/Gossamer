@@ -7,7 +7,7 @@ using static Gossamer.External.FreeType.Api;
 using static Gossamer.External.HarfBuzz.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.BackEnd.Text;
+namespace Gossamer.Backend.Text;
 
 public readonly record struct FontGlyph(uint Index, float U0, float V0, float U1, float V1, int Width, int Height, int BearingX, int BearingY);
 
