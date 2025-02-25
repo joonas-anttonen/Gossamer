@@ -11,10 +11,17 @@
     <Version>0.0.1</Version>
   </PropertyGroup>
 
+  <!-- References -->
   <ItemGroup>
     <Using Include="System.Numerics" />
   </ItemGroup>
-  
+
+  <!-- Embedded -->
+  <ItemGroup>
+    <EmbeddedResource Include="BackEnd/Text/ProggyClean.ttf" />
+  </ItemGroup>
+
+  <!-- Dependency binaries -->
   <ItemGroup>
     <!-- GLFW -->
     <None Update="External/libgossamer-glfw.dll" Condition=" '$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' ">

@@ -1086,6 +1086,14 @@ unsafe class Api
 
     const CallingConvention CallConvention = CallingConvention.Cdecl;
 
+    public static void ThrowIfFailed(FT_Error error)
+    {
+        if (error != FT_Error.Ok)
+        {
+            throw new GossamerException(error.ToString());
+        }
+    }
+
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FT_Error FT_Set_Char_Size(nint face, int char_width, int char_height, uint horz_resolution, uint vert_resolution);
 

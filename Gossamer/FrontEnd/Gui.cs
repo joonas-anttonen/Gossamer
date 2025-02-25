@@ -297,14 +297,13 @@ public class Gui : IDisposable
                 cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
                 cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
-                //cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.UnpackRGB(0x1f1e25), gfx2D.GetFont("Arial", 16));
+                //cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.UnpackRGB(0x1f1e25), gfx2D.GetBuiltInFont());
             }
 
-            var font = gfx2D.GetFont("Arial", 12);
+            var font = gfx2D.GetBuiltInFont();
             var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
             cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
 
-            Vector2 textPosition = new(6.0f, sizeOfFrame.Y + 200);
             Vector2 textAvailableSize = new(ww, wh);
 
             {
@@ -340,7 +339,7 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
                 //textToTest = "Word1 woORd2 longerword3 andword4 maybeevenlongerword5 word6";
                 var textLayout = gfx2D.ComputeTextLayout(
                     textToTest,
-                    font,
+                    gfx2D.GetFontOrBuiltIn("CascadiaCode", 16),
                     textAvailableSize,
                     wordWrap: true);
 
@@ -348,8 +347,8 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
                 Rectangle windowRect = new(0, 0, ww, wh);
                 Rectangle layoutCentered = layoutRect.CenterOn(windowRect.Center);
                 cmdBuffer.DrawText(textLayout, Vector2.Round(layoutCentered.Position), Color.UnpackRGB(0xbde5fb).WithAlpha(0.95f), parameters.ColorOfBackground);
-                cmdBuffer.DrawRectangle(windowRect.Position, windowRect.Position + textAvailableSize, Color.HighlighterRed);
                 cmdBuffer.DrawRectangle(layoutCentered.Position, layoutCentered.Position + textLayout.Size, Color.MintyGreen);
+                //cmdBuffer.DrawRectangle(windowRect.Position, windowRect.Position + textAvailableSize, Color.HighlighterRed);
 
                 gfx2D.ReleaseTextLayout(textLayout);
             }

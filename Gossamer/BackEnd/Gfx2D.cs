@@ -531,7 +531,21 @@ class Gfx2D(Gfx gfx) : IDisposable
     ulong frameCounter;
     Statistics frameStatistics;
 
-    public Font GetFont(string name, int size)
+    /// <summary>
+    /// Gets the built-in font that is always available.
+    /// </summary>
+    public Font GetBuiltInFont()
+    {
+        return fontCache.GetBuiltInFont();
+    }
+
+    /// <summary>
+    /// Gets a font by name and size. If the font is not found, the built-in font is returned.
+    /// </summary>
+    /// <param name="name"></param>
+    /// <param name="size"></param>
+    /// <returns></returns>
+    public Font GetFontOrBuiltIn(string name, int size)
     {
         fontCache.TryGetFontOrDefault(name, size, out Font? font);
         return font;
@@ -563,35 +577,8 @@ class Gfx2D(Gfx gfx) : IDisposable
         }
     }
 
-    public unsafe void Create()
+    public unsafe void InitializeFont(Font font)
     {
-        AssertIsNull(uniformBuffer);
-        AssertIsNull(vertexBuffer);
-        AssertIsNull(indexBuffer);
-
-        vertexBuffer = gfx.CreateDynamicMemoryBuffer<Vertex2D>(length: MaxVertices, GfxMemoryBufferUsage.Vertex);
-        indexBuffer = gfx.CreateDynamicMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryBufferUsage.Index);
-        uniformBuffer = gfx.CreateDynamicMemoryBuffer<PerCommandData>(length: 1, GfxMemoryBufferUsage.Uniform);
-
-        VkSamplerCreateInfo samplerCreateInfo = new(default)
-        {
-            AddressModeU = VkSamplerAddressMode.CLAMP_TO_BORDER,
-            AddressModeV = VkSamplerAddressMode.CLAMP_TO_BORDER,
-            AddressModeW = VkSamplerAddressMode.CLAMP_TO_BORDER,
-
-            MinFilter = VkFilter.NEAREST,
-            MagFilter = VkFilter.NEAREST,
-            MipmapMode = VkSamplerMipmapMode.NEAREST,
-
-            BorderColor = VkBorderColor.FLOAT_OPAQUE_WHITE,
-
-            MaxAnisotropy = 1,
-        };
-        drawSampler = gfx.CreateSampler(samplerCreateInfo);
-
-        //GfxFont font  = fontCache.LoadFont("Iceland.ttf", 32);
-        Font font = fontCache.LoadFont("/home/jant/.local/share/fonts/CascadiaCode.ttf", 22, 24);
-        //GfxFont font  = fontCache.LoadFont("/home/jant/.local/share/fonts/SourceCodePro-Regular.ttf", 16);
         Font.Atlas fontAtlas = font.GetAtlas();
 
         PixelBuffer fontTexture = gfx.CreatePixelBuffer(
@@ -644,6 +631,37 @@ class Gfx2D(Gfx gfx) : IDisposable
         ArrayUtilities.Append(ref fontTextures, fontTexture);
 
         gfx.DestroyMemoryBuffer(fontStagingBuffer);
+    }
+
+    public void Create()
+    {
+        AssertIsNull(uniformBuffer);
+        AssertIsNull(vertexBuffer);
+        AssertIsNull(indexBuffer);
+
+        vertexBuffer = gfx.CreateDynamicMemoryBuffer<Vertex2D>(length: MaxVertices, GfxMemoryBufferUsage.Vertex);
+        indexBuffer = gfx.CreateDynamicMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryBufferUsage.Index);
+        uniformBuffer = gfx.CreateDynamicMemoryBuffer<PerCommandData>(length: 1, GfxMemoryBufferUsage.Uniform);
+
+        VkSamplerCreateInfo samplerCreateInfo = new(default)
+        {
+            AddressModeU = VkSamplerAddressMode.CLAMP_TO_BORDER,
+            AddressModeV = VkSamplerAddressMode.CLAMP_TO_BORDER,
+            AddressModeW = VkSamplerAddressMode.CLAMP_TO_BORDER,
+
+            MinFilter = VkFilter.NEAREST,
+            MagFilter = VkFilter.NEAREST,
+            MipmapMode = VkSamplerMipmapMode.NEAREST,
+
+            BorderColor = VkBorderColor.FLOAT_OPAQUE_WHITE,
+
+            MaxAnisotropy = 1,
+        };
+        drawSampler = gfx.CreateSampler(samplerCreateInfo);
+
+        // Initialize the default font
+        InitializeFont(fontCache.GetBuiltInFont());
+        InitializeFont(fontCache.LoadFontFromFile("CascadiaCode", "/home/jant/.local/share/fonts/CascadiaCode.ttf", 22, 24));
     }
 
     public void Dispose()
@@ -953,7 +971,8 @@ class Gfx2D(Gfx gfx) : IDisposable
             );
             vkCmdPushConstants(commandBuffer, activePipeline.Layout, VkShaderStage.VERTEX | VkShaderStage.FRAGMENT, 0, (uint)Unsafe.SizeOf<PerCommandData>(), &commandData);
 
-            PixelBuffer commandTexture = command.Texture ?? fontTextures[0];
+            // FIXME: Fallback to the first font texture if the command does not have a texture or a font.
+            PixelBuffer commandTexture = command.Texture ?? (command.Font != null ? fontTextures[fontTextureIndices[command.Font]] : fontTextures[0]);
 
             VkDescriptorImageInfo descriptorImageInfo = new()
             {

@@ -503,9 +503,9 @@ class FreeTypeGlyph : IDisposable
         {
             FaceRec* faceData = (FaceRec*)face;
 
-            ThrowIf(FT_Load_Glyph(face, glyphIndex, pixelMode == PixelMode.Lcd ? FT_Load.LOAD_TARGET_LCD : FT_Load.DEFAULT) != FT_Error.Ok);
-            ThrowIf(FT_Render_Glyph((nint)faceData->glyph, pixelMode == PixelMode.Lcd ? FtRenderMode.LCD : FtRenderMode.Normal) != FT_Error.Ok);
-            ThrowIf(FT_Get_Glyph((nint)faceData->glyph, out nint glyphPtr) != FT_Error.Ok);
+            ThrowIfFailed(FT_Load_Glyph(face, glyphIndex, pixelMode == PixelMode.Lcd ? FT_Load.LOAD_TARGET_LCD : FT_Load.DEFAULT));
+            ThrowIfFailed(FT_Render_Glyph((nint)faceData->glyph, pixelMode == PixelMode.Lcd ? FtRenderMode.LCD : FtRenderMode.Normal));
+            ThrowIfFailed(FT_Get_Glyph((nint)faceData->glyph, out nint glyphPtr));
 
             GlyphSlotRec* glyphSlotData = faceData->glyph;
             BitmapGlyphRec* glyphBitmapData = (BitmapGlyphRec*)glyphPtr;
@@ -536,9 +536,9 @@ class FreeTypeGlyph : IDisposable
         {
             FaceRec64* faceData = (FaceRec64*)face;
 
-            ThrowIf(FT_Load_Glyph(face, glyphIndex, pixelMode == PixelMode.Lcd ? FT_Load.LOAD_TARGET_LCD : FT_Load.DEFAULT) != FT_Error.Ok);
-            ThrowIf(FT_Render_Glyph((nint)faceData->glyph, pixelMode == PixelMode.Lcd ? FtRenderMode.LCD : FtRenderMode.Normal) != FT_Error.Ok);
-            ThrowIf(FT_Get_Glyph((nint)faceData->glyph, out nint glyphPtr) != FT_Error.Ok);
+            ThrowIfFailed(FT_Load_Glyph(face, glyphIndex, pixelMode == PixelMode.Lcd ? FT_Load.LOAD_TARGET_LCD : FT_Load.DEFAULT));
+            ThrowIfFailed(FT_Render_Glyph((nint)faceData->glyph, pixelMode == PixelMode.Lcd ? FtRenderMode.LCD : FtRenderMode.Normal));
+            ThrowIfFailed(FT_Get_Glyph((nint)faceData->glyph, out nint glyphPtr));
 
             glyphPointer = glyphPtr;
 
