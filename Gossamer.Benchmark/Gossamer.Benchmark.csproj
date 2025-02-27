@@ -10,6 +10,9 @@
     <Configurations>Debug;Release</Configurations>
     <PackageId>Gossamer.Benchmark</PackageId>
     <Version>0.0.1</Version>
+
+    <!-- Get rid of the "netX.X" in the output path -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
