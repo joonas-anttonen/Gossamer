@@ -49,9 +49,16 @@ public static class ArrayUtilities
         children.CopyTo(array, array.Length - children.Length);
     }
 
-    public static bool Remove<T>(ref T[] array, T child)
+    /// <summary>
+    /// Removes the specified element from the array, if it exists. Resizes the array if the element is removed.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="array"></param>
+    /// <param name="element"></param>
+    /// <returns> <see langword="true"/> if the element was removed, <see langword="false"/> otherwise. </returns>
+    public static bool Remove<T>(ref T[] array, T element)
     {
-        int index = Array.IndexOf(array, child);
+        int index = Array.IndexOf(array, element);
         if (index < 0)
         {
             return false;

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 
 using Gossamer.Backend;
+using Gossamer.External.FreeType;
 using Gossamer.External.Glfw;
 using Gossamer.Logging;
 using Gossamer.Utilities;
@@ -48,12 +49,18 @@ public class Gui : IDisposable
 
     readonly GuiParameters parameters = new();
 
+    readonly GuiElement rootElement;
+
+    GuiElement? elementThatHasMouse;
+    GuiElement? elementThatCapturedMouse;
+    GuiElement? elementThatHasKeyboard;
+
     GlfwWindow glfwWindow;
 
     bool isIconified;
     bool isMaximized;
     bool isFullscreen;
-    //bool isDamaged;
+    bool isDamaged;
     readonly bool useFullscreen = true;
 
     readonly GLFWwindowrefreshfun glfwCallbackWindowRefresh;
@@ -66,6 +73,34 @@ public class Gui : IDisposable
     readonly GLFWcharfun glfwCallbackKeyboardChar;
     readonly GLFWwindowiconifyfun glfwCallbackWindowIconify;
     readonly GLFWwindowclosefun glfwCallbackWindowClose;
+
+    bool layoutRequested = true;
+
+    bool mouseOnClose;
+    bool mouseOnMaximize;
+    bool mouseOnMinimize;
+    bool mouseOnFrameControls;
+
+    readonly bool isWindowPositionable = true;
+    bool isFrameDragging;
+    Vector2 frameDraggingStartPosition;
+    Vector2 lastMousePosition;
+
+    Rectangle controlsCloseRect;
+    Rectangle controlsCloseIconRect;
+    Rectangle controlsMaximizeRect;
+    Rectangle controlsMaximizeIconRect;
+    Rectangle controlsMinimizeRect;
+    Rectangle controlsMinimizeIconRect;
+
+    FrameMode mode = FrameMode.Full;
+
+    public enum FrameMode
+    {
+        None = 0,
+        Title = 1,
+        Full = 2,
+    }
 
     public bool IsClosing
     {
@@ -133,6 +168,61 @@ public class Gui : IDisposable
 
         // Wayland does not allow application to move its own window
         isWindowPositionable = platform != Platform.Wayland;
+
+        rootElement = new(this, Identity.Create("ROOT"))
+        {
+            isGrid = true,
+            gridDefinition = new(
+                [],
+                [
+                    Measure.Px(0),
+                    Measure.Fr(1),
+                ]
+            ),
+        };
+
+        var frameElement = new GuiElement(this, Identity.Create("FRAME"))
+        {
+            gridPlacement = new(0, 0, 1, 2),
+            Style = new Style()
+            {
+                Background = Color.UnpackRGB(0x1f1e25),
+                Border = new Border(
+                    Visibility: BorderVisibility.All,
+                    Color: Color.UnpackRGB(0x2b313c),
+                    Spacing: Spacing.Create(
+                        Measure.Px(3),
+                        Measure.Px(32),
+                        Measure.Px(3),
+                        Measure.Px(3))),
+            }
+        };
+        frameElement.AttachTo(rootElement);
+
+        var testElement = new GuiElement(this, Identity.Create("TEST"))
+        {
+            gridPlacement = new(0, 0, 1, 1),
+            Style = new Style()
+            {
+                Background = Color.UnpackRGB(0xbbbbFF).WithAlpha(0.3f),
+                Margin = Spacing.Create(Measure.Px(0)),
+                Padding = Spacing.Create(Measure.Px(0)),
+                Outline = new Outline(
+                    IsVisible: false,
+                    Color: Color.HighlighterRed,
+                    Width: Measure.Px(0),
+                    Offset: Measure.Px(0)),
+            },
+            StyleWhenHovered = new()
+            {
+                Background = Color.SpiroDiscoBall,
+            },
+            StyleWhenFocused = new()
+            {
+                Background = Color.SizzlingRed,
+            },
+        };
+        testElement.AttachTo(rootElement);
     }
 
     public void Dispose()
@@ -203,6 +293,7 @@ public class Gui : IDisposable
         glfwSetWindowCloseCallback(glfwWindow, glfwCallbackWindowClose);
 
         isCreated = true;
+        layoutRequested = true;
     }
 
     void UpdateParameters()
@@ -216,42 +307,52 @@ public class Gui : IDisposable
         parameters.Size = new Vector2(ww, wh);
     }
 
-    bool layoutRequested = true;
-
-    bool mouseOnClose;
-    bool mouseOnMaximize;
-    bool mouseOnMinimize;
-    bool mouseOnFrameControls;
-
-    readonly bool isWindowPositionable = true;
-    bool isFrameDragging;
-    Vector2 frameDraggingStartPosition;
-
-    Rectangle controlsCloseRect;
-    Rectangle controlsCloseIconRect;
-    Rectangle controlsMaximizeRect;
-    Rectangle controlsMaximizeIconRect;
-    Rectangle controlsMinimizeRect;
-    Rectangle controlsMinimizeIconRect;
-
-    FrameMode mode = FrameMode.Full;
-
-    public enum FrameMode
+    bool LayoutUpdate()
     {
-        None = 0,
-        Title = 1,
-        Full = 2,
+        Assert(!isDisposed && isCreated);
+
+        if (!layoutRequested)
+            return false;
+
+        layoutRequested = false;
+
+        logger.Debug("");
+
+        UpdateParameters();
+
+        // Measure and arrange
+        //
+        glfwGetWindowSize(glfwWindow, out int ww, out int wh);
+
+        float emSize = 16;
+        rootElement.ComputeStyleCore(false);
+        _ = rootElement.MeasureCore(new Vector2(ww, wh), emSize);
+        rootElement.ArrangeCore(new Rectangle(0, 0, ww, wh), emSize);
+
+        return true;
     }
 
     public void Render()
     {
         Assert(isCreated);
 
-        if (layoutRequested)
+        UpdateParameters();
+        glfwGetWindowSize(glfwWindow, out int ww, out int wh);
+
+        // Layout
+        //
+        bool layoutChanged = LayoutUpdate();
+        if (layoutChanged)
         {
-            layoutRequested = false;
-            //Layout();
+            isDamaged = true;
         }
+
+        if (!isDamaged)
+        {
+            return;
+        }
+
+        rootElement.UpdateCore(0, 0);
 
         var gfx2D = gfx.Get2D();
 
@@ -261,9 +362,6 @@ public class Gui : IDisposable
         var cmdBuffer = gfx2D.BeginCommandBuffer();
         {
             cmdBuffer.BeginBatch();
-
-            UpdateParameters();
-            glfwGetWindowSize(glfwWindow, out int ww, out int wh);
 
             Vector4 sizeOfFrame = parameters.SizeOfFrame;
 
@@ -276,26 +374,28 @@ public class Gui : IDisposable
 
             cmdBuffer.FillRectangle(new(0, 0), new(ww, wh), parameters.ColorOfBackground);
 
-            Color colorOfFrame = parameters.ColorOfFrame;
+            //Color colorOfFrame = parameters.ColorOfFrame;
+
+            rootElement.RenderCore(cmdBuffer);
 
             if (mode != FrameMode.None)
             {
                 if (mode == FrameMode.Full)
                 {
-                    cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(sizeOfFrame.X, wh), colorOfFrame);
-                    cmdBuffer.FillRectangle(new Vector2(ww - sizeOfFrame.Z, 0), new Vector2(ww, wh), colorOfFrame);
-                    cmdBuffer.FillRectangle(new Vector2(0, wh - sizeOfFrame.W), new Vector2(ww, wh), colorOfFrame);
+                    //cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(sizeOfFrame.X, wh), colorOfFrame);
+                    //cmdBuffer.FillRectangle(new Vector2(ww - sizeOfFrame.Z, 0), new Vector2(ww, wh), colorOfFrame);
+                    //cmdBuffer.FillRectangle(new Vector2(0, wh - sizeOfFrame.W), new Vector2(ww, wh), colorOfFrame);
                 }
 
-                cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(ww, sizeOfFrame.Y), colorOfFrame);
+                //cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(ww, sizeOfFrame.Y), colorOfFrame);
 
-                cmdBuffer.FillRectangle(controlsCloseRect, mouseOnClose ? new Color(Color.SizzlingRed, 0.75f) : colorOfFrame);
-                cmdBuffer.FillRectangle(controlsMaximizeRect, mouseOnMaximize ? new Color(Color.White, 0.5f) : colorOfFrame);
-                cmdBuffer.FillRectangle(controlsMinimizeRect, mouseOnMinimize ? new Color(Color.White, 0.5f) : colorOfFrame);
-
-                cmdBuffer.FillRectangle(controlsCloseIconRect, Color.White);
-                cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
-                cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
+                //cmdBuffer.FillRectangle(controlsCloseRect, mouseOnClose ? new Color(Color.SizzlingRed, 0.75f) : colorOfFrame);
+                //cmdBuffer.FillRectangle(controlsMaximizeRect, mouseOnMaximize ? new Color(Color.White, 0.5f) : colorOfFrame);
+                //cmdBuffer.FillRectangle(controlsMinimizeRect, mouseOnMinimize ? new Color(Color.White, 0.5f) : colorOfFrame);
+                //
+                //cmdBuffer.FillRectangle(controlsCloseIconRect, Color.White);
+                //cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
+                //cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
                 //cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.UnpackRGB(0x1f1e25), gfx2D.GetBuiltInFont());
             }
@@ -356,6 +456,8 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
             cmdBuffer.EndBatch();
         }
         gfx2D.EndCommandBuffer(cmdBuffer);
+
+        isDamaged = false;
     }
 
     public void PostEmptyEvent()
@@ -373,6 +475,16 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
         glfwWaitEventsTimeout(timeout);
     }
 
+    internal void ScheduleLayout()
+    {
+        layoutRequested = true;
+        ScheduleDraw();
+    }
+    internal void ScheduleDraw()
+    {
+        isDamaged = true;
+    }
+
     void Callback_WindowRefresh(GlfwWindow window)
     {
         messageQueue.PostSurfaceDamaged();
@@ -381,6 +493,8 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
     void Callback_WindowSize(GlfwWindow window, int w, int h)
     {
         messageQueue.PostSurfaceLost();
+
+        ScheduleLayout();
 
         if (platform != Platform.Win32)
         {
@@ -399,6 +513,11 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
 
     void Callback_MouseEnter(GlfwWindow window, int contained)
     {
+        if (contained == Constants.GLFW_FALSE)
+        {
+            elementThatHasMouse?.LostMouseFocus();
+            elementThatHasMouse = rootElement;
+        }
     }
 
     void Callback_MouseMove(GlfwWindow window, double x, double y)
@@ -407,22 +526,22 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
 
         Vector4 sizeOfFrame = parameters.SizeOfFrame;
 
-        Vector2 mouseOnWindow = new((int)x, (int)y);
+        lastMousePosition = new((float)x, (float)y);
 
         if (isWindowPositionable && isFrameDragging)
         {
             glfwGetWindowPos(glfwWindow, out int wx, out int wy);
             Vector2 windowPosition = new(wx, wy);
 
-            windowPosition += mouseOnWindow - frameDraggingStartPosition;
+            windowPosition += lastMousePosition - frameDraggingStartPosition;
             glfwSetWindowPos(glfwWindow, (int)windowPosition.X, (int)windowPosition.Y);
         }
 
-        if (mode != FrameMode.None && mouseOnWindow.Y <= sizeOfFrame.Y)
+        if (mode != FrameMode.None && lastMousePosition.Y <= sizeOfFrame.Y)
         {
-            mouseOnClose = controlsCloseRect.Contains(mouseOnWindow);
-            mouseOnMaximize = controlsMaximizeRect.Contains(mouseOnWindow);
-            mouseOnMinimize = controlsMinimizeRect.Contains(mouseOnWindow);
+            mouseOnClose = controlsCloseRect.Contains(lastMousePosition);
+            mouseOnMaximize = controlsMaximizeRect.Contains(lastMousePosition);
+            mouseOnMinimize = controlsMinimizeRect.Contains(lastMousePosition);
             mouseOnFrameControls = mouseOnClose || mouseOnMaximize || mouseOnMinimize;
         }
         else
@@ -433,6 +552,38 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
         if (mouseOnFrameControls)
         {
             return;
+        }
+
+        // route to element that captured mouse
+        if (elementThatCapturedMouse != null)
+        {
+            elementThatCapturedMouse.OnMouseMove(elementThatCapturedMouse.WindowToElement(lastMousePosition));
+        }
+        else
+        {
+            GuiElement? lastElementThatHadMouse = elementThatHasMouse;
+
+            // check if the mouse is inside any element
+            if (rootElement.Contains(lastMousePosition, out elementThatHasMouse))
+            {
+                if (elementThatHasMouse != lastElementThatHadMouse && lastElementThatHadMouse != null)
+                {
+                    lastElementThatHadMouse.LostMouseFocus();
+                }
+
+                if (elementThatHasMouse != lastElementThatHadMouse && elementThatHasMouse != null)
+                {
+                    elementThatHasMouse.GotMouseFocus();
+                }
+            }
+
+            if (elementThatHasMouse != null)
+            {
+                // should always be atleast root element...
+                AssertNotNull(elementThatHasMouse);
+
+                elementThatHasMouse.OnMouseMove(lastMousePosition - elementThatHasMouse.ActualArea.Position);
+            }
         }
     }
 
@@ -483,6 +634,32 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
             }
         }
 
+        // route to element that captured mouse
+        //
+        if (elementThatCapturedMouse != null)
+        {
+            elementThatCapturedMouse.OnMouseButton(elementThatCapturedMouse.WindowToElement(lastMousePosition), iButton, iAction, iMods);
+
+            // end capture when mouse is released
+            if (iAction == InputAction.Release)
+            {
+                elementThatCapturedMouse = null;
+            }
+        }
+        // route to element that contains mouse
+        //
+        else if (elementThatHasMouse != null)
+        {
+            elementThatHasMouse.OnMouseButton(elementThatHasMouse.WindowToElement(lastMousePosition), iButton, iAction, iMods);
+
+            // begin capture when mouse is pressed - if the element can capture
+            if (iAction == InputAction.Press && elementThatHasMouse.Enabled && elementThatHasMouse.Focusable)
+            {
+                elementThatCapturedMouse = elementThatHasMouse;
+
+                SetElementThatHasKeyboard(elementThatHasMouse);
+            }
+        }
     }
 
     void Callback_MouseScroll(GlfwWindow window, double x, double y)
@@ -551,9 +728,43 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
         ScheduleLayout();
     }
 
-    void ScheduleLayout()
+    internal void RequestLoseFocus(GuiElement element)
     {
-        layoutRequested = true;
+        if (elementThatCapturedMouse == element)
+        {
+            elementThatCapturedMouse = null;
+        }
+
+        if (elementThatHasMouse == element)
+        {
+            elementThatHasMouse.LostMouseFocus();
+            elementThatHasMouse = null;
+        }
+
+        if (elementThatHasKeyboard == element)
+        {
+            elementThatHasKeyboard.LostKeyboardFocus();
+            elementThatHasKeyboard = null;
+        }
+    }
+
+    void SetElementThatHasKeyboard(GuiElement element)
+    {
+        if (elementThatHasKeyboard == element)
+            return;
+
+        if (elementThatHasKeyboard != null)
+        {
+            GuiElement temp = elementThatHasKeyboard;
+            elementThatHasKeyboard = null;
+            temp.LostKeyboardFocus();
+        }
+
+        if (element != null)
+        {
+            elementThatHasKeyboard = element;
+            elementThatHasKeyboard.GotKeyboardFocus();
+        }
     }
 
     static InputButton GetInputButton(int button)

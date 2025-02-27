@@ -5,7 +5,7 @@ namespace Gossamer.Backend.Text;
 /// <summary>
 /// A pre-computed block of text.
 /// </summary>
-class TextLayout
+public class TextLayout
 {
     public readonly record struct TextLayoutGlyph(Vector2 Position, Vector2 Size, Vector2 UV0, Vector2 UV1);
 

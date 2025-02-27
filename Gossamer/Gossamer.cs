@@ -82,6 +82,11 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         return Instance.log.GetLogger(name);
     }
 
+    public static void Log(string message, string typeName = "", [System.Runtime.CompilerServices.CallerMemberName] string callerName = "")
+    {
+        Instance.logger.Debug(message, typeName, callerName);
+    }
+
     /// <summary>
     /// The singleton instance of <see cref="Gossamer"/>. Safe to use only after an instance has been created.
     /// </summary>

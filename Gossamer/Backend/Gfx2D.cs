@@ -37,7 +37,7 @@ record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, Pixe
 
 record struct CommandBatch(int FirstCommandIndex, int CommandCount, PixelBuffer? Surface);
 
-class Gfx2DCommandBuffer
+public class Gfx2DCommandBuffer
 {
     const int InitialArraySize = 8192 * 4;
 
@@ -70,14 +70,14 @@ class Gfx2DCommandBuffer
         scratchVertexCount = 0;
     }
 
-    public void GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches)
+    internal void GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches)
     {
         vertices = this.vertices.AsSpan(0, frameVertexCount);
         indices = this.indices.AsSpan(0, frameIndexCount);
         commandBatches = batches.AsSpan(0, batchCount);
     }
 
-    public void GetBatchData(CommandBatch batch, out ReadOnlySpan<Command> commands)
+    internal void GetBatchData(CommandBatch batch, out ReadOnlySpan<Command> commands)
     {
         commands = this.commands.AsSpan(batch.FirstCommandIndex, batch.CommandCount);
     }

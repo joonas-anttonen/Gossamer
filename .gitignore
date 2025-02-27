@@ -3,6 +3,9 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+# Project-specific files
+*.nothtml
+
 # dotenv files
 .env
 

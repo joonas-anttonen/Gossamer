@@ -1,0 +1,45 @@
+<window>
+    <style>
+        grid {
+            background: #f0f0f0;
+            padding: 10px;
+        }
+
+        #first {
+            background: #f0f0f0;
+            padding: 10px;
+
+            color: red;
+            border: 1px solid red;
+            margin: 0px 5px 0px 0px;
+        }
+    </style>
+
+    <grid columns="auto" rows="auto auto">
+
+        <style>
+            #windowFrame {
+                background: #f0f0f0;
+                foreground: blue;
+
+                padding: 10px;
+                border-color: aliceblue;
+                border-width: 3px 32px 3px 3px;
+            }
+        </style>
+
+        <div id="windowFrame" colum="0" columnspan="99" row="0" rowspan="99">
+        
+        </div>
+
+        <grid columns="auto auto auto" rows="auto">
+
+            <button column="0" row="0" content="button 1" />
+            <button column="1" row="0" content="button 2" />
+            <button column="2" row="0" content="button 3" />
+
+        </grid>        
+
+    </grid>
+
+</window>
