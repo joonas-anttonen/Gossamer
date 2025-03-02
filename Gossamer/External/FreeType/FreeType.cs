@@ -1090,7 +1090,7 @@ unsafe class Api
     {
         if (error != FT_Error.Ok)
         {
-            throw new GossamerException(error.ToString());
+            throw new InvalidOperationException(error.ToString());
         }
     }
 

@@ -56,7 +56,7 @@ public sealed class Log : IDisposable
                 Level.Warning => "WARNING",
                 Level.Information => "INFO",
                 Level.Debug => "DEBUG",
-                _ => throw new GossamerException(),
+                _ => throw new NotImplementedException(),
             };
         }
     }

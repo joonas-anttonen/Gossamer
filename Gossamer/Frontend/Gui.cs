@@ -153,7 +153,7 @@ public class Gui : IDisposable
                 throw new ArgumentOutOfRangeException(nameof(parameters.Platform));
         }
 
-        ThrowIf(glfwInit() != 1, "Failed to initialize GLFW.");
+        ThrowNotSupportedIf(glfwInit() != 1, "Failed to initialize GLFW.");
 
         glfwCallbackWindowRefresh = Callback_WindowRefresh;
         glfwCallbackMouseEnter = Callback_MouseEnter;
@@ -273,7 +273,7 @@ public class Gui : IDisposable
         Vector2 windowPosition = parameters.Position ?? new Vector2(mx + (int)((mw - windowSize.X) / 2.0f), my + (int)((mh - windowSize.Y) / 2.0f));
 
         glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, "Gossamer");
-        ThrowIf(!glfwWindow.HasValue, "Failed to create GLFW window.");
+        ThrowInvalidOperationIf(!glfwWindow.HasValue, "Failed to create GLFW window.");
 
         glfwSetWindowSizeLimits(glfwWindow, 256, 144, -1, -1);
         if (isWindowPositionable)

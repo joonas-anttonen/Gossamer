@@ -125,16 +125,16 @@ public static class ExceptionUtilities
     }
 
     /// <summary>
-    /// Throws an <see cref="GossamerException"/> if the condition is true.
+    /// Throws an <see cref="Exception"/> if the condition is true.
     /// </summary>
     /// <param name="condition"></param>
     /// <param name="message"></param>
-    /// <exception cref="GossamerException"></exception>
+    /// <exception cref="Exception"></exception>
     public static void ThrowIf(bool condition, string? message = default)
     {
         if (condition)
         {
-            throw new GossamerException(message);
+            throw new Exception(message);
         }
     }
 }
