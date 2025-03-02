@@ -1,7 +1,5 @@
 ﻿using System.Numerics;
 
-using Gossamer;
-
 namespace Gossamer.Tests;
 
 [TestClass]

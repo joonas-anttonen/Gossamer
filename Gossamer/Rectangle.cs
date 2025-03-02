@@ -9,8 +9,6 @@ namespace Gossamer;
 /// <param name="Bottom">Bottom boundary.</param>
 public readonly record struct Rectangle(float Left, float Top, float Right, float Bottom)
 {
-    public static readonly Rectangle Empty = new();
-
     public float Width => Right - Left;
     public float Height => Bottom - Top;
 
