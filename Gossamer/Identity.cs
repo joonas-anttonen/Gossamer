@@ -22,6 +22,7 @@ public class Identity(Guid Id, string Name) : IEquatable<Identity>
         return new Identity(id, string.IsNullOrEmpty(name) ? id.ToString() : name);
     }
 
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     public override string ToString() => string.IsNullOrEmpty(Name) ? $"{Id}" : $"{Name}";
 
     public override bool Equals(object? obj)
