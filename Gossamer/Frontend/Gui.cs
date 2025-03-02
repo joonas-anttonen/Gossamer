@@ -209,17 +209,17 @@ public class Gui : IDisposable
                 Padding = Spacing.Create(Measure.Px(0)),
                 Outline = new Outline(
                     IsVisible: false,
-                    Color: Color.HighlighterRed,
+                    Color: Color.Palettes.Nord.Nord11_Red,
                     Width: Measure.Px(0),
                     Offset: Measure.Px(0)),
             },
             StyleWhenHovered = new()
             {
-                Background = Color.SpiroDiscoBall,
+                Background = Color.Palettes.Nord.Nord10_DarkBlue,
             },
             StyleWhenFocused = new()
             {
-                Background = Color.SizzlingRed,
+                Background = Color.Palettes.Nord.Nord11_Red,
             },
         };
         testElement.AttachTo(rootElement);
@@ -447,7 +447,7 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
                 Rectangle windowRect = new(0, 0, ww, wh);
                 Rectangle layoutCentered = layoutRect.CenterOn(windowRect.Center);
                 cmdBuffer.DrawText(textLayout, Vector2.Round(layoutCentered.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.95f), parameters.ColorOfBackground);
-                cmdBuffer.DrawRectangle(layoutCentered.Position, layoutCentered.Position + textLayout.Size, Color.MintyGreen);
+                cmdBuffer.DrawRectangle(layoutCentered.Position, layoutCentered.Position + textLayout.Size, Color.Palettes.Nord.Nord14_Green);
                 //cmdBuffer.DrawRectangle(windowRect.Position, windowRect.Position + textAvailableSize, Color.HighlighterRed);
 
                 gfx2D.ReleaseTextLayout(textLayout);

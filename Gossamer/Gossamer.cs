@@ -211,7 +211,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             // 4. Initialize Gfx
             gfx.Create(new GfxParameters(
                 PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices()),
-                Presentation: new GfxSwapChainPresentation(Color.RedOrange, gui)
+                Presentation: new GfxSwapChainPresentation(Color.Palettes.Nord.Nord11_Red, gui)
             ));
 
             RunBackend(gfx);
