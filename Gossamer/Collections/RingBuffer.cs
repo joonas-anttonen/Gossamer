@@ -8,7 +8,7 @@ namespace Gossamer.Collections;
 /// A simple ring buffer implementation.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-/// <param name="capacity">The capacity of the ring buffer.</param>
+/// <param name="capacity"> The capacity of the ring buffer. </param>
 public class RingBuffer<T>(int capacity) : IEnumerable<T>
 {
     readonly T[] buffer = new T[capacity];
@@ -23,10 +23,9 @@ public class RingBuffer<T>(int capacity) : IEnumerable<T>
     /// Gets the element at the specified index.
     /// </summary>
     /// <param name="index"></param>
-    /// <returns></returns>
     public T this[int index]
     {
-        get => buffer[MathUtilities.Wrap(head + index, 0, buffer.Length)];      
+        get => buffer[MathUtilities.Wrap(head + index, 0, buffer.Length)];
     }
 
     /// <summary>

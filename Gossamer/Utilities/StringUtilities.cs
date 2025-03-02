@@ -3,6 +3,7 @@ namespace Gossamer;
 /// <summary>
 /// Collection of string utilities.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public static class StringUtilities
 {
     static readonly System.Globalization.NumberFormatInfo StringifyNumberFormat = new() { NumberGroupSeparator = " " };

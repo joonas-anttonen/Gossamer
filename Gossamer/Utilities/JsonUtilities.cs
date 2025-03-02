@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Gossamer.Utilities;
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class JsonVector2Converter : JsonConverter<Vector2>
 {
     public override Vector2 Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -26,6 +27,7 @@ public class JsonVector2Converter : JsonConverter<Vector2>
     }
 }
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class JsonVector3Converter : JsonConverter<Vector3>
 {
     public override Vector3 Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -53,6 +55,7 @@ public class JsonVector3Converter : JsonConverter<Vector3>
     }
 }
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class JsonVector4Converter : JsonConverter<Vector4>
 {
     public override Vector4 Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -84,6 +87,7 @@ public class JsonVector4Converter : JsonConverter<Vector4>
     }
 }
 
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class JsonColorConverter : JsonConverter<Color>
 {
     public override Color Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

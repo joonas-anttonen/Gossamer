@@ -6,6 +6,7 @@ namespace Gossamer.Utilities;
 /// <summary>
 /// Provides utilities for working with exceptions and assertions. Best with 'using static ExceptionUtilities'.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class ExceptionUtilities
 {
     /// <inheritdoc cref="Debug.Assert(bool, string?)"/>

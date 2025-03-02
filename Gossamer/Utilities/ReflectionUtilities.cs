@@ -5,6 +5,7 @@ namespace Gossamer.Utilities;
 /// <summary>
 /// Collection of reflection utilities.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public static class ReflectionUtilities
 {
     /// <summary>

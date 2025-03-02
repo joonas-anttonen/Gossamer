@@ -6,7 +6,7 @@ namespace Gossamer.Utilities;
 /// <summary>
 /// Encapsulates a 'safe' handle to a native resource.
 /// </summary>
-abstract class SafeHandle : IDisposable
+public abstract class SafeHandle : IDisposable
 {
     public bool IsInvalid => handle == nint.Zero;
 
@@ -27,13 +27,14 @@ abstract class SafeHandle : IDisposable
 
     protected abstract void ReleaseHandle();
 
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     ~SafeHandle()
     {
         Dispose(false);
     }
 }
 
-sealed class SafeNativeBlob : SafeHandle
+public sealed class SafeNativeBlob : SafeHandle
 {
     public int Size { get; }
 
@@ -57,7 +58,7 @@ sealed class SafeNativeBlob : SafeHandle
 /// <summary>
 /// Encapsulates a 'safe' handle to a native string with a specified encoding.
 /// </summary>
-sealed class SafeNativeString : SafeHandle
+public sealed class SafeNativeString : SafeHandle
 {
     /// <summary>
     /// The encoding of the string.
@@ -85,13 +86,8 @@ sealed class SafeNativeString : SafeHandle
         }
     }
 
-    static unsafe nint StringToHGlobal(string? s, Encoding encoding)
+    static unsafe nint StringToHGlobal(string s, Encoding encoding)
     {
-        if (s is null)
-        {
-            return IntPtr.Zero;
-        }
-
         int nb = encoding.GetMaxByteCount(s.Length);
 
         nint ptr = Marshal.AllocHGlobal(checked(nb + 1));
@@ -107,7 +103,7 @@ sealed class SafeNativeString : SafeHandle
 /// <summary>
 /// Encapsulates a 'safe' handle to an array of native strings. Capacity is fixed and cannot be changed.
 /// </summary>
-sealed class SafeNativeStringArray : SafeHandle
+public sealed class SafeNativeStringArray : SafeHandle
 {
     readonly SafeNativeString[] strings;
 
