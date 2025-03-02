@@ -55,10 +55,10 @@ public class GuiParameters
     /// Color of the edges of the <see cref="Window"/>.
     /// </summary>
     [JsonConverter(typeof(JsonColorConverter))]
-    public Color ColorOfFrame { get; set; } = Color.UnpackRGB(0x2B2A33);
+    public Color ColorOfFrame { get; set; } = Color.ParseUInt(0x2B2A33);
     /// <summary>
     /// Color of the client area of the <see cref="Window"/>.
     /// </summary>
     [JsonConverter(typeof(JsonColorConverter))]
-    public Color ColorOfBackground { get; set; } = Color.UnpackRGB(0x1f1e25);
+    public Color ColorOfBackground { get; set; } = Color.ParseUInt(0x1f1e25);
 }

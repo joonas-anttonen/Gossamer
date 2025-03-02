@@ -2,11 +2,15 @@
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
     <Platforms>x64</Platforms>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <Configurations>Debug;Release</Configurations>
+
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    
     <PackageId>Gossamer</PackageId>
     <Version>0.0.1</Version>
 

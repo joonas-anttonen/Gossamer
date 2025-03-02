@@ -186,10 +186,10 @@ public class Gui : IDisposable
             gridPlacement = new(0, 0, 1, 2),
             Style = new Style()
             {
-                Background = Color.UnpackRGB(0x1f1e25),
+                Background = Color.ParseUInt(0x1f1e25),
                 Border = new Border(
                     Visibility: BorderVisibility.All,
-                    Color: Color.UnpackRGB(0x2b313c),
+                    Color: Color.ParseUInt(0x2b313c),
                     Spacing: Spacing.Create(
                         Measure.Px(3),
                         Measure.Px(32),
@@ -204,7 +204,7 @@ public class Gui : IDisposable
             gridPlacement = new(0, 0, 1, 1),
             Style = new Style()
             {
-                Background = Color.UnpackRGB(0xbbbbFF).WithAlpha(0.3f),
+                Background = Color.ParseUInt(0xbbbbFF).WithAlpha(0.3f),
                 Margin = Spacing.Create(Measure.Px(0)),
                 Padding = Spacing.Create(Measure.Px(0)),
                 Outline = new Outline(
@@ -446,7 +446,7 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
                 Rectangle layoutRect = new(0, 0, textLayout.Size.X, textLayout.Size.Y);
                 Rectangle windowRect = new(0, 0, ww, wh);
                 Rectangle layoutCentered = layoutRect.CenterOn(windowRect.Center);
-                cmdBuffer.DrawText(textLayout, Vector2.Round(layoutCentered.Position), Color.UnpackRGB(0xbde5fb).WithAlpha(0.95f), parameters.ColorOfBackground);
+                cmdBuffer.DrawText(textLayout, Vector2.Round(layoutCentered.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.95f), parameters.ColorOfBackground);
                 cmdBuffer.DrawRectangle(layoutCentered.Position, layoutCentered.Position + textLayout.Size, Color.MintyGreen);
                 //cmdBuffer.DrawRectangle(windowRect.Position, windowRect.Position + textAvailableSize, Color.HighlighterRed);
 

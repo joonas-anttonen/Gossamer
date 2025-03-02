@@ -6,7 +6,7 @@
 			"task": "build ${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
 			"file": "${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
 			"group": "build",
-			"label": "dotnet: build ${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
+			"label": "Build Gossamer.Benchmark",
 			"presentation": {
 				"echo": true,
 				"reveal": "always",

@@ -88,11 +88,11 @@ public class JsonColorConverter : JsonConverter<Color>
 {
     public override Color Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        return Color.UnpackRGB(reader.GetString() ?? throw new InvalidOperationException());
+        return Color.ParseHexString(reader.GetString() ?? throw new InvalidOperationException());
     }
 
     public override void Write(Utf8JsonWriter writer, Color value, JsonSerializerOptions options)
     {
-        writer.WriteStringValue(Color.ToHexString(value));
+        writer.WriteStringValue(value.ToHexString());
     }
 }
