@@ -1,4 +1,4 @@
-namespace Gossamer.Tests;
+namespace Gossamer.Tests.Gossamer;
 
 [TestClass]
 public class IdentityTest
