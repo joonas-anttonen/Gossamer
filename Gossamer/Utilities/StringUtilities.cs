@@ -1,4 +1,4 @@
-namespace Gossamer;
+namespace Gossamer.Utilities;
 
 /// <summary>
 /// Collection of string utilities.
@@ -41,6 +41,13 @@ public static class StringUtilities
     /// <returns></returns>
     public static string SanitizePath(string path)
         => path.Replace('\\', '/');
+
+    /// <summary>
+    /// Converts the specified date time to an ISO 8601 string.
+    /// </summary>
+    /// <param name="dateTime"></param>
+    public static string DateTimeISO8601(DateTime dateTime)
+        => dateTime.ToString("yyyy-MM-ddTHH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Converts the specified time span to a user-friendly format.
@@ -110,11 +117,11 @@ public static class StringUtilities
         const long GigaByte = MegaByte * 1024;
 
         if (bytes >= GigaByte)
-            return $"{((double)bytes) / GigaByte:F2} GiB";
+            return $"{(double)bytes / GigaByte:F2} GiB";
         else if (bytes >= MegaByte)
-            return $"{((double)bytes) / MegaByte:F2} MiB";
+            return $"{(double)bytes / MegaByte:F2} MiB";
         else if (bytes >= KiloByte)
-            return $"{((double)bytes) / KiloByte:F2} KiB";
+            return $"{(double)bytes / KiloByte:F2} KiB";
         else
             return $"{bytes} B";
     }
@@ -131,11 +138,11 @@ public static class StringUtilities
         const long GigaByte = MegaByte * 1000;
 
         if (bytes >= GigaByte)
-            return $"{((double)bytes) / GigaByte:F2} GB";
+            return $"{(double)bytes / GigaByte:F2} GB";
         else if (bytes >= MegaByte)
-            return $"{((double)bytes) / MegaByte:F2} MB";
+            return $"{(double)bytes / MegaByte:F2} MB";
         else if (bytes >= KiloByte)
-            return $"{((double)bytes) / KiloByte:F2} KB";
+            return $"{(double)bytes / KiloByte:F2} KB";
         else
             return $"{bytes} B";
     }

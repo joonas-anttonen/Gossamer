@@ -31,6 +31,18 @@ public static class ExceptionUtilities
     }
 
     /// <summary>
+    /// Throws an <see cref="ArgumentException"/> if the string is null or empty.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="value"></param>
+    /// <param name="message"></param>
+    /// <exception cref="ArgumentException"></exception>
+    public static string ThrowArgumentIfNullOrEmpty([NotNull] string? value, string? message = default)
+    {
+        return string.IsNullOrEmpty(value) ? throw new ArgumentException(message) : value;
+    }
+
+    /// <summary>
     /// Throws an <see cref="ArgumentNullException"/> if the value is null.
     /// </summary>
     /// <typeparam name="T"></typeparam>

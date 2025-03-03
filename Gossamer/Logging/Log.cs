@@ -1,40 +1,37 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Runtime.CompilerServices;
+
+using Gossamer.Utilities;
 
 namespace Gossamer.Logging;
 
 /// <summary>
-/// Logging system for Gossamer.
+/// A simple logging system.
+/// <para> All operations are thread-safe. </para>
 /// </summary>
 public sealed class Log : IDisposable
 {
     /// <summary>
-    /// Log levels.
+    /// Log event severity.
     /// </summary>
-    public enum Level
-    {
-        Error,
-        Warning,
-        Information,
-        Debug
-    }
+    public enum Severity { Error, Warning, Information, Debug }
 
     /// <summary>
     /// Log event.
     /// </summary>
-    /// <param name="Level">Event severity.</param>
+    /// <param name="Severity">Event severity.</param>
     /// <param name="Timestamp">Event timestamp.</param>
     /// <param name="Message">Event message.</param>
-    /// <param name="Origin">Event origin.</param>
-    public readonly record struct Event(Level Level, DateTime Timestamp, string Message, string Origin)
+    /// <param name="Type">Event origin type.</param>
+    /// <param name="Method">Event origin method.</param>
+    public readonly record struct Event(Severity Severity, DateTime Timestamp, string Message, string Type, string Method)
     {
         /// <summary>
         /// Returns a string with the event origin and message.
         /// </summary>
         public readonly string ToShortString()
         {
-            return $"{Origin} {Message}";
+            return $"{OriginString(Type, Method)} {Message}";
         }
 
         /// <summary>
@@ -42,83 +39,102 @@ public sealed class Log : IDisposable
         /// </summary>
         public override readonly string ToString()
         {
-            // ISO 8601
-            string timestamp = Timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
-
-            return $"[{timestamp}] [{LevelToString(Level)}] {Origin} {Message}";
+            return $"[{StringUtilities.DateTimeISO8601(Timestamp)}] [{SeverityString(Severity)}] {OriginString(Type, Method)} {Message}";
         }
 
-        static string LevelToString(Level level)
+        static string OriginString(string type, string method) => $"{type}::{method}";
+
+        static string SeverityString(Severity level) => level switch
         {
-            return level switch
-            {
-                Level.Error => "ERROR",
-                Level.Warning => "WARNING",
-                Level.Information => "INFO",
-                Level.Debug => "DEBUG",
-                _ => throw new NotImplementedException(),
-            };
-        }
+            Severity.Error => "ERROR",
+            Severity.Warning => "WARNING",
+            Severity.Information => "INFO",
+            Severity.Debug => "DEBUG",
+            _ => throw new NotImplementedException(),
+        };
     }
 
-    bool isDisposed;
+    ILogListener[] listeners = [];
 
-    readonly ConcurrentBag<ILogListener> listeners = [];
+    readonly Lock listenersIteratorLock = new();
 
     readonly ConcurrentDictionary<string, Logger> loggers = [];
 
     /// <summary>
     /// Adds a <see cref="ConsoleLogListener"/> to the collection of listeners.
+    /// <para> This is thread-safe. </para>
     /// </summary>
-    /// <returns></returns>
     public ILogListener AddConsoleListener()
     {
-        ILogListener listener = new ConsoleLogListener();
-        listeners.Add(listener);
-        return listener;
+        using (listenersIteratorLock.EnterScope())
+        {
+            ILogListener listener = new ConsoleLogListener();
+            ArrayUtilities.Append(ref listeners, listener);
+            return listener;
+        }
     }
 
     /// <summary>
     /// Adds a <see cref="FileLogListener"/> to the collection of listeners.
+    /// <para> This is thread-safe. </para>
     /// </summary>
     /// <param name="path"></param>
-    /// <returns></returns>
     public ILogListener AddFileListener(string path)
     {
-        ILogListener listener = new FileLogListener(path);
-        listeners.Add(listener);
-        return listener;
+        using (listenersIteratorLock.EnterScope())
+        {
+            ILogListener listener = new FileLogListener(path);
+            ArrayUtilities.Append(ref listeners, listener);
+            return listener;
+        }
     }
 
     /// <summary>
     /// Adds a <see cref="ILogListener"/> to the collection of listeners.
+    /// <para> This is thread-safe. </para>
     /// </summary>
     /// <param name="listener"></param>
     public void AddListener(ILogListener listener)
     {
-        listeners.Add(listener);
-    }
-
-    public void Dispose()
-    {
-        if (isDisposed)
+        using (listenersIteratorLock.EnterScope())
         {
-            return;
-        }
-
-        GC.SuppressFinalize(this);
-        isDisposed = true;
-
-        foreach (ILogListener listener in listeners)
-        {
-            listener.Flush();
+            ArrayUtilities.Append(ref listeners, listener);
         }
     }
 
     /// <summary>
-    /// Gets a <see cref="Logger"/> instance with the specified name. Instances are cached so that only one instance is created per name.
+    /// Returns a copy of the listeners.
+    /// <para> This is thread-safe. </para>
     /// </summary>
-    /// <param name="name"></param>
+    public ILogListener[] GetListeners()
+    {
+        using (listenersIteratorLock.EnterScope())
+        {
+            return listeners.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Flushes all listeners.
+    /// <para> This is thread-safe. </para>
+    /// </summary>
+    public void Dispose()
+    {
+        using (listenersIteratorLock.EnterScope())
+        {
+            foreach (ILogListener listener in listeners)
+            {
+                listener.Flush();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets a <see cref="Logger"/> instance with the specified name. 
+    /// <para> Instances are cached so that only one instance is created per name. </para>
+    /// <para> This is thread-safe. </para>
+    /// </summary>
+    /// <param name="name"> The name of the logger instance. </param>
     public Logger GetLogger(string name)
     {
         if (loggers.TryGetValue(name, out Logger? logger))
@@ -133,18 +149,22 @@ public sealed class Log : IDisposable
 
     /// <summary>
     /// Appends a message to the log.
+    /// <para> This is thread-safe. </para>
     /// </summary>
-    /// <param name="level">Severity of the event.</param>
+    /// <param name="severity">Severity of the event.</param>
     /// <param name="message">Message describing the event.</param>
     /// <param name="typeName">Name of the type that the message originated from.</param>
-    /// <param name="callerName">Name of the caller that the message originated from.</param>
-    public void Append(Level level, string message, string typeName, string callerName)
+    /// <param name="methodName">Name of the method that the message originated from.</param>
+    public void Append(Severity severity, string message, string typeName, string methodName)
     {
-        Event logEvent = new(level, DateTime.Now, message, $"{typeName}::{callerName}");
+        Event logEvent = new(severity, DateTime.Now, message, typeName, methodName);
 
-        foreach (ILogListener listener in listeners)
+        using (listenersIteratorLock.EnterScope())
         {
-            listener.Append(logEvent);
+            foreach (ILogListener listener in listeners)
+            {
+                listener.Append(logEvent);
+            }
         }
     }
 }
@@ -154,52 +174,63 @@ public sealed class Log : IDisposable
 /// </summary>
 /// <param name="log">The log.</param>
 /// <param name="name">The name of the logger instance.</param>
-public class Logger(Log log, string name)
+public record Logger(Log log, string name)
 {
     readonly Log log = log;
-    readonly string name = name;
+
+    public string Name { get; } = name;
+
+    string ResolveTypeName(string typeName) => string.IsNullOrEmpty(typeName) ? Name : typeName;
 
     /// <summary>
     /// Logs an error message.
+    /// <para> If <paramref name="typeName"/> is null or empty, the logger's name is used. </para>
+    /// <para> This is thread-safe. </para>
     /// </summary>
     /// <param name="message"></param>
     /// <param name="typeName"></param>
     /// <param name="callerName"></param>
     public void Error(string message, string typeName = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Error, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
+        log.Append(Log.Severity.Error, message, ResolveTypeName(typeName), callerName);
     }
 
     /// <summary>
     /// Logs a warning message.
+    /// <para> If <paramref name="typeName"/> is null or empty, the logger's name is used. </para>
+    /// <para> This is thread-safe. </para>
     /// </summary>
     /// <param name="message"></param>
     /// <param name="typeName"></param>
     /// <param name="callerName"></param>
     public void Warning(string message, string typeName = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Warning, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
+        log.Append(Log.Severity.Warning, message, ResolveTypeName(typeName), callerName);
     }
 
     /// <summary>
     /// Logs an information message.
+    /// <para> If <paramref name="typeName"/> is null or empty, the logger's name is used. </para>
+    /// <para> This is thread-safe. </para>
     /// </summary>
     /// <param name="message"></param>
     /// <param name="typeName"></param>
     /// <param name="callerName"></param>
     public void Information(string message, string typeName = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Information, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
+        log.Append(Log.Severity.Information, message, ResolveTypeName(typeName), callerName);
     }
 
     /// <summary>
     /// Logs a debug message.
+    /// <para> If <paramref name="typeName"/> is null or empty, the logger's name is used. </para>
+    /// <para> This is thread-safe. </para>
     /// </summary>
     /// <param name="message"></param>
     /// <param name="typeName"></param>
     /// <param name="callerName"></param>
     public void Debug(string message, string typeName = "", [CallerMemberName] string callerName = "")
     {
-        log.Append(Log.Level.Debug, message, string.IsNullOrEmpty(typeName) ? name : typeName, callerName);
+        log.Append(Log.Severity.Debug, message, ResolveTypeName(typeName), callerName);
     }
 }
