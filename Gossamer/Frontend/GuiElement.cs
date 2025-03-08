@@ -258,7 +258,7 @@ public record PartialStyle
 
 public record GridDefinition(Measure[] Columns, Measure[] Rows);
 
-public record struct GridPlacement(int Column, int Row, int ColumnSpan, int RowSpan);
+public record struct GridPlacement(int Column, int Row, int ColumnSpan = 1, int RowSpan = 1);
 
 public interface IReadOnlyStyle
 {
@@ -308,8 +308,15 @@ class Style : IReadOnlyStyle
     public Measure? MaxHeight { get; set; }
 }
 
+public interface IGridControllable
+{
+    GridPlacement GridPlacement { get; }
 
-public class GuiElement
+    Vector2 Measure(Vector2 spaceAvailable);
+    void Arrange(Rectangle layoutRectangle);
+}
+
+public class GuiElement : IGridControllable
 {
     public Identity Id { get; init; }
 
@@ -319,17 +326,6 @@ public class GuiElement
     Vector4 actualBorder;
     Vector4 actualPadding;
     Vector4 actualMargin;
-
-    /*
-    :enabled
-    :disabled
-    :hover
-    :active (e.g. clicked)
-    :checked
-    :invalid
-    :focus
-    :read-only
-    */
 
     /// <summary>
     /// This is the current style of the element. It is the base style with all relevant partial styles applied.
@@ -524,12 +520,12 @@ public class GuiElement
         }
     }
 
-    protected virtual Vector2 Measure(Vector2 spaceAvailable)
+    public virtual Vector2 Measure(Vector2 spaceAvailable)
     {
         return spaceAvailable;
     }
 
-    protected virtual void Arrange(Rectangle layoutRectangle)
+    public virtual void Arrange(Rectangle layoutRectangle)
     {
 
     }
@@ -580,6 +576,8 @@ public class GuiElement
     public GridDefinition gridDefinition = new GridDefinition([], []);
 
     public GridPlacement gridPlacement;
+
+    public GridPlacement GridPlacement => gridPlacement;
 
     internal virtual Vector2 MeasureCore(Vector2 sizeAvailable, float emSize)
     {
@@ -634,7 +632,7 @@ public class GuiElement
                             // This descendant is a factor for this column.
                             Vector2 descendantSize = descendant.MeasureCore(sizeAvailable, emSize);
 
-                                                        maximumElementWidth = Math.Max(maximumElementWidth, descendantSize.X);
+                            maximumElementWidth = Math.Max(maximumElementWidth, descendantSize.X);
                         }
 
                     }
