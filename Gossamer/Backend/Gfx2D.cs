@@ -661,7 +661,6 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         // Initialize the default font
         InitializeFont(fontCache.GetBuiltInFont());
-        InitializeFont(fontCache.LoadFontFromFile("CascadiaCode", "/home/jant/.local/share/fonts/CascadiaCode.ttf", 22, 24));
     }
 
     public void Dispose()
