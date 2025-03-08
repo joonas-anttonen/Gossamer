@@ -1,18 +1,47 @@
 using System.Numerics;
 
-
 namespace Gossamer.Tests.Gossamer;
 
 [TestClass]
 public class TransformTests
 {
     [TestMethod]
+    public void Apply_ShouldReturnCorrectTransformedVector()
+    {
+        var translation = new Vector3(1, 2, 3);
+        var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        var transform = new Transform3D(translation, rotation);
+
+        var vector = new Vector3(4, 5, 6);
+        var transformedVector = Transform3D.Transform(vector, transform);
+
+        var expectedTransformedVector = Vector3.Transform(vector, rotation) + translation;
+
+        Assert.AreEqual(expectedTransformedVector, transformedVector);
+    }
+
+    [TestMethod]
+    public void ApplyNormal_ShouldReturnCorrectTransformedNormal()
+    {
+        var translation = new Vector3(1, 2, 3);
+        var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        var transform = new Transform3D(translation, rotation);
+
+        var normal = new Vector3(4, 5, 6);
+        var transformedNormal = Transform3D.TransformNormal(normal, transform);
+
+        var expectedTransformedNormal = Vector3.Transform(normal, rotation);
+
+        Assert.AreEqual(expectedTransformedNormal, transformedNormal);
+    }
+
+    [TestMethod]
     public void Constructor_WithTranslationAndRotation_ShouldInitializeCorrectly()
     {
         var translation = new Vector3(1, 2, 3);
         var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
 
-        var transform = new Transform(translation, rotation);
+        var transform = new Transform3D(translation, rotation);
 
         Assert.AreEqual(translation, transform.Translation);
         Assert.AreEqual(rotation, transform.Rotation);
@@ -23,7 +52,7 @@ public class TransformTests
     {
         var translation = new Vector3(1, 2, 3);
 
-        var transform = new Transform(translation);
+        var transform = new Transform3D(translation);
 
         Assert.AreEqual(translation, transform.Translation);
         Assert.AreEqual(Quaternion.Identity, transform.Rotation);
@@ -34,7 +63,7 @@ public class TransformTests
     {
         var translation = new Vector3(1, 2, 3);
         var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transform = new Transform(translation, rotation);
+        var transform = new Transform3D(translation, rotation);
 
         var matrix = transform.ToMatrix();
 
@@ -49,7 +78,7 @@ public class TransformTests
     {
         var translation = new Vector3(1, 2, 3);
         var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transform = new Transform(translation, rotation);
+        var transform = new Transform3D(translation, rotation);
 
         var inverseTransform = transform.Inverse();
 
@@ -65,14 +94,14 @@ public class TransformTests
     {
         var translationA = new Vector3(1, 2, 3);
         var rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transformA = new Transform(translationA, rotationA);
+        var transformA = new Transform3D(translationA, rotationA);
 
         var translationB = new Vector3(4, 5, 6);
         var rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
-        var transformB = new Transform(translationB, rotationB);
+        var transformB = new Transform3D(translationB, rotationB);
 
         var t = 0.5f;
-        var interpolatedTransform = Transform.Interpolate(transformA, transformB, t);
+        var interpolatedTransform = Transform3D.Interpolate(transformA, transformB, t);
 
         var expectedTranslation = Vector3.Lerp(translationA, translationB, t);
         var expectedRotation = Quaternion.Slerp(rotationA, rotationB, t);
@@ -86,13 +115,13 @@ public class TransformTests
     {
         var translationA = new Vector3(1, 2, 3);
         var rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transformA = new Transform(translationA, rotationA);
+        var transformA = new Transform3D(translationA, rotationA);
 
         var translationB = new Vector3(4, 5, 6);
         var rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
-        var transformB = new Transform(translationB, rotationB);
+        var transformB = new Transform3D(translationB, rotationB);
 
-        var multipliedTransform = Transform.Multiply(transformA, transformB);
+        var multipliedTransform = Transform3D.Multiply(transformA, transformB);
 
         var expectedTranslation = Vector3.Transform(translationB, rotationA) + translationA;
         var expectedRotation = rotationA * rotationB;
@@ -106,11 +135,11 @@ public class TransformTests
     {
         var translationA = new Vector3(1, 2, 3);
         var rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transformA = new Transform(translationA, rotationA);
+        var transformA = new Transform3D(translationA, rotationA);
 
         var translationB = new Vector3(4, 5, 6);
         var rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
-        var transformB = new Transform(translationB, rotationB);
+        var transformB = new Transform3D(translationB, rotationB);
 
         var multipliedTransform = transformA * transformB;
 
@@ -124,7 +153,7 @@ public class TransformTests
     [TestMethod]
     public void IdentityTransform_ShouldHaveZeroTranslationAndIdentityRotation()
     {
-        var transform = new Transform(Vector3.Zero);
+        var transform = new Transform3D(Vector3.Zero);
 
         Assert.AreEqual(Vector3.Zero, transform.Translation);
         Assert.AreEqual(Quaternion.Identity, transform.Rotation);
@@ -134,7 +163,7 @@ public class TransformTests
     public void TransformWithZeroTranslation_ShouldHaveCorrectRotation()
     {
         var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transform = new Transform(Vector3.Zero, rotation);
+        var transform = new Transform3D(Vector3.Zero, rotation);
 
         Assert.AreEqual(Vector3.Zero, transform.Translation);
         Assert.AreEqual(rotation, transform.Rotation);
@@ -144,7 +173,7 @@ public class TransformTests
     public void TransformWithIdentityRotation_ShouldHaveCorrectTranslation()
     {
         var translation = new Vector3(1, 2, 3);
-        var transform = new Transform(translation, Quaternion.Identity);
+        var transform = new Transform3D(translation, Quaternion.Identity);
 
         Assert.AreEqual(translation, transform.Translation);
         Assert.AreEqual(Quaternion.Identity, transform.Rotation);
