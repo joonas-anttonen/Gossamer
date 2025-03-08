@@ -1225,7 +1225,7 @@ public unsafe class Gfx : IDisposable
 
         VkApplicationInfo applicationInfo = new(default)
         {
-            ApiVersion = MakeApiVersion(0, requiredApiVersion.Major, requiredApiVersion.Minor, requiredApiVersion.Build),
+            ApiVersion = availableApiVersionRaw,
 
             ApplicationName = applicationName.DangerousGetHandle(),
             ApplicationVersion = MakeApiVersion(0, apiParameters.AppInfo.Version.Major, apiParameters.AppInfo.Version.Minor, apiParameters.AppInfo.Version.Build),
