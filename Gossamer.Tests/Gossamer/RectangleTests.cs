@@ -57,6 +57,15 @@ public class RectangleTests
     }
 
     [TestMethod]
+    public void TestCenterOnOtherRect()
+    {
+        var rect1 = new Rectangle(0, 0, 10, 10);
+        var rect2 = new Rectangle(0, 0, 20, 20);
+        var centeredRect = rect1.CenterOn(rect2);
+        Assert.AreEqual(new Rectangle(5, 5, 15, 15), centeredRect);
+    }
+
+    [TestMethod]
     public void TestCrop()
     {
         var rect = new Rectangle(0, 0, 10, 10);
@@ -73,10 +82,26 @@ public class RectangleTests
     }
 
     [TestMethod]
+    public void TestScaleWithVector()
+    {
+        var rect = new Rectangle(0, 0, 10, 10);
+        var scaledRect = rect.Scale(new Vector2(2, 2));
+        Assert.AreEqual(new Rectangle(0, 0, 20, 20), scaledRect);
+    }
+
+    [TestMethod]
     public void TestMove()
     {
         var rect = new Rectangle(0, 0, 10, 10);
         var movedRect = rect.Move(5, 5);
+        Assert.AreEqual(new Rectangle(5, 5, 15, 15), movedRect);
+    }
+
+    [TestMethod]
+    public void TestMoveWithVector()
+    {
+        var rect = new Rectangle(0, 0, 10, 10);
+        var movedRect = rect.Move(new Vector2(5, 5));
         Assert.AreEqual(new Rectangle(5, 5, 15, 15), movedRect);
     }
 
