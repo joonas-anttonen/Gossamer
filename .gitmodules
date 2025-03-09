@@ -1,0 +1,3 @@
+[submodule "Gossamer.GfxCompiler"]
+	path = Gossamer.GfxCompiler
+	url = https://github.com/joonas-anttonen/Gossamer.GfxCompiler.git
