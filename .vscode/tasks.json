@@ -2,26 +2,39 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"type": "dotnet",
-			"task": "build ${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
-			"file": "${workspaceFolder}/Gossamer.Benchmark/Gossamer.Benchmark.csproj",
-			"group": "build",
-			"label": "Build Gossamer.Benchmark",
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"focus": false,
-				"panel": "shared",
-				"showReuseMessage": false,
-				"clear": true
-			}
+			"label": "Build Gossamer Debug",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"build",
+				"${workspaceFolder}/Gossamer.sln",
+				"/p:Configuration=Debug",
+				"/p:Platform=x64",
+				"/p:GenerateFullPaths=true"
+			],
+			"problemMatcher": "$msCompile"
 		},
 		{
-			"type": "dotnet",
-			"task": "build ${workspaceFolder}/Gossamer.sln",
-			"file": "${workspaceFolder}/Gossamer.sln",
-			"group": "build",
-			"label": "Build Gossamer Solution",
+			"label": "Build Gossamer.GfxCompiler Release",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"build",
+				"${workspaceFolder}/Gossamer.GfxCompiler/Gossamer.GfxCompiler.sln",
+				"/p:Configuration=Release",
+				"/p:Platform=x64",
+				"/p:GenerateFullPaths=true"
+			],
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "Master Build Gossamer Debug",
+			"problemMatcher": "$msCompile",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"Build Gossamer.GfxCompiler Release",
+				"Build Gossamer Debug"
+			],
 			"presentation": {
 				"echo": true,
 				"reveal": "always",
