@@ -9,13 +9,18 @@ namespace Gossamer.Collections;
 /// </summary>
 /// <typeparam name="T"></typeparam>
 /// <param name="capacity"> The capacity of the ring buffer. </param>
-public class RingBuffer<T>(int capacity) : IEnumerable<T>
+public class RingBuffer<T>(int capacity) : IEnumerable<T> where T : INumber<T>
 {
-    readonly T[] buffer = new T[capacity];
+    readonly T[] buffer = new T[capacity < 1 ? throw new ArgumentOutOfRangeException(nameof(capacity)) : capacity];
     int head;
 
     /// <summary>
-    /// The number of elements in the ring buffer.
+    /// The maximum number of elements the ring buffer can hold.
+    /// </summary>
+    public int Capacity => buffer.Length;
+
+    /// <summary>
+    /// The current number of elements in the ring buffer.
     /// </summary>
     public int Count { get; private set; }
 
@@ -35,6 +40,7 @@ public class RingBuffer<T>(int capacity) : IEnumerable<T>
     {
         head = 0;
         Count = 0;
+        Array.Clear(buffer, 0, buffer.Length);
     }
 
     /// <summary>
@@ -46,6 +52,40 @@ public class RingBuffer<T>(int capacity) : IEnumerable<T>
         buffer[head] = item;
         head = (head + 1) % buffer.Length;
         Count = Math.Min(Count + 1, buffer.Length);
+    }
+
+    /// <summary>
+    /// Calculates the minimum, maximum, and average values in the ring buffer.
+    /// </summary>
+    /// <param name="min"></param>
+    /// <param name="max"></param>
+    /// <param name="average"></param>
+    public void CalculateMinMaxMean(out T min, out T max, out T average)
+    {
+        min = max = average = buffer[0];
+
+        if (Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 1; i < Count; i++)
+        {
+            var value = buffer[i];
+
+            if (value < min)
+            {
+                min = value;
+            }
+            else if (value > max)
+            {
+                max = value;
+            }
+
+            average += value;
+        }
+
+        average /= T.CreateChecked(Count);
     }
 
     IEnumerator<T> IEnumerable<T>.GetEnumerator()
