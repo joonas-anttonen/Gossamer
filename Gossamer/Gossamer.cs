@@ -283,7 +283,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     void FrontendFrame()
     {
-        AssertNotNull(gui);
+        ThrowInvalidOperationIfNull(gui);
 
         gui.WaitForEvents(0.1);
         gui.Render();
@@ -291,7 +291,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     void FrontendWakeUp()
     {
-        AssertNotNull(gui);
+        ThrowInvalidOperationIfNull(gui);
 
         gui.PostEmptyEvent();
     }
@@ -343,7 +343,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     public override SynchronizationContext CreateCopy()
     {
-        Assert(false);
+        ThrowNotSupportedIf(true, "CreateCopy is not supported.");
         return this;
     }
 

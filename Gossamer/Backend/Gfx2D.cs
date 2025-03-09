@@ -84,7 +84,7 @@ public class Gfx2DCommandBuffer
 
     public void BeginBatch()
     {
-        Assert(!batchInProgress);
+        ThrowInvalidOperationIf(batchInProgress);
 
         batchInProgress = true;
         batchFirstCommandIndex = commandsCount;
@@ -95,7 +95,7 @@ public class Gfx2DCommandBuffer
 
     public void EndBatch(PixelBuffer? surface = null)
     {
-        Assert(batchInProgress);
+        ThrowInvalidOperationIfNot(batchInProgress);
         batchInProgress = false;
 
         ArrayUtilities.Reserve(ref batches, batchCount + 1);
@@ -118,15 +118,15 @@ public class Gfx2DCommandBuffer
 
     ref Command GetCurrentCommand()
     {
-        Assert(batchInProgress);
+        ThrowInvalidOperationIfNot(batchInProgress);
 
         return ref commands[commandsCount - 1];
     }
 
     public void DrawText(TextLayout layout, Vector2 position, Color color, Color backgroundColor)
     {
-        Assert(batchInProgress);
-        //
+        ThrowInvalidOperationIfNot(batchInProgress);
+ 
         ref Command newCommand = ref BeginCommand();
         newCommand.Font = layout.Font;
         newCommand.Color = backgroundColor.ToVector3();
@@ -178,7 +178,7 @@ public class Gfx2DCommandBuffer
 
     public void DrawCircle(Vector2 center, float radius, Color color, float thickness = 1.0f, bool useAntialiasing = true)
     {
-        Assert(batchInProgress);
+        ThrowInvalidOperationIfNot(batchInProgress);
 
         if (radius <= 0.0f)
             return;
@@ -635,9 +635,9 @@ class Gfx2D(Gfx gfx) : IDisposable
 
     public void Create()
     {
-        AssertIsNull(uniformBuffer);
-        AssertIsNull(vertexBuffer);
-        AssertIsNull(indexBuffer);
+        ThrowInvalidOperationIf(uniformBuffer != null);
+        ThrowInvalidOperationIf(vertexBuffer != null);
+        ThrowInvalidOperationIf(indexBuffer != null);
 
         vertexBuffer = gfx.CreateDynamicMemoryBuffer<Vertex2D>(length: MaxVertices, GfxMemoryBufferUsage.Vertex);
         indexBuffer = gfx.CreateDynamicMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryBufferUsage.Index);
@@ -689,8 +689,8 @@ class Gfx2D(Gfx gfx) : IDisposable
     /// </summary>
     public unsafe void BeginFrame(GfxPresenter presenter)
     {
-        Assert(!frameInProgress);
-        Assert(renderingInitialized);
+        ThrowInvalidOperationIf(frameInProgress);
+        ThrowInvalidOperationIfNot(renderingInitialized);
 
         PixelBuffer presentationBuffer = presenter.GetPresentationBuffer();
 
@@ -713,7 +713,7 @@ class Gfx2D(Gfx gfx) : IDisposable
 
         VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
 
-        AssertNotNull(backBuffer);
+        ThrowInvalidOperationIfNull(backBuffer);
 
         gfx.PixelBufferBarrier(
             commandBuffer,
@@ -746,9 +746,11 @@ class Gfx2D(Gfx gfx) : IDisposable
     {
         frameCounter++;
 
-        Assert(frameInProgress);
-        AssertNotNull(vertexBuffer);
-        AssertNotNull(indexBuffer);
+        ThrowInvalidOperationIfNot(frameInProgress);
+        ThrowInvalidOperationIfNull(vertexBuffer);
+        ThrowInvalidOperationIfNull(indexBuffer);
+        ThrowInvalidOperationIfNull(backBuffer);
+        ThrowInvalidOperationIfNull(compositionPipeline);
 
         if (currentCommandBuffer == null)
         {
@@ -766,9 +768,6 @@ class Gfx2D(Gfx gfx) : IDisposable
                 gfx.UpdateDynamicBuffer(vertexBuffer, vertices);
                 gfx.UpdateDynamicBuffer(indexBuffer, indices);
             }
-
-            AssertNotNull(backBuffer);
-            AssertNotNull(compositionPipeline);
 
             int statisticsVertices = vertices.Length;
             int statisticsIndices = indices.Length;
@@ -908,12 +907,12 @@ class Gfx2D(Gfx gfx) : IDisposable
 
     public unsafe void RecordBatch(VkCommandBuffer commandBuffer, ReadOnlySpan<Command> commands, PixelBuffer presentBuffer)
     {
-        Assert(frameInProgress);
-        AssertNotNull(backBuffer);
-        AssertNotNull(pipeline);
-        AssertNotNull(vertexBuffer);
-        AssertNotNull(indexBuffer);
-        AssertNotNull(uniformBuffer);
+        ThrowInvalidOperationIfNot(frameInProgress);
+        ThrowInvalidOperationIfNull(backBuffer);
+        ThrowInvalidOperationIfNull(pipeline);
+        ThrowInvalidOperationIfNull(vertexBuffer);
+        ThrowInvalidOperationIfNull(indexBuffer);
+        ThrowInvalidOperationIfNull(uniformBuffer);
 
         GfxPipeline activePipeline = pipeline;
 

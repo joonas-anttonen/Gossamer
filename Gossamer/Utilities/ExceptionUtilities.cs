@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Gossamer.Utilities;
@@ -9,27 +8,6 @@ namespace Gossamer.Utilities;
 [ExcludeFromCodeCoverage]
 public static class ExceptionUtilities
 {
-    /// <inheritdoc cref="Debug.Assert(bool, string?)"/>
-    [Conditional("DEBUG")]
-    public static void Assert([DoesNotReturnIf(false)] bool condition, string? message = default)
-    {
-        Debug.Assert(condition, message);
-    }
-
-    /// <inheritdoc cref="Debug.Assert(bool, string?)"/>
-    [Conditional("DEBUG")]
-    public static void AssertNotNull<T>([NotNull] T? instance, string? message = default) where T : class
-    {
-        Debug.Assert(instance != null, message);
-    }
-
-    /// <inheritdoc cref="Debug.Assert(bool, string?)"/>
-    [Conditional("DEBUG")]
-    public static void AssertIsNull<T>(T? instance, string? message = default) where T : class
-    {
-        Debug.Assert(instance == null, message);
-    }
-
     /// <summary>
     /// Throws an <see cref="ArgumentException"/> if the string is null or empty.
     /// </summary>
@@ -117,6 +95,20 @@ public static class ExceptionUtilities
     public static void ThrowInvalidOperationIf(bool condition, string? message = default)
     {
         if (condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+
+    /// <summary>
+    /// Throws an <see cref="InvalidOperationException"/> if the condition is true.
+    /// </summary>
+    /// <param name="condition"></param>
+    /// <param name="message"></param>
+    /// <exception cref="InvalidOperationException"></exception>
+    public static void ThrowInvalidOperationIfNot(bool condition, string? message = default)
+    {
+        if (!condition)
         {
             throw new InvalidOperationException(message);
         }

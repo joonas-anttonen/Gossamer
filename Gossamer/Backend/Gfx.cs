@@ -63,7 +63,7 @@ class GfxTimestampPool
 
     internal uint BeginCpuTimestamp()
     {
-        Assert(cpuCount < capacity);
+        ThrowInvalidOperationIfNot(cpuCount < capacity);
 
         cpuTimestamps[cpuCount++] = cpuStopwatch.Elapsed;
         return cpuCount - 1;
@@ -71,7 +71,7 @@ class GfxTimestampPool
 
     internal uint EndCpuTimestamp()
     {
-        Assert(cpuCount < capacity);
+        ThrowInvalidOperationIfNot(cpuCount < capacity);
 
         cpuTimestamps[cpuCount++] = cpuStopwatch.Elapsed;
         return cpuCount - 1;
@@ -79,7 +79,7 @@ class GfxTimestampPool
 
     internal uint BeginGpuTimestamp(VkCommandBuffer commandBuffer)
     {
-        Assert(gpuCount < capacity);
+        ThrowInvalidOperationIfNot(gpuCount < capacity);
 
         vkCmdWriteTimestamp(commandBuffer, VkPipelineStage.TOP_OF_PIPE, queryPool, gpuCount);
         gpuCount++;
@@ -88,7 +88,7 @@ class GfxTimestampPool
 
     internal uint EndGpuTimestamp(VkCommandBuffer commandBuffer)
     {
-        Assert(gpuCount < capacity);
+        ThrowInvalidOperationIfNot(gpuCount < capacity);
 
         vkCmdWriteTimestamp(commandBuffer, VkPipelineStage.BOTTOM_OF_PIPE, queryPool, gpuCount);
         gpuCount++;
@@ -97,8 +97,8 @@ class GfxTimestampPool
 
     internal TimeSpan GetGpuDuration(uint start, uint end)
     {
-        Assert(start < capacity);
-        Assert(end < capacity);
+        ThrowInvalidOperationIfNot(start < capacity);
+        ThrowInvalidOperationIfNot(end < capacity);
 
         ulong startTimestamp = gpuTimestamps[start];
         ulong endTimestamp = gpuTimestamps[end];
@@ -108,8 +108,8 @@ class GfxTimestampPool
 
     internal TimeSpan GetCpuDuration(uint start, uint end)
     {
-        Assert(start < capacity);
-        Assert(end < capacity);
+        ThrowInvalidOperationIfNot(start < capacity);
+        ThrowInvalidOperationIfNot(end < capacity);
 
         return cpuTimestamps[end] - cpuTimestamps[start];
     }
@@ -891,10 +891,10 @@ public unsafe class Gfx : IDisposable
         {
             // Some asserts to make sure the bindings are valid.
             // Hardly any error checking on these in the validation layers.
-            Assert(bindings.Length > 0);
+            ThrowInvalidOperationIfNot(bindings.Length > 0);
             for (int i = 0; i < bindings.Length; i++)
             {
-                Assert(bindings[i].DescriptorCount > 0);
+                ThrowInvalidOperationIfNot(bindings[i].DescriptorCount > 0);
             }
 
             VkDescriptorSetLayoutCreateInfo layoutInfo = new(default)
@@ -1030,7 +1030,7 @@ public unsafe class Gfx : IDisposable
         VkVertexInputBindingDescription* vertexInputBindings = stackalloc VkVertexInputBindingDescription[vertexInputBindingsCount];
         for (uint i = 0; i < vertexInputBindingsCount; i++)
         {
-            Assert(parameters.InputBindings[i].Stride > 0);
+            ThrowInvalidOperationIfNot(parameters.InputBindings[i].Stride > 0);
             vertexInputBindings[i] = parameters.InputBindings[i];
         }
 
@@ -1038,7 +1038,7 @@ public unsafe class Gfx : IDisposable
         VkVertexInputAttributeDescription* vertexInputAttributes = stackalloc VkVertexInputAttributeDescription[vertexInputAttibutesCount];
         for (uint i = 0; i < vertexInputAttibutesCount; i++)
         {
-            Assert(parameters.InputAttributes[i].Format != VkFormat.UNDEFINED);
+            ThrowInvalidOperationIfNot(parameters.InputAttributes[i].Format != VkFormat.UNDEFINED);
             vertexInputAttributes[i] = parameters.InputAttributes[i];
         }
 
@@ -1330,7 +1330,7 @@ public unsafe class Gfx : IDisposable
 
     void CreateVulkanDevice()
     {
-        AssertNotNull(parameters);
+        ThrowInvalidOperationIfNull(parameters);
 
         VkPhysicalDevice physicalDevice = GetVulkanPhysicalDevice(parameters.PhysicalDevice);
         this.physicalDevice = physicalDevice;

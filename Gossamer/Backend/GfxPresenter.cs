@@ -186,7 +186,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
         }
 
         PerFrame? oldFrame = perFrame[currentFrameIndex];
-        Assert(oldFrame != null);
+        ThrowInvalidOperationIfNull(oldFrame);
 
         if (oldFrame.SubmissionFence.HasValue)
         {
@@ -216,7 +216,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
         currentFrameIndex = (int)nextFrameIndex;
 
         PerFrame? frame = perFrame[currentFrameIndex];
-        Assert(frame != null);
+        ThrowInvalidOperationIfNull(frame);
 
         if (frame.SubmissionFence.HasValue)
         {
@@ -277,7 +277,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
         VkCommandBuffer commandBuffer = frame.CommandBuffer;
         ThrowVulkanIfFailed(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
 
-        AssertNotNull(frame.OutputImage);
+        ThrowInvalidOperationIfNull(frame.OutputImage);
 
         TransitionImageLayout(
             pixelBuffer: frame.OutputImage,
@@ -323,7 +323,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
                 srcAccess = VkAccessFlags2.TRANSFER_WRITE_BIT;
                 break;
             default:
-                Assert(false);
+                ThrowNotSupportedIf(true, "Unsupported source layout.");
                 srcAccess = VkAccessFlags2.NONE;
                 break;
         }
@@ -340,7 +340,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
                 dstAccess = VkAccessFlags2.NONE;
                 break;
             default:
-                Assert(false);
+                ThrowNotSupportedIf(true, "Unsupported destination layout.");
                 dstAccess = VkAccessFlags2.NONE;
                 break;
         }
@@ -378,7 +378,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
     public override void EndFrame()
     {
         PerFrame frame = perFrame[currentFrameIndex];
-        Assert(frame.OutputImage != null);
+        ThrowInvalidOperationIfNull(frame.OutputImage);
 
         TransitionImageLayout(
             pixelBuffer: frame.OutputImage,

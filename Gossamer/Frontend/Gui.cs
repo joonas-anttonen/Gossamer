@@ -240,8 +240,8 @@ public class Gui : IDisposable
 
     internal unsafe GfxSwapChainSurface CreateSurface(External.Vulkan.VkInstance instance)
     {
-        Assert(isCreated);
-        Assert(glfwWindow.HasValue);
+        ThrowInvalidOperationIfNot(isCreated);
+        ThrowInvalidOperationIfNot(glfwWindow.HasValue);
 
         External.Vulkan.VkSurfaceKhr surface = default;
         External.Vulkan.Api.ThrowVulkanIfFailed(glfwCreateWindowSurface(instance, glfwWindow, null, &surface));
@@ -253,7 +253,7 @@ public class Gui : IDisposable
 
     public void Create()
     {
-        Assert(!isCreated);
+        ThrowInvalidOperationIf(isCreated);
 
         // Disable OpenGL
         glfwWindowHint(Constants.GLFW_CLIENT_API, 0);
@@ -309,7 +309,7 @@ public class Gui : IDisposable
 
     bool LayoutUpdate()
     {
-        Assert(!isDisposed && isCreated);
+        ThrowInvalidOperationIfNot(!isDisposed && isCreated);
 
         if (!layoutRequested)
             return false;
@@ -334,7 +334,7 @@ public class Gui : IDisposable
 
     public void Render()
     {
-        Assert(isCreated);
+        ThrowInvalidOperationIfNot(isCreated);
 
         UpdateParameters();
         glfwGetWindowSize(glfwWindow, out int ww, out int wh);
@@ -573,7 +573,7 @@ public class Gui : IDisposable
             if (elementThatHasMouse != null)
             {
                 // should always be atleast root element...
-                AssertNotNull(elementThatHasMouse);
+                ThrowInvalidOperationIfNull(elementThatHasMouse);
 
                 elementThatHasMouse.OnMouseMove(lastMousePosition - elementThatHasMouse.ActualArea.Position);
             }

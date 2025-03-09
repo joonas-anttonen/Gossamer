@@ -27,14 +27,14 @@ class BackendMessage
 
     public void GetMouseXY(out int x, out int y)
     {
-        Assert(Type == BackendMessageType.MouseXY);
+        ThrowInvalidOperationIfNot(Type == BackendMessageType.MouseXY);
         x = field0;
         y = field1;
     }
 
     public void GetMouseButton(out InputButton button, out InputAction action, out InputMods mods)
     {
-        Assert(Type == BackendMessageType.MouseButton);
+        ThrowInvalidOperationIfNot(Type == BackendMessageType.MouseButton);
         button = (InputButton)field0;
         action = (InputAction)field1;
         mods = (InputMods)field2;
@@ -42,14 +42,14 @@ class BackendMessage
 
     public void GetMouseWheel(out int x, out int y)
     {
-        Assert(Type == BackendMessageType.MouseWheel);
+        ThrowInvalidOperationIfNot(Type == BackendMessageType.MouseWheel);
         x = field0;
         y = field1;
     }
 
     public void GetKeyboardKey(out InputKey key, out int scancode, out InputAction action, out InputMods mods)
     {
-        Assert(Type == BackendMessageType.KeyboardKey);
+        ThrowInvalidOperationIfNot(Type == BackendMessageType.KeyboardKey);
         key = (InputKey)field0;
         scancode = field1;
         action = (InputAction)field2;
@@ -58,14 +58,14 @@ class BackendMessage
 
     public void GetKeyboardChar(out int codepoint, out InputMods mods)
     {
-        Assert(Type == BackendMessageType.KeyboardChar);
+        ThrowInvalidOperationIfNot(Type == BackendMessageType.KeyboardChar);
         codepoint = field0;
         mods = (InputMods)field1;
     }
 
     public void GetSurfaceLost(out int x, out int y)
     {
-        Assert(Type == BackendMessageType.SurfaceLost);
+        ThrowInvalidOperationIfNot(Type == BackendMessageType.SurfaceLost);
         x = field0;
         y = field1;
     }
