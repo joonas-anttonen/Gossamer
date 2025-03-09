@@ -26,6 +26,7 @@
   <!-- Embedded -->
   <ItemGroup>
     <EmbeddedResource Include="Backend/Text/ProggyClean.ttf" />
+    <EmbeddedResource Include="Backend/Shaders/built-in.shaders" />
   </ItemGroup>
 
   <!-- Dependency binaries for Windows -->
