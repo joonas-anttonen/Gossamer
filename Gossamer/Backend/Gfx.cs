@@ -117,14 +117,56 @@ class GfxTimestampPool
 
 readonly record struct GfxSingleCommand(VkCommandBuffer CommandBuffer, VkFence Fence);
 
+record ShaderStageDefinition(uint Stage, string EntryPoint, long Offset, long Size);
+record ShaderProgramDefinition(string Name, ShaderStageDefinition[] Stages);
+record ShaderPackageDefinition(Dictionary<string, ShaderProgramDefinition> Pipelines)
+{
+    public static Dictionary<string, GfxPipelineShader> Deserialize(string path)
+    {
+        using FileStream stream = File.OpenRead(path);
+        using BinaryReader reader = new(stream);
+
+        // Json chunk
+        uint jsonChunkLength = reader.ReadUInt32();
+        uint jsonChunkType = reader.ReadUInt32();
+        ThrowInvalidDataIf(jsonChunkType != 1, "Invalid json chunk type.");
+
+        byte[] jsonChunkData = reader.ReadBytes((int)jsonChunkLength);
+
+        // Bytecode chunk
+        uint bytecodeChunkLength = reader.ReadUInt32();
+        uint bytecodeChunkType = reader.ReadUInt32();
+        ThrowInvalidDataIf(bytecodeChunkType != 2, "Invalid bytecode chunk type.");
+
+        ShaderPackageDefinition packageDefinition = System.Text.Json.JsonSerializer.Deserialize<ShaderPackageDefinition>(System.Text.Encoding.UTF8.GetString(jsonChunkData)) ?? throw new InvalidDataException();
+        byte[] packageBytecode = reader.ReadBytes((int)bytecodeChunkLength);
+
+        Dictionary<string, GfxPipelineShader> shaderPrograms = new(capacity: packageDefinition.Pipelines.Count);
+        foreach (var (shaderProgramName, shaderProgramDefinition) in packageDefinition.Pipelines)
+        {
+            GfxPipelineShader.Stage[] stages = new GfxPipelineShader.Stage[shaderProgramDefinition.Stages.Length];
+
+            for (int i = 0; i < shaderProgramDefinition.Stages.Length; i++)
+            {
+                ShaderStageDefinition stageDefinition = shaderProgramDefinition.Stages[i];
+                byte[] stageBytecode = new byte[stageDefinition.Size];
+                Array.Copy(packageBytecode, stageDefinition.Offset, stageBytecode, 0, stageDefinition.Size);
+
+                stages[i] = new GfxPipelineShader.Stage((VkShaderStage)stageDefinition.Stage, new SafeNativeString(stageDefinition.EntryPoint), stageBytecode);
+            }
+
+            shaderPrograms[shaderProgramName] = new GfxPipelineShader(shaderProgramName, stages);
+        }
+
+        return shaderPrograms;
+    }
+}
+
 record GfxPipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout);
 
-class GfxPipelineShader(string name, GfxPipelineShader.Stage[] stages)
+record GfxPipelineShader(string Name, GfxPipelineShader.Stage[] Stages)
 {
     public record Stage(VkShaderStage StageType, SafeNativeString Entrypoint, byte[] Code);
-
-    public string Name { get; } = name;
-    public Stage[] Stages { get; } = stages;
 }
 
 record GfxPipelineParameters(
@@ -643,10 +685,6 @@ public unsafe class Gfx : IDisposable
         vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
     }
 
-    record ShaderStageDefinition(uint Stage, string EntryPoint, long Offset, long Size);
-    record ShaderProgramDefinition(string Name, ShaderStageDefinition[] Stages);
-    record ShaderPackageDefinition(Dictionary<string, ShaderProgramDefinition> Pipelines);
-
     void UpdateDynamicBuffer<T>(MemoryBuffer<T> memoryBuffer, void* pSrc, int srcSize) where T : unmanaged
     {
         int dstSize = (int)memoryBuffer.Length * sizeof(T);
@@ -865,38 +903,10 @@ public unsafe class Gfx : IDisposable
 
     internal void LoadShaders(string path)
     {
-        using FileStream stream = File.OpenRead(path);
-        using BinaryReader reader = new(stream);
-
-        // Json chunk
-        uint jsonChunkLength = reader.ReadUInt32();
-        uint jsonChunkType = reader.ReadUInt32();
-        ThrowInvalidDataIf(jsonChunkType != 1, "Invalid json chunk type.");
-
-        byte[] jsonChunkData = reader.ReadBytes((int)jsonChunkLength);
-
-        // Bytecode chunk
-        uint bytecodeChunkLength = reader.ReadUInt32();
-        uint bytecodeChunkType = reader.ReadUInt32();
-        ThrowInvalidOperationIf(bytecodeChunkType != 2, "Invalid bytecode chunk type.");
-
-        ShaderPackageDefinition packageDefinition = System.Text.Json.JsonSerializer.Deserialize<ShaderPackageDefinition>(System.Text.Encoding.UTF8.GetString(jsonChunkData)) ?? throw new InvalidDataException();
-        byte[] packageBytecode = reader.ReadBytes((int)bytecodeChunkLength);
-
-        foreach (var (shaderProgramName, shaderProgramDefinition) in packageDefinition.Pipelines)
+        Dictionary<string, GfxPipelineShader> loadedShaderPrograms = ShaderPackageDefinition.Deserialize(path);
+        foreach (var shaderProgram in loadedShaderPrograms)
         {
-            GfxPipelineShader.Stage[] stages = new GfxPipelineShader.Stage[shaderProgramDefinition.Stages.Length];
-
-            for (int i = 0; i < shaderProgramDefinition.Stages.Length; i++)
-            {
-                ShaderStageDefinition stageDefinition = shaderProgramDefinition.Stages[i];
-                byte[] stageBytecode = new byte[stageDefinition.Size];
-                Array.Copy(packageBytecode, stageDefinition.Offset, stageBytecode, 0, stageDefinition.Size);
-
-                stages[i] = new GfxPipelineShader.Stage((VkShaderStage)stageDefinition.Stage, new SafeNativeString(stageDefinition.EntryPoint), stageBytecode);
-            }
-
-            cachedPipelineShaders[shaderProgramName] = new GfxPipelineShader(shaderProgramName, stages);
+            cachedPipelineShaders[shaderProgram.Key] = shaderProgram.Value;
         }
     }
 
@@ -1180,8 +1190,8 @@ public unsafe class Gfx : IDisposable
                         enabledExtensionNames.Add(VK_KHR_xlib_surface);
                         capabilities = capabilities with { CanSwap = true };
                     }
-                    
-                    if(!capabilities.CanSwap)
+
+                    if (!capabilities.CanSwap)
                     {
                         logger.Warning($"Swapchain is enabled but {VK_KHR_wayland_surface} or {VK_KHR_xcb_surface} or {VK_KHR_xlib_surface} is not available.");
                     }
