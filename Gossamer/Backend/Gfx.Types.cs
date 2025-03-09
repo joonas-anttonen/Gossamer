@@ -26,8 +26,7 @@ public record GfxApiParameters(
 );
 
 public record GfxParameters(
-    GfxPhysicalDevice PhysicalDevice,
-    GfxPresentation Presentation
+    GfxPhysicalDevice PhysicalDevice
 );
 
 public record GfxCapabilities(

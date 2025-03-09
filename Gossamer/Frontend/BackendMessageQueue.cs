@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 using Gossamer.Backend;
 using Gossamer.Collections;
@@ -10,7 +11,7 @@ class BackendMessageQueue(int initialCapacity = 4)
     readonly ConcurrentObjectPool<BackendMessage> messagePool = new(initialCapacity: initialCapacity);
     readonly ConcurrentQueue<BackendMessage> messageQueue = new();
 
-    public bool TryDequeue(out BackendMessage? message)
+    public bool TryDequeue([NotNullWhen(true)] out BackendMessage? message)
     {
         return messageQueue.TryDequeue(out message);
     }
@@ -34,10 +35,10 @@ class BackendMessageQueue(int initialCapacity = 4)
         messageQueue.Enqueue(message);
     }
 
-    public void PostSurfaceLost()
+    public void PostSurfaceLost(int x, int y)
     {
         var message = messagePool.Rent();
-        message.SetSurfaceLost();
+        message.SetSurfaceLost(x, y);
         messageQueue.Enqueue(message);
     }
 

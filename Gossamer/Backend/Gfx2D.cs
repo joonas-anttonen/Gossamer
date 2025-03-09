@@ -687,12 +687,11 @@ class Gfx2D(Gfx gfx) : IDisposable
     /// <summary>
     /// Begins a frame of rendering. Resets the internal state.
     /// </summary>
-    public unsafe void BeginFrame()
+    public unsafe void BeginFrame(GfxPresenter presenter)
     {
         Assert(!frameInProgress);
         Assert(renderingInitialized);
 
-        GfxPresenter presenter = gfx.GetPresenter();
         PixelBuffer presentationBuffer = presenter.GetPresentationBuffer();
 
         bool needsCreate = backBuffer == null || backBuffer.Width != presentationBuffer.Width || backBuffer.Height != presentationBuffer.Height;
@@ -743,7 +742,7 @@ class Gfx2D(Gfx gfx) : IDisposable
     /// <summary>
     /// Ends a frame of rendering. Flushes the vertex and index buffers to the GPU.
     /// </summary>
-    public unsafe void EndFrame()
+    public unsafe void EndFrame(GfxPresenter presenter)
     {
         frameCounter++;
 
@@ -775,6 +774,9 @@ class Gfx2D(Gfx gfx) : IDisposable
             int statisticsIndices = indices.Length;
             int statisticsDrawCalls = 0;
 
+            VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
+            PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
+
             for (int i = 0; i < commandBatches.Length; i++)
             {
                 CommandBatch batch = commandBatches[i];
@@ -782,14 +784,10 @@ class Gfx2D(Gfx gfx) : IDisposable
 
                 statisticsDrawCalls += batch.CommandCount;
 
-                RecordBatch(commands, backBuffer);
+                RecordBatch(commandBuffer, commands, backBuffer);
             }
 
             frameStatistics = new(frameCounter, statisticsDrawCalls, statisticsVertices, statisticsIndices);
-
-            GfxPresenter presenter = gfx.GetPresenter();
-            VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
-            PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
 
             /*if (true)
             {
@@ -908,7 +906,7 @@ class Gfx2D(Gfx gfx) : IDisposable
         }
     }
 
-    public unsafe void RecordBatch(ReadOnlySpan<Command> commands, PixelBuffer presentBuffer)
+    public unsafe void RecordBatch(VkCommandBuffer commandBuffer, ReadOnlySpan<Command> commands, PixelBuffer presentBuffer)
     {
         Assert(frameInProgress);
         AssertNotNull(backBuffer);
@@ -918,8 +916,6 @@ class Gfx2D(Gfx gfx) : IDisposable
         AssertNotNull(uniformBuffer);
 
         GfxPipeline activePipeline = pipeline;
-
-        VkCommandBuffer commandBuffer = gfx.GetPresenter().GetCommandBuffer();
 
         VkRenderingAttachmentInfo colorAttachment = new(default)
         {

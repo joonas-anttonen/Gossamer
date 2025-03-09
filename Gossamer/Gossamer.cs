@@ -202,17 +202,19 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
                 PresentationMode: GfxPresentationMode.SwapChain
             ));
 
-            // 2. Create Gui
+            // 2. Initialize Gfx
+            gfx.Create(new GfxParameters(
+                PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices())
+            ));
+
+            // 3. Create Gui
             using Gui gui = new(parameters, gfx, backendMessageQueue);
 
-            // 3. Initialize Gui
+            // 4. Initialize Gui
             gui.Create();
 
-            // 4. Initialize Gfx
-            gfx.Create(new GfxParameters(
-                PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices()),
-                Presentation: new GfxSwapChainPresentation(Color.Palettes.Nord.Nord11_Red, gui)
-            ));
+            // 5. Create Gfx presenter (depends on Gui)
+            gfx.CreatePresenter(new GfxSwapChainPresentation(Color.Palettes.Nord.Nord11_Red, gui));
 
             RunBackend(gfx);
             RunFrontend(gui);
@@ -296,31 +298,41 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     void RunBackend()
     {
+        Gfx localGfx = ThrowInvalidOperationIfNull(gfx);
+
         bool keepRunning = true;
         while (keepRunning)
         {
             bool keepDequeueing = true;
             while (keepDequeueing)
             {
-                keepDequeueing = backendMessageQueue.TryDequeue(out BackendMessage? message);
-                if (keepDequeueing)
+                if (!backendMessageQueue.TryDequeue(out BackendMessage? message))
                 {
-                    AssertNotNull(message);
-
-                    //Debug.WriteLine($"Processing message of type {message.Type}.");
-
-                    //ProcessMessage(message);
-                    backendMessageQueue.Return(message);
-
-                    if (message.Type == BackendMessageType.Quit)
-                    {
-                        keepDequeueing = false;
-                        keepRunning = false;
-                    }
+                    break;
                 }
+
+                switch (message.Type)
+                {
+                    case BackendMessageType.Quit:
+                        {
+                            keepDequeueing = false;
+                            keepRunning = false;
+                            break;
+                        }
+                    case BackendMessageType.SurfaceLost:
+                        {
+                            message.GetSurfaceLost(out int w, out int h);
+
+                            GfxPresenter? presenter = localGfx.GetPresenter();
+                            presenter?.Invalidate((uint)w, (uint)h);
+                            break;
+                        }
+                }
+
+                backendMessageQueue.Return(message);
             }
 
-            gfx?.Render();
+            localGfx.Render();
 
             // FIXME: This is a temporary solution to prevent the backend from spinning too fast
             Thread.Sleep(1);

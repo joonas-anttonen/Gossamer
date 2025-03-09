@@ -129,12 +129,9 @@ public static class ExceptionUtilities
     /// <param name="value"></param>
     /// <param name="message"></param>
     /// <exception cref="InvalidOperationException"></exception>
-    public static void ThrowInvalidOperationIfNull<T>([NotNull] T? value, string? message = default) where T : class
+    public static T ThrowInvalidOperationIfNull<T>([NotNull] T? value, string? message = default) where T : class
     {
-        if (value == null)
-        {
-            throw new InvalidOperationException(message);
-        }
+        return value ?? throw new InvalidOperationException(message);
     }
 
     /// <summary>

@@ -63,6 +63,13 @@ class BackendMessage
         mods = (InputMods)field1;
     }
 
+    public void GetSurfaceLost(out int x, out int y)
+    {
+        Assert(Type == BackendMessageType.SurfaceLost);
+        x = field0;
+        y = field1;
+    }
+
     public void SetQuit()
     {
         Type = BackendMessageType.Quit;
@@ -73,9 +80,11 @@ class BackendMessage
         Type = BackendMessageType.SurfaceDamaged;
     }
 
-    public void SetSurfaceLost()
+    public void SetSurfaceLost(int x, int y)
     {
         Type = BackendMessageType.SurfaceLost;
+        field0 = x;
+        field1 = y;
     }
 
     public void SetMouseXY(int x, int y)

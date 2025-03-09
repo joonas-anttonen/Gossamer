@@ -301,9 +301,12 @@ public unsafe class Gfx : IDisposable
         return gfx2D;
     }
 
-    internal GfxPresenter GetPresenter()
+    internal GfxPresenter? GetPresenter()
     {
-        ThrowInvalidOperationIfNull(presenter, "No presenter available.");
+        if (presenter == null)
+        {
+            logger.Warning("No presenter available.");
+        }
         return presenter;
     }
 
@@ -316,8 +319,13 @@ public unsafe class Gfx : IDisposable
 
     public void Render()
     {
-        AssertNotNull(presenter);
-        AssertNotNull(gfx2D);
+        if (presenter == null)
+        {
+            logger.Warning("No presenter available.");
+            return;
+        }
+
+        ThrowInvalidOperationIfNull(gfx2D);
 
         TimeSpan globalRenderElapsed = globalRenderStopwatch.Elapsed - globalRenderTimestamp;
         globalRenderTimestamp = globalRenderStopwatch.Elapsed;
@@ -342,8 +350,8 @@ public unsafe class Gfx : IDisposable
         timestampPool?.BeginCpuTimestamp();
         timestampPool?.BeginGpuTimestamp(presenter.GetCommandBuffer());
 
-        gfx2D.BeginFrame();
-        gfx2D.EndFrame();
+        gfx2D.BeginFrame(presenter);
+        gfx2D.EndFrame(presenter);
 
         timestampPool?.EndGpuTimestamp(presenter.GetCommandBuffer());
         timestampPool?.EndCpuTimestamp();
@@ -362,27 +370,37 @@ public unsafe class Gfx : IDisposable
         CreateVulkanMemoryAllocator();
         CreateDeviceCommandPool();
 
-        if (parameters.Presentation is GfxSwapChainPresentation swapChainPresentation)
-        {
-            var swapChainSurface = swapChainPresentation.Gui.CreateSurface(instance);
-            var swapChainPresenter = new GfxSwapChainPresenter(
-                instance,
-                physicalDevice,
-                device,
-                deviceQueue,
-                deviceQueueIndex,
-                swapChainSurface.Surface,
-                swapChainSurface.Extent,
-                swapChainPresentation.ClearColor);
-            presenter = swapChainPresenter;
-            swapChainPresenter.Refresh(false);
-        }
-
         LoadShaders("Jangine.shaders");
 
         gfx2D = new Gfx2D(this);
         gfx2D.Create();
         gfx2D.InitializeRendering(DisplayParameters.Empty);
+    }
+
+    public void CreatePresenter(GfxPresentation presentation)
+    {
+        switch (presentation)
+        {
+            case GfxSwapChainPresentation swapChainPresentation:
+                {
+                    var swapChainSurface = swapChainPresentation.Gui.CreateSurface(instance);
+                    var swapChainPresenter = new GfxSwapChainPresenter(
+                        instance,
+                        physicalDevice,
+                        device,
+                        deviceQueue,
+                        deviceQueueIndex,
+                        swapChainSurface.Surface,
+                        swapChainSurface.Extent,
+                        swapChainPresentation.ClearColor);
+                    presenter = swapChainPresenter;
+                    swapChainPresenter.Refresh(false);
+                    break;
+                }
+
+            default:
+                throw new NotImplementedException();
+        }
     }
 
     public void Dispose()
@@ -511,6 +529,9 @@ public unsafe class Gfx : IDisposable
         {
             return;
         }
+
+        // FIXME: Implement proper resource management so we don't have to wait for idle.
+        vkDeviceWaitIdle(device);
 
         vkDestroyQueryPool(device, timestampPool.queryPool, default);
     }
@@ -726,6 +747,9 @@ public unsafe class Gfx : IDisposable
             return;
         }
 
+        // FIXME: Implement proper resource management so we don't have to wait for idle.
+        vkDeviceWaitIdle(device);
+
         ThrowVulkanIfFailed(vmaDestroyBuffer(allocator, memoryBuffer.Buffer, memoryBuffer.Allocation));
     }
 
@@ -758,10 +782,15 @@ public unsafe class Gfx : IDisposable
 
     internal void DestroySampler(VkSampler sampler)
     {
-        if (sampler.HasValue)
+        if (!sampler.HasValue)
         {
-            vkDestroySampler(device, sampler, default);
+            return;
         }
+
+        // FIXME: Implement proper resource management so we don't have to wait for idle.
+        vkDeviceWaitIdle(device);
+
+        vkDestroySampler(device, sampler, default);
     }
 
     internal VkSampler CreateSampler(VkSamplerCreateInfo samplerCreateInfo)
@@ -787,6 +816,9 @@ public unsafe class Gfx : IDisposable
         {
             return;
         }
+
+        // FIXME: Implement proper resource management so we don't have to wait for idle.
+        vkDeviceWaitIdle(device);
 
         vkDestroyImageView(device, pixelBuffer.View, default);
         ThrowVulkanIfFailed(vmaDestroyImage(allocator, pixelBuffer.Image, pixelBuffer.Allocation));
@@ -1652,8 +1684,6 @@ public unsafe class Gfx : IDisposable
                 Driver: ParseVersion(properties.DriverVersion),
                 Api: ParseVersion(properties.ApiVersion)
             );
-
-            logger.Debug($"Available physical device: {devices[i]}");
         }
 
         return devices;
@@ -1663,7 +1693,6 @@ public unsafe class Gfx : IDisposable
     /// Selects the optimal device from the given array of devices. The optimal device is a discrete GPU if available, otherwise an integrated GPU.
     /// </summary>
     /// <param name="devices"></param>
-    /// <returns></returns>
     public GfxPhysicalDevice SelectOptimalDevice(GfxPhysicalDevice[] devices)
     {
         ThrowInvalidDataIf(devices.Length == 0, "No devices available.");
@@ -1684,7 +1713,7 @@ public unsafe class Gfx : IDisposable
 
         if (selectedDevice == null)
         {
-            logger.Warning("No optimal device found, selecting the first available device.");
+            logger.Warning("No discrete or integrated GPU available. Selecting the first device.");
             selectedDevice = devices[0];
         }
 

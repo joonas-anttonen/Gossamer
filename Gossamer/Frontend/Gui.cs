@@ -492,14 +492,9 @@ Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
 
     void Callback_WindowSize(GlfwWindow window, int w, int h)
     {
-        messageQueue.PostSurfaceLost();
+        messageQueue.PostSurfaceLost(w, h);
 
         ScheduleLayout();
-
-        if (platform != Platform.Win32)
-        {
-            gfx.GetPresenter().Invalidate((uint)w, (uint)h);
-        }
     }
 
     void Callback_WindowIconify(GlfwWindow window, int iconified)
