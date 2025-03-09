@@ -6,11 +6,11 @@ using Gossamer.External.Vulkan;
 
 namespace Gossamer.Backend;
 
-public record class GfxPresentation(Color ClearColor);
-public record class GfxSwapChainPresentation(Color ClearColor, Frontend.Gui Gui) : GfxPresentation(ClearColor);
-public record class GfxDirectXPresentation(Color ClearColor, nint Handle, GfxFormat Format, uint Width, uint Height) : GfxPresentation(ClearColor);
+public record GfxPresentation(Color ClearColor);
+public record GfxSwapChainPresentation(Color ClearColor, Frontend.Gui Gui) : GfxPresentation(ClearColor);
+public record GfxDirectXPresentation(Color ClearColor, nint Handle, GfxFormat Format, uint Width, uint Height) : GfxPresentation(ClearColor);
 
-internal record class GfxSwapChainSurface(VkSurfaceKhr Surface, VkExtent2D Extent);
+internal record GfxSwapChainSurface(VkSurfaceKhr Surface, VkExtent2D Extent);
 
 public enum GfxPresentationMode
 {
@@ -19,18 +19,18 @@ public enum GfxPresentationMode
     Headless,
 }
 
-public record class GfxApiParameters(
+public record GfxApiParameters(
     Gossamer.ApplicationInfo AppInfo,
     bool EnableDebugging,
     GfxPresentationMode PresentationMode
 );
 
-public record class GfxParameters(
+public record GfxParameters(
     GfxPhysicalDevice PhysicalDevice,
     GfxPresentation Presentation
 );
 
-public record class GfxCapabilities(
+public record GfxCapabilities(
     bool CanDebug,
     bool CanSwap,
     bool CanTimestamp
@@ -44,7 +44,7 @@ public record class GfxCapabilities(
 /// <param name="Name">Name of the physical device.</param>
 /// <param name="Driver">Vulkan driver version.</param>
 /// <param name="Api">Vulkan api version.</param>
-public record class GfxPhysicalDevice(
+public record GfxPhysicalDevice(
     GfxPhysicalDeviceType Type,
     Guid Id,
     string Name,

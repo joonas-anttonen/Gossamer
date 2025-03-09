@@ -117,17 +117,17 @@ class GfxTimestampPool
 
 readonly record struct GfxSingleCommand(VkCommandBuffer CommandBuffer, VkFence Fence);
 
-record class GfxPipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout);
+record GfxPipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout);
 
 class GfxPipelineShader(string name, GfxPipelineShader.Stage[] stages)
 {
-    public record class Stage(VkShaderStage StageType, SafeNativeString Entrypoint, byte[] Code);
+    public record Stage(VkShaderStage StageType, SafeNativeString Entrypoint, byte[] Code);
 
     public string Name { get; } = name;
     public Stage[] Stages { get; } = stages;
 }
 
-record class GfxPipelineParameters(
+record GfxPipelineParameters(
     GfxPipelineShader ShaderProgram,
     VkPushConstantRange[] PushConstants,
     VkDescriptorSetLayoutBinding[] Layout,
@@ -643,9 +643,9 @@ public unsafe class Gfx : IDisposable
         vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
     }
 
-    record class ShaderStageDefinition(uint Stage, string EntryPoint, long Offset, long Size);
-    record class ShaderProgramDefinition(string Name, ShaderStageDefinition[] Stages);
-    record class ShaderPackageDefinition(Dictionary<string, ShaderProgramDefinition> Pipelines);
+    record ShaderStageDefinition(uint Stage, string EntryPoint, long Offset, long Size);
+    record ShaderProgramDefinition(string Name, ShaderStageDefinition[] Stages);
+    record ShaderPackageDefinition(Dictionary<string, ShaderProgramDefinition> Pipelines);
 
     void UpdateDynamicBuffer<T>(MemoryBuffer<T> memoryBuffer, void* pSrc, int srcSize) where T : unmanaged
     {

@@ -15,7 +15,7 @@ public readonly record struct ShapedGlyph(float XAdvance, float YAdvance, float 
 
 public sealed class Font : IDisposable
 {
-    public record class Atlas(uint Width, uint Height, byte[] Pixels);
+    public record Atlas(uint Width, uint Height, byte[] Pixels);
 
     bool isDisposed;
 

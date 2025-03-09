@@ -12,7 +12,7 @@ namespace Gossamer;
 
 public sealed class Gossamer : SynchronizationContext, IDisposable
 {
-    public record class ApplicationInfo(string Name, Version Version)
+    public record ApplicationInfo(string Name, Version Version)
     {
         /// <summary>
         /// Creates <see cref="ApplicationInfo"/> using <see cref="System.Reflection.Assembly.GetCallingAssembly"/>.
@@ -26,7 +26,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         }
     }
 
-    public record class Parameters(bool EnableDebugging = false, Gui.Platform Platform = Gui.Platform.Auto)
+    public record Parameters(bool EnableDebugging = false, Gui.Platform Platform = Gui.Platform.Auto)
     {
         public static Parameters FromArgs(string[] args)
         {
