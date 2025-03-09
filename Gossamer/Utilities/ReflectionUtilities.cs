@@ -12,7 +12,7 @@ public static class ReflectionUtilities
     /// Loads an embedded resource from the executing assembly.
     /// </summary>
     /// <param name="name"></param>
-    public static byte[] LoadEmbeddedResource(string name)
+    public static byte[] LoadEmbeddedResourceAsBytes(string name)
     {
         Assembly assembly = Assembly.GetExecutingAssembly();
 
@@ -27,5 +27,20 @@ public static class ReflectionUtilities
         }
 
         return resourceBytes;
+    }
+
+    /// <summary>
+    /// Loads an embedded resource from the executing assembly.
+    /// </summary>
+    /// <param name="name"></param>
+    public static Stream LoadEmbeddedResourceAsStream(string name)
+    {
+        Assembly assembly = Assembly.GetExecutingAssembly();
+
+        Stream? resourceStream = assembly.GetManifestResourceStream(name);
+
+        ExceptionUtilities.ThrowInvalidOperationIfNull(resourceStream, $"Resource '{name}' not found.");
+
+        return resourceStream;
     }
 }

@@ -1047,7 +1047,7 @@ class Gfx2D(Gfx gfx) : IDisposable
         };
 
         pipeline = gfx.CreatePipeline(new GfxPipelineParameters(
-            ShaderProgram: gfx.GetShaderProgram("Overlay"),
+            ShaderProgram: gfx.GetShaderProgram("built-in-2d"),
             PushConstants: [
                 new()
                 {
@@ -1115,7 +1115,7 @@ class Gfx2D(Gfx gfx) : IDisposable
         ));
 
         compositionPipeline = gfx.CreatePipeline(new GfxPipelineParameters(
-            ShaderProgram: gfx.GetShaderProgram("Composition"),
+            ShaderProgram: gfx.GetShaderProgram("built-in-2d-composition"),
             PushConstants: [],
             Layout: [
                 new()

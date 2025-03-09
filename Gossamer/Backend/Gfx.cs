@@ -121,9 +121,8 @@ record ShaderStageDefinition(uint Stage, string EntryPoint, long Offset, long Si
 record ShaderProgramDefinition(string Name, ShaderStageDefinition[] Stages);
 record ShaderPackageDefinition(Dictionary<string, ShaderProgramDefinition> Pipelines)
 {
-    public static Dictionary<string, GfxPipelineShader> Deserialize(string path)
+    public static Dictionary<string, GfxPipelineShader> Deserialize(Stream stream)
     {
-        using FileStream stream = File.OpenRead(path);
         using BinaryReader reader = new(stream);
 
         // Json chunk
@@ -370,7 +369,7 @@ public unsafe class Gfx : IDisposable
         CreateVulkanMemoryAllocator();
         CreateDeviceCommandPool();
 
-        LoadShaders("Jangine.shaders");
+        LoadShaders(ReflectionUtilities.LoadEmbeddedResourceAsStream("Gossamer.Backend.Shaders.built-in.shaders"));
 
         gfx2D = new Gfx2D(this);
         gfx2D.Create();
@@ -933,9 +932,13 @@ public unsafe class Gfx : IDisposable
         }
     }
 
-    internal void LoadShaders(string path)
+    internal void LoadShaders(Stream stream)
     {
-        Dictionary<string, GfxPipelineShader> loadedShaderPrograms = ShaderPackageDefinition.Deserialize(path);
+        LoadShadersCore(ShaderPackageDefinition.Deserialize(stream));
+    }
+
+    void LoadShadersCore(Dictionary<string, GfxPipelineShader> loadedShaderPrograms)
+    {
         foreach (var shaderProgram in loadedShaderPrograms)
         {
             cachedPipelineShaders[shaderProgram.Key] = shaderProgram.Value;

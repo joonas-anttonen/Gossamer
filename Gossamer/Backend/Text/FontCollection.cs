@@ -44,7 +44,7 @@ public sealed class FontCollection : IDisposable
         // Load the default embedded font
         defaultFont = LoadFontFromBytes(
             "ProggyClean",
-            Utilities.ReflectionUtilities.LoadEmbeddedResource("Gossamer.Backend.Text.ProggyClean.ttf"),
+            Utilities.ReflectionUtilities.LoadEmbeddedResourceAsBytes("Gossamer.Backend.Text.ProggyClean.ttf"),
             32, 32);
     }
 
