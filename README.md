@@ -2,8 +2,7 @@
 
 ### Gossamer.GfxCompiler
 ```PowerShell
-cd Gossamer.GfxCompiler
-dotnet build Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
+dotnet build Gossamer.GfxCompiler/Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
 ```
 
 ## Dependencies
