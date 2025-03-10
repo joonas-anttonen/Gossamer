@@ -2,97 +2,28 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Gossamer Build (DEBUG)",
-			"detail": "Build the Gossamer solution in Debug mode",
-			"hide": true,
+			"label": "Build",
+			"detail": "Builds the solution in debug mode",
 			"problemMatcher": "$msCompile",
-			"presentation": {
-				"showReuseMessage": false,
-				"clear": false
-			},
-			"command": "dotnet",
 			"type": "process",
+			"command": "dotnet",
 			"args": [
 				"build",
 				"${workspaceFolder}/Gossamer.sln",
 				"/p:Configuration=Debug",
 				"/p:Platform=x64",
-				"/p:GenerateFullPaths=true"
 			]
 		},
 		{
-			"label": "Gossamer.GfxCompiler Build (RELEASE)",
-			"detail": "Build the Gossamer.GfxCompiler solution in Release mode",
-			"hide": true,
+			"label": "Compile Shaders",
+			"detail": "Compiles the shaders in the Backend/Shaders folder",
 			"problemMatcher": "$msCompile",
-			"presentation": {
-				"showReuseMessage": false,
-				"clear": false
-			},
-			"command": "dotnet",
-			"type": "process",
-			"args": [
-				"build",
-				"${workspaceFolder}/Gossamer.GfxCompiler/Gossamer.GfxCompiler.sln",
-				"/p:Configuration=Release",
-				"/p:Platform=x64",
-				"/p:GenerateFullPaths=true"
-			]
-		},
-		{
-			"label": "Build Assets",
-			"detail": "Build the assets",
-			"hide": true,
-			"problemMatcher": "$msCompile",
-			"presentation": {
-				"showReuseMessage": false,
-				"clear": false
-			},
-			"command": "${workspaceFolder}/Gossamer.GfxCompiler/bin/x64/Release/Gossamer.GfxCompiler.exe",
 			"type": "shell",
+			"command": "${workspaceFolder}/Gossamer.GfxCompiler/bin/x64/Release/Gossamer.GfxCompiler.exe",
 			"args": [
 				"${workspaceFolder}/Gossamer/Backend/Shaders",
 				"${workspaceFolder}/Gossamer/Backend/Shaders/built-in.shaders"
 			]
-		},
-		{
-			"label": "GIGA Build (DEBUG)",
-			"detail": "Build the whole thing in debug mode",
-			"hide": false,
-			"problemMatcher": "$msCompile",
-			"dependsOrder": "sequence",
-			"dependsOn": [
-				"Gossamer.GfxCompiler Build (RELEASE)",
-				"Build Assets",
-				"Gossamer Build (DEBUG)"
-			],
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"focus": false,
-				"panel": "shared",
-				"showReuseMessage": false,
-				"clear": true
-			}
-		},
-		{
-			"label": "Build (DEBUG)",
-			"detail": "Build Gossamer in debug mode",
-			"hide": false,
-			"problemMatcher": "$msCompile",
-			"dependsOrder": "sequence",
-			"dependsOn": [
-				"Build Assets",
-				"Gossamer Build (DEBUG)"
-			],
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"focus": false,
-				"panel": "shared",
-				"showReuseMessage": false,
-				"clear": true
-			}
-		},
+		}
 	]
 }
