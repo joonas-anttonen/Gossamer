@@ -20,7 +20,19 @@ public sealed class ConsoleLogListener : ILogListener
 {
     void ILogListener.Append(Log.Event logEvent)
     {
-        Console.WriteLine(logEvent.ToShortString());
+        string msg = logEvent.ToShortString();
+
+        Console.ForegroundColor = logEvent.Severity switch
+        {
+            Log.Severity.Debug => ConsoleColor.Blue,
+            Log.Severity.Information => ConsoleColor.White,
+            Log.Severity.Warning => ConsoleColor.Yellow,
+            Log.Severity.Error => ConsoleColor.Red,
+            _ => ConsoleColor.White
+        };
+
+        Console.WriteLine(msg);
+        Console.ResetColor();
     }
 }
 
@@ -62,7 +74,7 @@ public class FileLogListener : ILogListener
 
         // Ensure the directory exists
         string pathDirectory = Path.GetDirectoryName(OutputPath) ?? string.Empty;
-        
+
         if (!Directory.Exists(pathDirectory))
         {
             Directory.CreateDirectory(pathDirectory);
