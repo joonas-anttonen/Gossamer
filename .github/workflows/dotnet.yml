@@ -1,7 +1,4 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
-
-name: .NET
+name: Build and Test
 
 on:
   push:
@@ -22,10 +19,11 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 9.0.x    
+
     - name: Build Shader Compiler
       run: dotnet build Gossamer.GfxCompiler/Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
     - name: Build Shaders
-      run: |
+      run: | # On Linux, DXC needs execution permission and LD_LIBRARY_PATH so that it can find libdxcompiler.so
         chmod +x dxc
         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(readlink --canonicalize .)
         ../Gossamer.GfxCompiler ../../../../../Gossamer/Backend/Shaders ../../../../../Gossamer/Backend/Shaders/built-in.shaders
