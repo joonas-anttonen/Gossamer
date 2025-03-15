@@ -268,14 +268,30 @@ unsafe static class Api
     /// <summary>
     /// https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-vkAcquireNextImageKHR-surface-07783
     /// </summary>
+    /// <param name="device"></param>
+    /// <param name="swapchain"></param>
+    /// <param name="timeout"> Nanoseconds to wait for an image to become available. </param>
+    /// <param name="semaphore"></param>
+    /// <param name="fence"></param>
+    /// <param name="pImageIndex"></param>
     [DllImport(BinaryName, CallingConvention = CallConvention, EntryPoint = "vkAcquireNextImageKHR")]
-    public static extern VkResult vkAcquireNextImageKhr(VkDevice device, VkSwapChainKhr swapchain, ulong timeout, VkSemaphore semaphore, VkFence fence, uint* pImageIndex);
+    public static extern VkResult vkAcquireNextImageKhr(
+        VkDevice device,
+        VkSwapChainKhr swapchain,
+        ulong timeout,
+        VkSemaphore semaphore,
+        VkFence fence,
+        uint* pImageIndex);
 
     /// <summary>
     /// https://registry.khronos.org/vulkan/specs/latest/man/html/vkQueuePresentKHR.html
     /// </summary>
+    /// <param name="queue"></param>
+    /// <param name="pPresentInfo"></param>
     [DllImport(BinaryName, CallingConvention = CallConvention, EntryPoint = "vkQueuePresentKHR")]
-    public static extern VkResult vkQueuePresentKhr(VkQueue queue, VkPresentInfoKhr* pPresentInfo);
+    public static extern VkResult vkQueuePresentKhr(
+        VkQueue queue,
+        VkPresentInfoKhr* pPresentInfo);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkQueueSubmit(VkQueue queue, uint submitCount, VkSubmitInfo* pSubmits, VkFence fence);

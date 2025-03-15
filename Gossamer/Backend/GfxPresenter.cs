@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Gossamer.External.Vulkan;
 using Gossamer.Logging;
+using Gossamer.Utilities;
 
 using static Gossamer.External.Vulkan.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
@@ -10,8 +11,6 @@ namespace Gossamer.Backend;
 
 public abstract class GfxPresenter : IDisposable
 {
-    protected bool isDisposed;
-
     public abstract bool BeginFrame();
     public abstract void EndFrame();
 
@@ -19,6 +18,11 @@ public abstract class GfxPresenter : IDisposable
 
     internal abstract VkCommandBuffer GetCommandBuffer();
     public abstract PixelBuffer GetPresentationBuffer();
+
+    public virtual TimeSpan GetTotalPauseDuration()
+    {
+        return TimeSpan.Zero;
+    }
 
     /// <summary>
     /// Invalidates the presentation surface.
@@ -36,6 +40,52 @@ public abstract class GfxPresenter : IDisposable
     {
         Dispose(disposing: true);
         GC.SuppressFinalize(this);
+    }
+
+    internal unsafe static void TransitionImageLayout(PixelBuffer pixelBuffer, VkCommandBuffer commandBuffer, VkImageLayout srcLayout, VkImageLayout dstLayout, VkPipelineStage2 srcStage, VkPipelineStage2 dstStage)
+    {
+        VkAccessFlags2 srcAccess = srcLayout switch
+        {
+            VkImageLayout.UNDEFINED => VkAccessFlags2.NONE,
+            VkImageLayout.COLOR_ATTACHMENT_OPTIMAL => VkAccessFlags2.COLOR_ATTACHMENT_WRITE_BIT,
+            VkImageLayout.TRANSFER_DST_OPTIMAL => VkAccessFlags2.TRANSFER_WRITE_BIT,
+            _ => throw new NotSupportedException("Unsupported source layout."),
+        };
+        VkAccessFlags2 dstAccess = dstLayout switch
+        {
+            VkImageLayout.TRANSFER_DST_OPTIMAL => VkAccessFlags2.TRANSFER_WRITE_BIT,
+            VkImageLayout.COLOR_ATTACHMENT_OPTIMAL => VkAccessFlags2.COLOR_ATTACHMENT_WRITE_BIT,
+            VkImageLayout.PRESENT_SRC_KHR => VkAccessFlags2.NONE,
+            _ => throw new NotSupportedException("Unsupported destination layout."),
+        };
+
+        VkImageMemoryBarrier2 imageMemoryBarrier = new(default)
+        {
+            SrcAccessMask = srcAccess,
+            DstAccessMask = dstAccess,
+            SrcStageMask = srcStage,
+            DstStageMask = dstStage,
+            OldLayout = srcLayout,
+            NewLayout = dstLayout,
+            SrcQueueFamilyIndex = Constants.VK_QUEUE_FAMILY_IGNORED,
+            DstQueueFamilyIndex = Constants.VK_QUEUE_FAMILY_IGNORED,
+            Image = pixelBuffer.Image,
+            SubresourceRange = new VkImageSubresourceRange
+            {
+                AspectMask = (VkImageAspect)pixelBuffer.Aspect,
+                BaseMipLevel = 0,
+                LevelCount = 1,
+                BaseArrayLayer = 0,
+                LayerCount = 1
+            }
+        };
+
+        VkDependencyInfo dependencyInfo = new(default)
+        {
+            ImageMemoryBarrierCount = 1,
+            ImageMemoryBarriers = &imageMemoryBarrier
+        };
+        vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
     }
 }
 
@@ -105,47 +155,72 @@ public sealed class GfxDirectXPresenter : GfxPresenter
     }
 }
 
-internal unsafe sealed class GfxSwapChainPresenter(
-    VkInstance instance,
-    VkPhysicalDevice physicalDevice,
-    VkDevice device,
-    VkQueue deviceQueue,
-    uint deviceQueueIndex,
-    VkSurfaceKhr surface,
-    VkExtent2D surfaceExtent,
-    Color surfaceClearColor) : GfxPresenter
+internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 {
     readonly Logger logger = Gossamer.GetLogger(nameof(GfxSwapChainPresenter));
 
-    class PerFrame(VkCommandPool CommandPool, VkCommandBuffer CommandBuffer, VkSemaphore ReleaseSemaphore, VkFence SubmissionFence, PixelBuffer OutputImage)
+    record PerFrame(
+        VkCommandPool CommandPool,
+        VkCommandBuffer CommandBuffer,
+        VkSemaphore SubmitSemaphore,
+        VkFence SubmitFence,
+        PixelBuffer? OutputImage)
     {
-        public VkCommandPool CommandPool { get; set; } = CommandPool;
-        public VkCommandBuffer CommandBuffer { get; set; } = CommandBuffer;
-        public VkFence SubmissionFence { get; set; } = SubmissionFence;
-        public PixelBuffer? OutputImage { get; set; } = OutputImage;
-
-        public VkSemaphore ReleaseSemaphore { get; set; } = ReleaseSemaphore;
-        public VkSemaphore AcquireSemaphore { get; set; }
+        public static readonly PerFrame Empty = new(default, default, default, default, default);
     }
 
-    readonly VkInstance instance = instance;
-    readonly VkPhysicalDevice physicalDevice = physicalDevice;
-    readonly VkDevice device = device;
-    readonly VkQueue deviceQueue = deviceQueue;
-    readonly uint deviceQueueIndex = deviceQueueIndex;
-    readonly Color surfaceClearColor = surfaceClearColor;
+    readonly VkInstance instance;
+    readonly VkPhysicalDevice physicalDevice;
+    readonly VkDevice device;
+    readonly VkQueue deviceQueue;
+    readonly uint deviceQueueIndex;
+    readonly Color surfaceClearColor;
 
     bool surfaceInvalidated = true;
-    VkExtent2D surfaceExtent = surfaceExtent;
-    VkSurfaceKhr surface = surface;
+    VkExtent2D surfaceExtent = new(1280, 720);
+    VkSurfaceKhr surface;
     VkSwapChainKhr swapChain;
 
     PerFrame[] perFrame = [];
     int currentFrameIndex;
 
-    readonly Queue<VkSemaphore> semaphores = new();
+    VkFence acquireFence;
+
+    ulong frameCount = 0;
+    TimeSpan waitingForPreviousFrame = TimeSpan.Zero;
+    TimeSpan waitingForNextFrame = TimeSpan.Zero;
 
     readonly Stopwatch stopwatch = Stopwatch.StartNew();
+
+    public GfxSwapChainPresenter(
+        VkInstance instance,
+        VkPhysicalDevice physicalDevice,
+        VkDevice device,
+        VkQueue deviceQueue,
+        uint deviceQueueIndex,
+        VkSurfaceKhr surface,
+        VkExtent2D surfaceExtent,
+        Color surfaceClearColor)
+    {
+        this.instance = instance;
+        this.physicalDevice = physicalDevice;
+        this.device = device;
+        this.deviceQueue = deviceQueue;
+        this.deviceQueueIndex = deviceQueueIndex;
+        this.surfaceClearColor = surfaceClearColor;
+        this.surfaceExtent = surfaceExtent;
+        this.surface = surface;
+
+        VkFenceCreateInfo fenceCreateInfo = new(default);
+        VkFence pAcquireFence = default;
+        ThrowVulkanIfFailed(vkCreateFence(device, &fenceCreateInfo, default, &pAcquireFence));
+        acquireFence = pAcquireFence;
+    }
+
+    public override TimeSpan GetTotalPauseDuration()
+    {
+        return waitingForPreviousFrame + waitingForNextFrame;
+    }
 
     public override void Invalidate(uint width, uint height)
     {
@@ -173,71 +248,90 @@ internal unsafe sealed class GfxSwapChainPresenter(
             return VkResult.OUT_OF_DATE_KHR;
         }
 
-        VkSemaphore acquireSemaphore = default;
+        PerFrame previousFrame = perFrame[currentFrameIndex];
 
-        if (semaphores.Count > 0)
-        {
-            acquireSemaphore = semaphores.Dequeue();
-        }
-        else
-        {
-            VkSemaphoreCreateInfo semaphoreCreateInfo = new(default);
-            ThrowVulkanIfFailed(vkCreateSemaphore(device, &semaphoreCreateInfo, default, &acquireSemaphore));
-        }
-
-        PerFrame? oldFrame = perFrame[currentFrameIndex];
-        ThrowInvalidOperationIfNull(oldFrame);
-
-        if (oldFrame.SubmissionFence.HasValue)
+        // Wait for the previous frame to finish
+        if (previousFrame.SubmitFence.HasValue)
         {
             TimeSpan beforeWait = stopwatch.Elapsed;
 
-            VkFence fence = oldFrame.SubmissionFence;
-            ThrowVulkanIfFailed(vkWaitForFences(device, 1, &fence, 1, ulong.MaxValue));
+            VkFence localSubmissionFence = previousFrame.SubmitFence;
+            ThrowVulkanIfFailed(vkWaitForFences(device, 1, &localSubmissionFence, 1, ulong.MaxValue));
 
             TimeSpan afterWait = stopwatch.Elapsed;
-
             TimeSpan waitTime = afterWait - beforeWait;
+            waitingForPreviousFrame += waitTime;
+        }
 
-            if (waitTime.TotalMilliseconds > 1)
+        TimeSpan beforeAcquire = stopwatch.Elapsed;
+
+        // Try to acquire the next image
+        while (true)
+        {
+            const ulong nanoSecondsToWait = 1_000_000; // 1 ms
+
+            uint nextFrameIndex = 0;
+            VkResult acquireResult = vkAcquireNextImageKhr(device, swapChain, nanoSecondsToWait, default, acquireFence, &nextFrameIndex);
+            if (acquireResult == VkResult.SUCCESS || acquireResult == VkResult.SUBOPTIMAL_KHR)
             {
-                //logger.Debug($"Waited for fence for {waitTime}.");
+                VkFence localAcquireFence = acquireFence;
+                ThrowVulkanIfFailed(vkWaitForFences(device, 1, &localAcquireFence, 1, ulong.MaxValue));
+                ThrowVulkanIfFailed(vkResetFences(device, 1, &localAcquireFence));
+
+                currentFrameIndex = (int)nextFrameIndex;
+
+                frameCount++;
+
+                TimeSpan afterAcquire = stopwatch.Elapsed;
+                TimeSpan acquireTime = afterAcquire - beforeAcquire;
+                waitingForNextFrame += acquireTime;
+
+                /*if (frameCount % 100 == 0)
+                {
+                    logger.Warning(
+                        $"previous: {waitingForPreviousFrame} " +
+                        $"(avg: {StringUtilities.TimeShort(waitingForPreviousFrame.TotalSeconds / frameCount)}) " +
+                        $"next: {waitingForNextFrame} " +
+                        $"(avg: {StringUtilities.TimeShort(waitingForNextFrame.TotalSeconds / frameCount)})");
+
+                    frameCount = 0;
+                    waitingForPreviousFrame = TimeSpan.Zero;
+                    waitingForNextFrame = TimeSpan.Zero;
+                }*/
+
+                break;
+            }
+            else if (acquireResult == VkResult.TIMEOUT)
+            {
+                logger.Warning("AcquireNextImageKhr timed out.");
+                continue;
+            }
+            else
+            {
+                // NOTE:  If vkAcquireNextImageKHR does not successfully acquire an image, semaphore and fence are unaffected.
+                //        We don't need to worry about them here.
+                return acquireResult;
             }
         }
 
-        uint nextFrameIndex = 0;
-        VkResult result = vkAcquireNextImageKhr(device, swapChain, ulong.MaxValue, acquireSemaphore, default, &nextFrameIndex);
-        if (result != VkResult.SUCCESS)
+        PerFrame nextFrame = perFrame[currentFrameIndex];
+
+        // Reset the submission fence
+        if (nextFrame.SubmitFence.HasValue)
         {
-            vkDestroySemaphore(device, acquireSemaphore, default);
-            return result;
+            VkFence localSubmissionFence = nextFrame.SubmitFence;
+            ThrowVulkanIfFailed(vkWaitForFences(device, 1, &localSubmissionFence, 1, ulong.MaxValue));
+            ThrowVulkanIfFailed(vkResetFences(device, 1, &localSubmissionFence));
         }
 
-        currentFrameIndex = (int)nextFrameIndex;
-
-        PerFrame? frame = perFrame[currentFrameIndex];
-        ThrowInvalidOperationIfNull(frame);
-
-        if (frame.SubmissionFence.HasValue)
+        // Reset the command pool
+        if (nextFrame.CommandPool.HasValue)
         {
-            VkFence fence = frame.SubmissionFence;
-            ThrowVulkanIfFailed(vkWaitForFences(device, 1, &fence, 1, ulong.MaxValue));
-            ThrowVulkanIfFailed(vkResetFences(device, 1, &fence));
+            VkCommandPool localCommandPool = nextFrame.CommandPool;
+            ThrowVulkanIfFailed(vkResetCommandPool(device, localCommandPool, 0));
         }
 
-        if (frame.CommandPool.HasValue)
-        {
-            VkCommandPool commandPool = frame.CommandPool;
-            ThrowVulkanIfFailed(vkResetCommandPool(device, commandPool, 0));
-        }
-
-        if (frame.AcquireSemaphore.HasValue)
-        {
-            semaphores.Enqueue(frame.AcquireSemaphore);
-        }
-        frame.AcquireSemaphore = acquireSemaphore;
-
-        return result;
+        return VkResult.SUCCESS;
     }
 
     public override bool BeginFrame()
@@ -287,92 +381,23 @@ internal unsafe sealed class GfxSwapChainPresenter(
             srcStage: VkPipelineStage2.TOP_OF_PIPE,
             dstStage: VkPipelineStage2.ALL_TRANSFER);
 
-        Color clearColor = surfaceClearColor;
-        VkClearColorValue clearColorValue = new();
-        clearColorValue.Float32[0] = clearColor.R;
-        clearColorValue.Float32[1] = clearColor.G;
-        clearColorValue.Float32[2] = clearColor.B;
-        clearColorValue.Float32[3] = clearColor.A;
-        VkImageSubresourceRange clearRange = new()
-        {
-            AspectMask = VkImageAspect.COLOR,
-            BaseMipLevel = 0,
-            LevelCount = 1,
-            BaseArrayLayer = 0,
-            LayerCount = 1
-        };
-        vkCmdClearColorImage(frame.CommandBuffer, frame.OutputImage.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColorValue, 1, &clearRange);
-
+        /*       Color clearColor = surfaceClearColor;
+               VkClearColorValue clearColorValue = new();
+               clearColorValue.Float32[0] = clearColor.R;
+               clearColorValue.Float32[1] = clearColor.G;
+               clearColorValue.Float32[2] = clearColor.B;
+               clearColorValue.Float32[3] = clearColor.A;
+               VkImageSubresourceRange clearRange = new()
+               {
+                   AspectMask = VkImageAspect.COLOR,
+                   BaseMipLevel = 0,
+                   LevelCount = 1,
+                   BaseArrayLayer = 0,
+                   LayerCount = 1
+               };
+               vkCmdClearColorImage(frame.CommandBuffer, frame.OutputImage.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColorValue, 1, &clearRange);
+       */
         return true;
-    }
-
-    void TransitionImageLayout(PixelBuffer pixelBuffer, VkCommandBuffer commandBuffer, VkImageLayout srcLayout, VkImageLayout dstLayout, VkPipelineStage2 srcStage, VkPipelineStage2 dstStage)
-    {
-        VkAccessFlags2 srcAccess;
-        VkAccessFlags2 dstAccess;
-
-        switch (srcLayout)
-        {
-            case VkImageLayout.UNDEFINED:
-                srcAccess = VkAccessFlags2.NONE;
-                break;
-            case VkImageLayout.COLOR_ATTACHMENT_OPTIMAL:
-                srcAccess = VkAccessFlags2.COLOR_ATTACHMENT_WRITE_BIT;
-                break;
-            case VkImageLayout.TRANSFER_DST_OPTIMAL:
-                srcAccess = VkAccessFlags2.TRANSFER_WRITE_BIT;
-                break;
-            default:
-                ThrowNotSupportedIf(true, "Unsupported source layout.");
-                srcAccess = VkAccessFlags2.NONE;
-                break;
-        }
-
-        switch (dstLayout)
-        {
-            case VkImageLayout.TRANSFER_DST_OPTIMAL:
-                dstAccess = VkAccessFlags2.TRANSFER_WRITE_BIT;
-                break;
-            case VkImageLayout.COLOR_ATTACHMENT_OPTIMAL:
-                dstAccess = VkAccessFlags2.COLOR_ATTACHMENT_WRITE_BIT;
-                break;
-            case VkImageLayout.PRESENT_SRC_KHR:
-                dstAccess = VkAccessFlags2.NONE;
-                break;
-            default:
-                ThrowNotSupportedIf(true, "Unsupported destination layout.");
-                dstAccess = VkAccessFlags2.NONE;
-                break;
-        }
-
-        VkImageMemoryBarrier2 imageMemoryBarrier = new(default)
-        {
-            SrcAccessMask = srcAccess,
-            DstAccessMask = dstAccess,
-            SrcStageMask = srcStage,
-            DstStageMask = dstStage,
-            OldLayout = srcLayout,
-            NewLayout = dstLayout,
-            SrcQueueFamilyIndex = Constants.VK_QUEUE_FAMILY_IGNORED,
-            DstQueueFamilyIndex = Constants.VK_QUEUE_FAMILY_IGNORED,
-            Image = pixelBuffer.Image,
-            SubresourceRange = new VkImageSubresourceRange
-            {
-                AspectMask = (VkImageAspect)pixelBuffer.Aspect,
-                BaseMipLevel = 0,
-                LevelCount = 1,
-                BaseArrayLayer = 0,
-                LayerCount = 1
-            }
-        };
-
-        VkDependencyInfo dependencyInfo = new(default)
-        {
-            ImageMemoryBarrierCount = 1,
-            ImageMemoryBarriers = &imageMemoryBarrier
-        };
-
-        vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
     }
 
     public override void EndFrame()
@@ -380,43 +405,39 @@ internal unsafe sealed class GfxSwapChainPresenter(
         PerFrame frame = perFrame[currentFrameIndex];
         ThrowInvalidOperationIfNull(frame.OutputImage);
 
+        uint localCurrentFrameIndex = (uint)currentFrameIndex;
+        VkSwapChainKhr localSwapChain = swapChain;
+        VkSemaphore localSubmitSemaphore = frame.SubmitSemaphore;
+        VkCommandBuffer localCommandBuffer = frame.CommandBuffer;
+
         TransitionImageLayout(
             pixelBuffer: frame.OutputImage,
-            commandBuffer: frame.CommandBuffer,
+            commandBuffer: localCommandBuffer,
             srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
             dstLayout: VkImageLayout.PRESENT_SRC_KHR,
             srcStage: VkPipelineStage2.ALL_TRANSFER,
             dstStage: VkPipelineStage2.BOTTOM_OF_PIPE);
 
-        ThrowVulkanIfFailed(vkEndCommandBuffer(frame.CommandBuffer));
+        ThrowVulkanIfFailed(vkEndCommandBuffer(localCommandBuffer));
 
         VkPipelineStage pipelineStages = VkPipelineStage.TOP_OF_PIPE;
-        VkSemaphore acquireSemaphore = frame.AcquireSemaphore;
-        VkSemaphore releaseSemaphore = frame.ReleaseSemaphore;
-        VkCommandBuffer commandBuffer = frame.CommandBuffer;
-
         VkSubmitInfo submitInfo = new(default)
         {
-            WaitSemaphoreCount = 1,
-            WaitSemaphores = &acquireSemaphore,
             WaitDstStageMask = &pipelineStages,
             CommandBufferCount = 1,
-            CommandBuffers = &commandBuffer,
+            CommandBuffers = &localCommandBuffer,
             SignalSemaphoreCount = 1,
-            SignalSemaphores = &releaseSemaphore
+            SignalSemaphores = &localSubmitSemaphore
         };
+        ThrowVulkanIfFailed(vkQueueSubmit(deviceQueue, 1, &submitInfo, frame.SubmitFence));
 
-        ThrowVulkanIfFailed(vkQueueSubmit(deviceQueue, 1, &submitInfo, frame.SubmissionFence));
-
-        VkSwapChainKhr swapChain = this.swapChain;
-        uint presentFrameIndex = (uint)currentFrameIndex;
         VkPresentInfoKhr presentInfo = new(default)
         {
             WaitSemaphoreCount = 1,
-            WaitSemaphores = &releaseSemaphore,
+            WaitSemaphores = &localSubmitSemaphore,
             SwapchainCount = 1,
-            Swapchains = &swapChain,
-            ImageIndices = &presentFrameIndex
+            Swapchains = &localSwapChain,
+            ImageIndices = &localCurrentFrameIndex
         };
 
         VkResult result = vkQueuePresentKhr(deviceQueue, &presentInfo);
@@ -501,31 +522,21 @@ internal unsafe sealed class GfxSwapChainPresenter(
         VkPresentModeKhr* presentModes = stackalloc VkPresentModeKhr[(int)presentModesCount];
         ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfacePresentModesKhr(physicalDevice, surface, &presentModesCount, presentModes));
 
-        bool swapChainExtentOK;
-
         VkExtent2D swapChainExtent = new();
         if (surfaceCapabilities.CurrentExtent.Width == uint.MaxValue)
         {
-            swapChainExtentOK = true;
+            // If the surface size is undefined, the size is set to the size of the images requested.
             swapChainExtent.Width = Math.Max(surfaceCapabilities.MinImageExtent.Width, Math.Min(surfaceCapabilities.MaxImageExtent.Width, surfaceExtent.Width));
             swapChainExtent.Height = Math.Max(surfaceCapabilities.MinImageExtent.Height, Math.Min(surfaceCapabilities.MaxImageExtent.Height, surfaceExtent.Height));
-            //swapChainExtentOK = false;
         }
-        else if (surfaceCapabilities.CurrentExtent.Width == 0 || surfaceCapabilities.CurrentExtent.Height == 0)
+        else if (surfaceCapabilities.CurrentExtent.Width > 0 && surfaceCapabilities.CurrentExtent.Height > 0)
         {
-            swapChainExtentOK = false;
-        }
-        else
-        {
-            swapChainExtentOK = true;
             // If the surface size is defined, the swap chain size must match
             swapChainExtent = surfaceCapabilities.CurrentExtent;
         }
-
-        if (!swapChainExtentOK)
+        else
         {
-            ReleaseSwapChainIfAny();
-            return false;
+            throw new NotSupportedException("Invalid surface size.");
         }
 
         // Select a present mode for the swap chain, the VK_PRESENT_MODE_FIFO_KHR mode must always be present as per spec, this mode waits for the vertical blank ("v-sync")
@@ -549,27 +560,16 @@ internal unsafe sealed class GfxSwapChainPresenter(
             }
         }
 
-        // Determine the number of images
-        uint desiredNumberOfSwapChainImages = Math.Min(surfaceCapabilities.MinImageCount + 1, surfaceCapabilities.MaxImageCount);
+        // Required number of swap chain images
+        uint desiredNumberOfSwapChainImages = 2;
+        ThrowNotSupportedIf(desiredNumberOfSwapChainImages < surfaceCapabilities.MinImageCount, "Requested number of swap chain images is too low.");
 
-        // Determine the image usage
-        VkImageUsage swapChainImageUsage = VkImageUsage.COLOR_ATTACHMENT_BIT;
-
-        if (surfaceCapabilities.SupportedUsageFlags.HasFlag(VkImageUsage.TRANSFER_SRC_BIT))
-        {
-            swapChainImageUsage |= VkImageUsage.TRANSFER_SRC_BIT;
-        }
-
-        if (surfaceCapabilities.SupportedUsageFlags.HasFlag(VkImageUsage.TRANSFER_DST_BIT))
-        {
-            swapChainImageUsage |= VkImageUsage.TRANSFER_DST_BIT;
-        }
-
-        CompositeAlphaFlagsKhr compositeAlpha = CompositeAlphaFlagsKhr.OPAQUE_BIT_KHR;
-        if (surfaceCapabilities.SupportedCompositeAlpha.HasFlag(CompositeAlphaFlagsKhr.INHERIT_BIT_KHR))
-        {
-            compositeAlpha = CompositeAlphaFlagsKhr.INHERIT_BIT_KHR;
-        }
+        // Required swap chain image usage
+        VkImageUsage desiredSwapChainImageUsage =
+            VkImageUsage.COLOR_ATTACHMENT_BIT |
+            VkImageUsage.TRANSFER_SRC_BIT |
+            VkImageUsage.TRANSFER_DST_BIT;
+        ThrowNotSupportedIf(!surfaceCapabilities.SupportedUsageFlags.HasFlag(desiredSwapChainImageUsage), "Desired swap chain image usage is not supported.");
 
         VkSwapChainCreateInfoKhr swapChainCreateInfo = new(default)
         {
@@ -578,7 +578,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
             ImageFormat = outputSurfaceFormat.Format,
             ImageColorSpace = outputSurfaceFormat.ColorSpace,
             ImageExtent = swapChainExtent,
-            ImageUsage = swapChainImageUsage,
+            ImageUsage = desiredSwapChainImageUsage,
             ImageArrayLayers = 1,
             ImageSharingMode = VkSharingMode.EXCLUSIVE,
             PreTransform = SurfaceTransformFlagsKhr.IDENTITY_BIT_KHR,
@@ -586,16 +586,13 @@ internal unsafe sealed class GfxSwapChainPresenter(
             OldSwapChain = swapChain,
             Clipped = 1,
             PresentMode = swapChainPresentMode,
-            CompositeAlpha = compositeAlpha
+            CompositeAlpha = CompositeAlphaFlagsKhr.OPAQUE_BIT_KHR
         };
-
-        // Create swap chain
-
-        VkSwapChainKhr pSwapChain = default;
-        ThrowVulkanIfFailed(vkCreateSwapchainKhr(device, &swapChainCreateInfo, default, &pSwapChain));
+        VkSwapChainKhr localSwapChain = default;
+        ThrowVulkanIfFailed(vkCreateSwapchainKhr(device, &swapChainCreateInfo, default, &localSwapChain));
 
         ReleaseSwapChainIfAny();
-        swapChain = pSwapChain;
+        swapChain = localSwapChain;
 
         // Query swap chain images
 
@@ -606,8 +603,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
         ThrowVulkanIfFailed(vkGetSwapchainImagesKhr(device, swapChain, &swapChainImageCount, pSwapChainImages));
 
         Array.Resize(ref perFrame, (int)swapChainImageCount);
-
-        // Create image views for swap chain images
+        Array.Fill(perFrame, PerFrame.Empty);
 
         for (int i = 0; i < perFrame.Length; i++)
         {
@@ -649,35 +645,19 @@ internal unsafe sealed class GfxSwapChainPresenter(
                 allocation: default
             );
 
-            VkFenceCreateInfo fenceCreateInfo = new(default)
-            {
-                Flags = VkFenceCreateFlags.SIGNALED
-            };
-
-            VkFence submissionFence;
-            ThrowVulkanIfFailed(vkCreateFence(device, &fenceCreateInfo, default, &submissionFence));
-
-            VkCommandPoolCreateInfo commandPoolCreateInfo = new(default)
-            {
-                QueueFamilyIndex = deviceQueueIndex,
-                Flags = VkCommandPoolCreateFlags.TRANSIENT
-            };
-
+            VkCommandPoolCreateInfo commandPoolCreateInfo = new(default) { QueueFamilyIndex = deviceQueueIndex, Flags = VkCommandPoolCreateFlags.TRANSIENT };
             VkCommandPool commandPool;
             ThrowVulkanIfFailed(vkCreateCommandPool(device, &commandPoolCreateInfo, default, &commandPool));
 
-            VkCommandBufferAllocateInfo commandBufferAllocateInfo = new(default)
-            {
-                Level = VkCommandBufferLevel.PRIMARY,
-                Pool = commandPool,
-                Count = 1
-            };
-
+            VkCommandBufferAllocateInfo commandBufferAllocateInfo = new(default) { Pool = commandPool, Count = 1 };
             VkCommandBuffer commandBuffer;
             ThrowVulkanIfFailed(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer));
 
-            VkSemaphoreCreateInfo semaphoreCreateInfo = new(default);
+            VkFenceCreateInfo submissionFenceCreateInfo = new(default) { Flags = VkFenceCreateFlags.SIGNALED };
+            VkFence submissionFence;
+            ThrowVulkanIfFailed(vkCreateFence(device, &submissionFenceCreateInfo, default, &submissionFence));
 
+            VkSemaphoreCreateInfo semaphoreCreateInfo = new(default);
             VkSemaphore releaseSemaphore;
             ThrowVulkanIfFailed(vkCreateSemaphore(device, &semaphoreCreateInfo, default, &releaseSemaphore));
 
@@ -691,72 +671,54 @@ internal unsafe sealed class GfxSwapChainPresenter(
     {
         for (int i = 0; i < perFrame.Length; i++)
         {
-            PerFrame? frame = perFrame[i];
-            if (frame == null)
-            {
-                continue;
-            }
+            PerFrame frame = perFrame[i];
 
-            if (frame.ReleaseSemaphore.HasValue)
+            if (frame.SubmitSemaphore.HasValue)
             {
-                vkDestroySemaphore(device, frame.ReleaseSemaphore, default);
-                frame.ReleaseSemaphore = default;
+                vkDestroySemaphore(device, frame.SubmitSemaphore, default);
             }
-            if (frame.AcquireSemaphore.HasValue)
+            if (frame.SubmitFence.HasValue)
             {
-                vkDestroySemaphore(device, frame.AcquireSemaphore, default);
-                frame.AcquireSemaphore = default;
-            }
-            if (frame.SubmissionFence.HasValue)
-            {
-                vkDestroyFence(device, frame.SubmissionFence, default);
-                frame.SubmissionFence = default;
+                vkDestroyFence(device, frame.SubmitFence, default);
             }
             if (frame.OutputImage != null && frame.OutputImage.View.HasValue)
             {
                 vkDestroyImageView(device, frame.OutputImage.View, default);
-                frame.OutputImage = default;
             }
             if (frame.CommandBuffer.HasValue)
             {
                 VkCommandBuffer commandBuffer = frame.CommandBuffer;
                 vkFreeCommandBuffers(device, frame.CommandPool, 1, &commandBuffer);
-                frame.CommandBuffer = default;
             }
             if (frame.CommandPool.HasValue)
             {
                 vkDestroyCommandPool(device, frame.CommandPool, default);
-                frame.CommandPool = default;
             }
-        }
 
-        while (semaphores.Count > 0)
-        {
-            VkSemaphore semaphore = semaphores.Dequeue();
-            vkDestroySemaphore(device, semaphore, default);
+            perFrame[i] = PerFrame.Empty;
         }
     }
 
     protected unsafe override void Dispose(bool disposing)
     {
-        if (!isDisposed)
+        ReleasePerFrame();
+
+        if (acquireFence.HasValue)
         {
-            isDisposed = true;
+            vkDestroyFence(device, acquireFence);
+            acquireFence = default;
+        }
 
-            ReleasePerFrame();
+        if (swapChain.HasValue)
+        {
+            vkDestroySwapchainKhr(device, swapChain);
+            swapChain = default;
+        }
 
-            if (swapChain.HasValue)
-            {
-                vkDestroySwapchainKhr(device, swapChain);
-                swapChain = default;
-            }
-
-            if (surface.HasValue)
-            {
-                ThrowVulkanIfFailed(vkDestroySurfaceKhr(instance, surface, default),
-                    "Failed to destroy surface.");
-                surface = default;
-            }
+        if (surface.HasValue)
+        {
+            ThrowVulkanIfFailed(vkDestroySurfaceKhr(instance, surface, default));
+            surface = default;
         }
     }
 }
