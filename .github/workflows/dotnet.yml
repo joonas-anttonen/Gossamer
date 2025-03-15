@@ -27,7 +27,7 @@ jobs:
     - name: Update dxc permissions
       run: chmod +x Gossamer.GfxCompiler/bin/x64/Release/External/dxc
     - name: Build Shaders
-      run: Gossamer.GfxCompiler ../../../../Gossamer/Backend/Shaders ../../../../Gossamer/Backend/Shaders/built-in.shaders
+      run: ./Gossamer.GfxCompiler ../../../../Gossamer/Backend/Shaders ../../../../Gossamer/Backend/Shaders/built-in.shaders
       working-directory: Gossamer.GfxCompiler/bin/x64/Release
     - name: Build
       run: dotnet build Gossamer.sln /p:Configuration=Debug /p:Platform=x64
