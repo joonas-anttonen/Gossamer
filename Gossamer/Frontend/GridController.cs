@@ -24,9 +24,9 @@ public class GridController : IGridControllable
 
             GridPlacement placement = descendant.GridPlacement;
 
-            
 
-            
+
+
         }
     }
 

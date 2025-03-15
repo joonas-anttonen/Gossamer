@@ -12,7 +12,7 @@ readonly struct GlfwWindow
 {
     internal readonly nint Value;
 
-    public bool HasValue => Value != 0; 
+    public bool HasValue => Value != 0;
     public override string ToString() => Value.ToString("x");
 }
 
@@ -25,7 +25,7 @@ readonly struct GlfwMonitor
 
     internal GlfwMonitor(nint value) => Value = value;
 
-    public bool HasValue => Value != 0; 
+    public bool HasValue => Value != 0;
     public override string ToString() => Value.ToString("x");
 }
 

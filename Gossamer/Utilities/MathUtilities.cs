@@ -148,7 +148,7 @@ public static class MathUtilities
             throw new ArgumentException(string.Format("min {0} should be less than or equal to max {1}", min, max), nameof(min));
 
         // Code from http://stackoverflow.com/a/707426/1356325
-        int range_size = max - min ;
+        int range_size = max - min;
 
         if (value < min)
             value += range_size * ((min - value) / range_size + 1);
