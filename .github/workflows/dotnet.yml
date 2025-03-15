@@ -24,6 +24,8 @@ jobs:
         dotnet-version: 9.0.x    
     - name: Build Shader Compiler
       run: dotnet build Gossamer.GfxCompiler/Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
+    - name: Update dxc permissions
+      run: chmod +x Gossamer.GfxCompiler/bin/x64/Release/External/dxc
     - name: Build Shaders
       run: Gossamer.GfxCompiler/bin/x64/Release/Gossamer.GfxCompiler ../../../../Gossamer/Backend/Shaders ../../../../Gossamer/Backend/Shaders/built-in.shaders
     - name: Build
