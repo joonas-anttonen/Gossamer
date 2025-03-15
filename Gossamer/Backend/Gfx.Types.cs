@@ -3,6 +3,8 @@
 */
 
 using Gossamer.External.Vulkan;
+using Gossamer.External.Vulkan.Vma;
+using Gossamer.Utilities;
 
 namespace Gossamer.Backend;
 
@@ -93,5 +95,86 @@ public record DisplayParameters(
             },
             _ => 1.0f,
         };
+    }
+}
+
+readonly record struct GfxSingleCommand(VkCommandBuffer CommandBuffer, VkFence Fence);
+
+record GfxPipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout);
+
+record GfxPipelineShader(string Name, GfxPipelineShader.Stage[] Stages)
+{
+    public record Stage(VkShaderStage StageType, SafeNativeString Entrypoint, byte[] Code);
+}
+
+record GfxPipelineParameters(
+    GfxPipelineShader ShaderProgram,
+    VkPushConstantRange[] PushConstants,
+    VkDescriptorSetLayoutBinding[] Layout,
+    VkPrimitiveTopology InputTopology,
+    VkCullMode CullMode,
+    VkFrontFace FrontFace,
+    VkVertexInputBindingDescription[] InputBindings,
+    VkVertexInputAttributeDescription[] InputAttributes,
+    GfxPipelineAttachment[] Attachments,
+    bool DepthTest,
+    bool DepthWrite,
+    VkCompareOp DepthCompareOp,
+    bool Multisampling
+);
+
+record struct GfxPipelineAttachment(VkFormat Format, VkPipelineColorBlendAttachmentState Blend);
+
+public class MemoryBuffer<T>
+{
+    /// <summary>
+    /// The length of the buffer in T's.
+    /// </summary>
+    public uint Length { get; }
+
+    internal VkBuffer Buffer { get; }
+    internal VmaAllocation Allocation { get; }
+
+    internal MemoryBuffer(
+        uint length,
+        VkBuffer buffer,
+        VmaAllocation allocation)
+    {
+        Length = length;
+        Buffer = buffer;
+        Allocation = allocation;
+    }
+}
+
+public class PixelBuffer
+{
+    public GfxFormat Format { get; }
+    public GfxAspect Aspect { get; }
+    public GfxSamples Samples { get; }
+    public uint Width { get; }
+    public uint Height { get; }
+
+    internal VkImage Image { get; }
+    internal VkImageView View { get; }
+    internal VmaAllocation Allocation { get; }
+
+    internal PixelBuffer(
+        GfxFormat format,
+        GfxAspect aspect,
+        GfxSamples samples,
+        uint width,
+        uint height,
+        VkImage image,
+        VkImageView view,
+        VmaAllocation allocation)
+    {
+        Format = format;
+        Aspect = aspect;
+        Image = image;
+        View = view;
+        Allocation = allocation;
+        Width = width;
+        Height = height;
+        Samples = samples;
     }
 }

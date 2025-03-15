@@ -1,7 +1,25 @@
-﻿using System.Text.Json;
+﻿using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Gossamer.Utilities;
+
+/// <summary>
+/// Provides utilities for working with JSON.
+/// </summary>
+public static class JsonUtilities
+{
+    /// <summary>
+    /// Deserializes a JSON string into an object.
+    /// </summary>
+    /// <typeparam name="T"/>
+    /// <param name="data"/>
+    /// <exception cref="InvalidDataException"/>
+    public static T Deserialize<T>(byte[] data)
+    {
+        return JsonSerializer.Deserialize<T>(Encoding.UTF8.GetString(data)) ?? throw new InvalidDataException();
+    }
+}
 
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public class JsonVector2Converter : JsonConverter<Vector2>

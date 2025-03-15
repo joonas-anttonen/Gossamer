@@ -362,7 +362,7 @@ internal unsafe sealed class GfxSwapChainPresenter(
                 BaseMipLevel = 0,
                 LevelCount = 1,
                 BaseArrayLayer = 0,
-                LayerCount = pixelBuffer.Layers
+                LayerCount = 1
             }
         };
 
@@ -644,7 +644,6 @@ internal unsafe sealed class GfxSwapChainPresenter(
                 samples: GfxSamples.X1,
                 width: swapChainExtent.Width,
                 height: swapChainExtent.Height,
-                layers: 1,
                 image: swapChainImage,
                 view: swapChainImageView,
                 allocation: default

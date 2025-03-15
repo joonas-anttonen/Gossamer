@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 
+using Gossamer.Backend.Shaders;
 using Gossamer.External.Vulkan;
 using Gossamer.External.Vulkan.Vma;
 using Gossamer.Logging;
@@ -14,231 +15,11 @@ using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Backend;
 
-class GfxTimestampPool
-{
-    internal VkQueryPool queryPool;
-
-    readonly float deviceTimestampPeriodInSeconds;
-    readonly int capacity;
-    readonly ulong[] gpuTimestamps;
-    readonly TimeSpan[] cpuTimestamps;
-    readonly Stopwatch cpuStopwatch = Stopwatch.StartNew();
-    uint gpuCount;
-    uint cpuCount;
-
-    internal GfxTimestampPool(VkQueryPool queryPool, int capacity, float deviceTimestampPeriodInNanoseconds)
-    {
-        this.queryPool = queryPool;
-        this.capacity = capacity;
-        gpuTimestamps = new ulong[capacity];
-        cpuTimestamps = new TimeSpan[capacity];
-        deviceTimestampPeriodInSeconds = deviceTimestampPeriodInNanoseconds / 1e9f;
-    }
-
-    internal unsafe void Reset(VkDevice device, VkCommandBuffer commandBuffer)
-    {
-        cpuStopwatch.Restart();
-
-        if (gpuCount > 0)
-        {
-            fixed (ulong* previousTimestamps = gpuTimestamps)
-            {
-                ThrowVulkanIfFailed(vkGetQueryPoolResults(
-                    device,
-                    queryPool,
-                    0,
-                    gpuCount,
-                    gpuCount * sizeof(ulong),
-                    (nint)previousTimestamps,
-                    sizeof(ulong),
-                    VkQueryResultFlags.RESULT_64 | VkQueryResultFlags.RESULT_WAIT));
-            }
-        }
-
-        gpuCount = 0;
-        cpuCount = 0;
-
-        vkCmdResetQueryPool(commandBuffer, queryPool, 0, (uint)capacity);
-    }
-
-    internal uint BeginCpuTimestamp()
-    {
-        ThrowInvalidOperationIfNot(cpuCount < capacity);
-
-        cpuTimestamps[cpuCount++] = cpuStopwatch.Elapsed;
-        return cpuCount - 1;
-    }
-
-    internal uint EndCpuTimestamp()
-    {
-        ThrowInvalidOperationIfNot(cpuCount < capacity);
-
-        cpuTimestamps[cpuCount++] = cpuStopwatch.Elapsed;
-        return cpuCount - 1;
-    }
-
-    internal uint BeginGpuTimestamp(VkCommandBuffer commandBuffer)
-    {
-        ThrowInvalidOperationIfNot(gpuCount < capacity);
-
-        vkCmdWriteTimestamp(commandBuffer, VkPipelineStage.TOP_OF_PIPE, queryPool, gpuCount);
-        gpuCount++;
-        return gpuCount - 1;
-    }
-
-    internal uint EndGpuTimestamp(VkCommandBuffer commandBuffer)
-    {
-        ThrowInvalidOperationIfNot(gpuCount < capacity);
-
-        vkCmdWriteTimestamp(commandBuffer, VkPipelineStage.BOTTOM_OF_PIPE, queryPool, gpuCount);
-        gpuCount++;
-        return gpuCount - 1;
-    }
-
-    internal TimeSpan GetGpuDuration(uint start, uint end)
-    {
-        ThrowInvalidOperationIfNot(start < capacity);
-        ThrowInvalidOperationIfNot(end < capacity);
-
-        ulong startTimestamp = gpuTimestamps[start];
-        ulong endTimestamp = gpuTimestamps[end];
-
-        return TimeSpan.FromSeconds((endTimestamp - startTimestamp) * deviceTimestampPeriodInSeconds);
-    }
-
-    internal TimeSpan GetCpuDuration(uint start, uint end)
-    {
-        ThrowInvalidOperationIfNot(start < capacity);
-        ThrowInvalidOperationIfNot(end < capacity);
-
-        return cpuTimestamps[end] - cpuTimestamps[start];
-    }
-}
-
-readonly record struct GfxSingleCommand(VkCommandBuffer CommandBuffer, VkFence Fence);
-
-record ShaderStageDefinition(uint Stage, string EntryPoint, long Offset, long Size);
-record ShaderProgramDefinition(string Name, ShaderStageDefinition[] Stages);
-record ShaderPackageDefinition(Dictionary<string, ShaderProgramDefinition> Pipelines)
-{
-    public static Dictionary<string, GfxPipelineShader> Deserialize(Stream stream)
-    {
-        using BinaryReader reader = new(stream);
-
-        // Json chunk
-        uint jsonChunkLength = reader.ReadUInt32();
-        uint jsonChunkType = reader.ReadUInt32();
-        ThrowInvalidDataIf(jsonChunkType != 1, "Invalid json chunk type.");
-
-        byte[] jsonChunkData = reader.ReadBytes((int)jsonChunkLength);
-
-        // Bytecode chunk
-        uint bytecodeChunkLength = reader.ReadUInt32();
-        uint bytecodeChunkType = reader.ReadUInt32();
-        ThrowInvalidDataIf(bytecodeChunkType != 2, "Invalid bytecode chunk type.");
-
-        ShaderPackageDefinition packageDefinition = System.Text.Json.JsonSerializer.Deserialize<ShaderPackageDefinition>(System.Text.Encoding.UTF8.GetString(jsonChunkData)) ?? throw new InvalidDataException();
-        byte[] packageBytecode = reader.ReadBytes((int)bytecodeChunkLength);
-
-        Dictionary<string, GfxPipelineShader> shaderPrograms = new(capacity: packageDefinition.Pipelines.Count);
-        foreach (var (shaderProgramName, shaderProgramDefinition) in packageDefinition.Pipelines)
-        {
-            GfxPipelineShader.Stage[] stages = new GfxPipelineShader.Stage[shaderProgramDefinition.Stages.Length];
-
-            for (int i = 0; i < shaderProgramDefinition.Stages.Length; i++)
-            {
-                ShaderStageDefinition stageDefinition = shaderProgramDefinition.Stages[i];
-                byte[] stageBytecode = new byte[stageDefinition.Size];
-                Array.Copy(packageBytecode, stageDefinition.Offset, stageBytecode, 0, stageDefinition.Size);
-
-                stages[i] = new GfxPipelineShader.Stage((VkShaderStage)stageDefinition.Stage, new SafeNativeString(stageDefinition.EntryPoint), stageBytecode);
-            }
-
-            shaderPrograms[shaderProgramName] = new GfxPipelineShader(shaderProgramName, stages);
-        }
-
-        return shaderPrograms;
-    }
-}
-
-record GfxPipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout);
-
-record GfxPipelineShader(string Name, GfxPipelineShader.Stage[] Stages)
-{
-    public record Stage(VkShaderStage StageType, SafeNativeString Entrypoint, byte[] Code);
-}
-
-record GfxPipelineParameters(
-    GfxPipelineShader ShaderProgram,
-    VkPushConstantRange[] PushConstants,
-    VkDescriptorSetLayoutBinding[] Layout,
-    VkPrimitiveTopology InputTopology,
-    VkCullMode CullMode,
-    VkFrontFace FrontFace,
-    VkVertexInputBindingDescription[] InputBindings,
-    VkVertexInputAttributeDescription[] InputAttributes,
-    GfxPipelineAttachment[] Attachments,
-    bool DepthTest,
-    bool DepthWrite,
-    VkCompareOp DepthCompareOp,
-    bool Multisampling
-);
-
-record struct GfxPipelineAttachment(VkFormat Format, VkPipelineColorBlendAttachmentState Blend);
-
-public class MemoryBuffer<T>
-{
-    /// <summary>
-    /// The length of the buffer in elements.
-    /// </summary>
-    public uint Length { get; }
-
-    internal VkBuffer Buffer { get; }
-    internal VmaAllocation Allocation { get; }
-
-    internal MemoryBuffer(uint length, VkBuffer buffer, VmaAllocation allocation)
-    {
-        Length = length;
-        Buffer = buffer;
-        Allocation = allocation;
-    }
-}
-
-public class PixelBuffer
-{
-    public GfxFormat Format { get; }
-    public GfxAspect Aspect { get; }
-    public GfxSamples Samples { get; }
-    public uint Width { get; }
-    public uint Height { get; }
-    public uint Layers { get; }
-
-    internal VkImageLayout Layout { get; set; }
-    internal VkImage Image { get; }
-    internal VkImageView View { get; }
-    internal VmaAllocation Allocation { get; }
-
-    internal PixelBuffer(GfxFormat format, GfxAspect aspect, GfxSamples samples, uint width, uint height, uint layers, VkImage image, VkImageView view, VmaAllocation allocation)
-    {
-        Format = format;
-        Aspect = aspect;
-        Image = image;
-        View = view;
-        Allocation = allocation;
-        Width = width;
-        Height = height;
-        Samples = samples;
-        Layers = layers;
-    }
-}
-
 public unsafe class Gfx : IDisposable
 {
     public readonly record struct Statistics(ulong Frame, TimeSpan CpuFrameTime, TimeSpan GpuFrameTime);
 
     readonly Logger logger = Gossamer.GetLogger(nameof(Gfx));
-
-    bool isDisposed;
 
     PFN_vkDebugUtilsMessengerCallbackEXT? VulkanDebugMessengerCallback;
     PFN_vkSetDebugUtilsObjectNameEXT? VulkanDebugSetObjectName;
@@ -404,13 +185,7 @@ public unsafe class Gfx : IDisposable
 
     public void Dispose()
     {
-        if (isDisposed)
-        {
-            return;
-        }
-
         GC.SuppressFinalize(this);
-        isDisposed = true;
 
         if (device.HasValue)
         {
@@ -692,7 +467,7 @@ public unsafe class Gfx : IDisposable
                 BaseMipLevel = 0,
                 LevelCount = 1,
                 BaseArrayLayer = 0,
-                LayerCount = pixelBuffer.Layers
+                LayerCount = 1
             }
         };
 
@@ -881,7 +656,7 @@ public unsafe class Gfx : IDisposable
         VkImageView view;
         ThrowVulkanIfFailed(vkCreateImageView(device, &imageViewCreateInfo, default, &view));
 
-        return new PixelBuffer(format, aspect, samples, width, height, 1, image, view, allocation);
+        return new PixelBuffer(format, aspect, samples, width, height, image, view, allocation);
     }
 
     internal VkDescriptorSetLayout CreateDescriptorLayout(VkDescriptorSetLayoutBinding[] bindings)
@@ -934,12 +709,7 @@ public unsafe class Gfx : IDisposable
 
     internal void LoadShaders(Stream stream)
     {
-        LoadShadersCore(ShaderPackageDefinition.Deserialize(stream));
-    }
-
-    void LoadShadersCore(Dictionary<string, GfxPipelineShader> loadedShaderPrograms)
-    {
-        foreach (var shaderProgram in loadedShaderPrograms)
+        foreach (var shaderProgram in ShaderPackage.Deserialize(stream))
         {
             cachedPipelineShaders[shaderProgram.Key] = shaderProgram.Value;
         }

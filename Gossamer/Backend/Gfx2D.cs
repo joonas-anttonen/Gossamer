@@ -126,7 +126,7 @@ public class Gfx2DCommandBuffer
     public void DrawText(TextLayout layout, Vector2 position, Color color, Color backgroundColor)
     {
         ThrowInvalidOperationIfNot(batchInProgress);
- 
+
         ref Command newCommand = ref BeginCommand();
         newCommand.Font = layout.Font;
         newCommand.Color = backgroundColor.ToVector3();
