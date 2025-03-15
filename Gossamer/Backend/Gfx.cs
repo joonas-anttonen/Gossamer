@@ -171,10 +171,8 @@ public unsafe class Gfx : IDisposable
                         deviceQueue,
                         deviceQueueIndex,
                         swapChainSurface.Surface,
-                        swapChainSurface.Extent,
-                        swapChainPresentation.ClearColor);
+                        swapChainSurface.Extent);
                     presenter = swapChainPresenter;
-                    swapChainPresenter.Refresh(false);
                     break;
                 }
 

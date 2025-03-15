@@ -2,7 +2,6 @@ using System.Diagnostics;
 
 using Gossamer.External.Vulkan;
 using Gossamer.Logging;
-using Gossamer.Utilities;
 
 using static Gossamer.External.Vulkan.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
@@ -174,7 +173,6 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
     readonly VkDevice device;
     readonly VkQueue deviceQueue;
     readonly uint deviceQueueIndex;
-    readonly Color surfaceClearColor;
 
     bool surfaceInvalidated = true;
     VkExtent2D surfaceExtent = new(1280, 720);
@@ -199,15 +197,13 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         VkQueue deviceQueue,
         uint deviceQueueIndex,
         VkSurfaceKhr surface,
-        VkExtent2D surfaceExtent,
-        Color surfaceClearColor)
+        VkExtent2D surfaceExtent)
     {
         this.instance = instance;
         this.physicalDevice = physicalDevice;
         this.device = device;
         this.deviceQueue = deviceQueue;
         this.deviceQueueIndex = deviceQueueIndex;
-        this.surfaceClearColor = surfaceClearColor;
         this.surfaceExtent = surfaceExtent;
         this.surface = surface;
 
@@ -362,41 +358,20 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         }
 
         PerFrame frame = perFrame[currentFrameIndex];
+        ThrowInvalidOperationIfNull(frame.OutputImage);
 
-        VkCommandBufferBeginInfo commandBufferBeginInfo = new(default)
-        {
-            Flags = VkCommandBufferUsageFlags.ONE_TIME_SUBMIT_BIT
-        };
-
+        VkCommandBufferBeginInfo commandBufferBeginInfo = new(default) { Flags = VkCommandBufferUsageFlags.ONE_TIME_SUBMIT_BIT };
         VkCommandBuffer commandBuffer = frame.CommandBuffer;
         ThrowVulkanIfFailed(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
 
-        ThrowInvalidOperationIfNull(frame.OutputImage);
-
         TransitionImageLayout(
             pixelBuffer: frame.OutputImage,
-            commandBuffer: frame.CommandBuffer,
+            commandBuffer: commandBuffer,
             srcLayout: VkImageLayout.UNDEFINED,
             dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
             srcStage: VkPipelineStage2.TOP_OF_PIPE,
             dstStage: VkPipelineStage2.ALL_TRANSFER);
 
-        /*       Color clearColor = surfaceClearColor;
-               VkClearColorValue clearColorValue = new();
-               clearColorValue.Float32[0] = clearColor.R;
-               clearColorValue.Float32[1] = clearColor.G;
-               clearColorValue.Float32[2] = clearColor.B;
-               clearColorValue.Float32[3] = clearColor.A;
-               VkImageSubresourceRange clearRange = new()
-               {
-                   AspectMask = VkImageAspect.COLOR,
-                   BaseMipLevel = 0,
-                   LevelCount = 1,
-                   BaseArrayLayer = 0,
-                   LayerCount = 1
-               };
-               vkCmdClearColorImage(frame.CommandBuffer, frame.OutputImage.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColorValue, 1, &clearRange);
-       */
         return true;
     }
 
@@ -462,7 +437,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         }
     }
 
-    public bool Refresh(bool enableVerticalSync)
+    bool Refresh(bool enableVerticalSync)
     {
         surfaceInvalidated = false;
 

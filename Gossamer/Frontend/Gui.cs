@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 
 using Gossamer.Backend;
-using Gossamer.External.FreeType;
 using Gossamer.External.Glfw;
 using Gossamer.Logging;
 using Gossamer.Utilities;

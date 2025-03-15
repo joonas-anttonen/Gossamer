@@ -8,9 +8,9 @@ using Gossamer.Utilities;
 
 namespace Gossamer.Backend;
 
-public record GfxPresentation(Color ClearColor);
-public record GfxSwapChainPresentation(Color ClearColor, Frontend.Gui Gui) : GfxPresentation(ClearColor);
-public record GfxDirectXPresentation(Color ClearColor, nint Handle, GfxFormat Format, uint Width, uint Height) : GfxPresentation(ClearColor);
+public record GfxPresentation();
+public record GfxSwapChainPresentation(Frontend.Gui Gui, bool EnableVerticalSync) : GfxPresentation();
+public record GfxDirectXPresentation(nint Handle, GfxFormat Format, uint Width, uint Height) : GfxPresentation();
 
 internal record GfxSwapChainSurface(VkSurfaceKhr Surface, VkExtent2D Extent);
 

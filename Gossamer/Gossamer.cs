@@ -214,7 +214,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             gui.Create();
 
             // 5. Create Gfx presenter (depends on Gui)
-            gfx.CreatePresenter(new GfxSwapChainPresentation(Color.Palettes.Nord.Nord11_Red, gui));
+            gfx.CreatePresenter(new GfxSwapChainPresentation(gui, EnableVerticalSync: false));
 
             RunBackend(gfx);
             RunFrontend(gui);
