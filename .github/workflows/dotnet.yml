@@ -1,0 +1,36 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: .NET
+
+on:
+  push:
+    branches: [ "core" ]
+  pull_request:
+    branches: [ "core" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'true'
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x    
+    - name: Build Shader Compiler
+      run: dotnet build Gossamer.GfxCompiler/Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
+    - name: Build Shaders
+      run: |
+        chmod +x dxc
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(readlink --canonicalize .)
+        ../Gossamer.GfxCompiler ../../../../../Gossamer/Backend/Shaders ../../../../../Gossamer/Backend/Shaders/built-in.shaders
+      working-directory: Gossamer.GfxCompiler/bin/x64/Release/External
+    - name: Build
+      run: dotnet build Gossamer.sln /p:Configuration=Debug /p:Platform=x64
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
