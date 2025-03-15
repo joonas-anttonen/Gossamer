@@ -2,15 +2,24 @@
 
 ## Build
 
+Building this project from scratch is a 3-step process: build the shader compiler, built the shaders, and build the project.\
+First step is only required if changes have been made to the shader compiler.\
+Second step is only required if changes have been made to the shaders.
+
+All steps are implemented as tasks in vscode but command line work just as well, even faster.
+
 ### Build the shader compiler
 
 ```PowerShell
 dotnet build Gossamer.GfxCompiler/Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
 ```
 
-### Compile built-in shaders
+### Compile the built-in shaders
 
-Depends on the shader compiler.
+Requires the shader compiler to be built.
+
+> Linux: By default, dxc doesn't have execution permission and can't find libdxcompiler when executed.\
+> Run `chmod +x Gossamer.GfxCompiler/bin/x64/Release/External/dxc && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(readlink --canonicalize Gossamer.GfxCompiler/bin/x64/Release/External)` for a quick fix.
 
 Task `Compile Shaders` or
 
@@ -20,7 +29,7 @@ Gossamer.GfxCompiler/bin/x64/Release/Gossamer.GfxCompiler ../../../../Gossamer/B
 
 ### Build the project
 
-Depends on the compiled shaders.
+Requires the compiled shaders.
 
 Task `Build` or
 
