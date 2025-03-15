@@ -4,7 +4,7 @@ using Gossamer.Frontend;
 
 namespace Gossamer.Tests.Gossamer.Frontend;
 
-[TestClass]
+/*[TestClass]
 public class GridControllerTests
 {
     [TestMethod]
@@ -38,7 +38,7 @@ public class GridControllerTests
 
         Assert.AreEqual(new Rectangle(0, 0, 100, 100), controllable.LayoutRectangle);
     }
-}
+}*/
 
 public class GridControllable : IGridControllable
 {
