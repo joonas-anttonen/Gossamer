@@ -24,12 +24,11 @@ jobs:
         dotnet-version: 9.0.x    
     - name: Build Shader Compiler
       run: dotnet build Gossamer.GfxCompiler/Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
-    - name: Update DXC permissions
-      run: chmod +x Gossamer.GfxCompiler/bin/x64/Release/External/dxc
-    - name: Update LD_LIBRARY_PATH for DXC
-      run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(readlink --canonicalize Gossamer.GfxCompiler/bin/x64/Release/External)
     - name: Build Shaders
-      run: ../Gossamer.GfxCompiler ../../../../../Gossamer/Backend/Shaders ../../../../../Gossamer/Backend/Shaders/built-in.shaders
+      run: |
+        chmod +x Gossamer.GfxCompiler/bin/x64/Release/External/dxc
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(readlink --canonicalize Gossamer.GfxCompiler/bin/x64/Release/External)
+        ../Gossamer.GfxCompiler ../../../../../Gossamer/Backend/Shaders ../../../../../Gossamer/Backend/Shaders/built-in.shaders
       working-directory: Gossamer.GfxCompiler/bin/x64/Release/External
     - name: Build
       run: dotnet build Gossamer.sln /p:Configuration=Debug /p:Platform=x64
