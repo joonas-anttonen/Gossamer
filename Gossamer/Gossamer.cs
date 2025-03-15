@@ -187,13 +187,14 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             // Set the current directory to the directory of the executable
             Directory.SetCurrentDirectory(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location!)!);
 
-            logger.Debug($"OS: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
-            logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
-            logger.Debug($"Working directory: {Directory.GetCurrentDirectory()}");
-
-            // Debug log threading information
-            logger.Debug("Frontend thread = " + frontendThreadId);
-            logger.Debug("Backend thread = " + backendThreadId);
+            if (parameters.EnableDebugging)
+            {
+                logger.Debug($"OS: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
+                logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
+                logger.Debug($"Working directory: {Directory.GetCurrentDirectory()}");
+                logger.Debug($"Frontend = {frontendThreadId}");
+                logger.Debug($"Backend = {backendThreadId}");
+            }
 
             // 1. Create Gfx
             using Gfx gfx = new(new GfxApiParameters(
