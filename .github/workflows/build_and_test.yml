@@ -38,4 +38,4 @@ jobs:
 
     - name: Test
       run: |
-        dotnet test Gossamer.Tests/Gossamer.Tests.csproj --no-build --verbosity normal
+        dotnet test Gossamer.Tests/Gossamer.Tests.csproj /p:Configuration=Debug /p:Platform=x64 --no-build --verbosity normal
