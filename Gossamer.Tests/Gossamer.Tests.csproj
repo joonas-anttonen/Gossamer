@@ -5,9 +5,11 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    
-    <Platforms>x64</Platforms>
 
+    <!-- This sets defaults, needed for tooling (e.g. Intellisense) to understand what to build --> 
+    <Platforms>x64</Platforms>
+    <Configurations>Debug;Release</Configurations>
+  
     <!-- Get rid of the "netX.X" in the output path -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>

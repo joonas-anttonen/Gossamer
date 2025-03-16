@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
+    <!-- This sets defaults, needed for tooling (e.g. Intellisense) to understand what to build -->
     <Platforms>x64</Platforms>
     <Configurations>Debug;Release;Run</Configurations>
 

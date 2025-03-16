@@ -21,14 +21,21 @@ jobs:
         dotnet-version: 9.0.x    
 
     - name: Build Shader Compiler
-      run: dotnet build Gossamer.GfxCompiler/Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
+      run: |
+        dotnet build Gossamer.GfxCompiler/Gossamer.GfxCompiler.csproj /p:Configuration=Release /p:Platform=x64
+
     - name: Build Shaders
+      working-directory: Gossamer.GfxCompiler/bin/x64/Release/External # So that we can find the shader compiler
       run: | # On Linux, DXC needs execution permission and LD_LIBRARY_PATH so that it can find libdxcompiler.so
         chmod +x dxc
         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(readlink --canonicalize .)
         ../Gossamer.GfxCompiler ../../../../../Gossamer/Backend/Shaders ../../../../../Gossamer/Backend/Shaders/built-in.shaders
-      working-directory: Gossamer.GfxCompiler/bin/x64/Release/External
+
     - name: Build
-      run: dotnet build Gossamer.sln /p:Configuration=Debug /p:Platform=x64
+      run: |
+        dotnet build Gossamer/Gossamer.csproj /p:Configuration=Debug /p:Platform=x64
+        dotnet build Gossamer.Tests/Gossamer.Tests.csproj /p:Configuration=Debug /p:Platform=x64
+
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      run: |
+        dotnet test Gossamer.Tests/Gossamer.Tests.csproj --no-build --verbosity normal

@@ -15,15 +15,24 @@
 			]
 		},
 		{
-			"label": "Compile Shaders",
-			"detail": "Compiles the shaders in the Backend/Shaders folder",
+			"label": "Test",
+			"detail": "Test the project",
 			"problemMatcher": "$msCompile",
-			"type": "shell",
-			"command": "${workspaceFolder}/Gossamer.GfxCompiler/bin/x64/Release/Gossamer.GfxCompiler.exe",
+			"type": "process",
+			"command": "dotnet",
 			"args": [
-				"${workspaceFolder}/Gossamer/Backend/Shaders",
-				"${workspaceFolder}/Gossamer/Backend/Shaders/built-in.shaders"
+				"test",
+				"${workspaceFolder}/Gossamer.Tests/Gossamer.Tests.csproj",
+				"/p:Configuration=Debug",
+				"/p:Platform=x64",
 			]
+		},
+		{
+			"label": "Build and Test",
+			"detail": "Builds and tests the project in debug mode",
+			"problemMatcher": "$msCompile",
+			"dependsOrder": "sequence",
+			"dependsOn": ["Build", "Test"]
 		},
 		{
 			"label": "Run",
@@ -38,6 +47,17 @@
 				"${workspaceFolder}/Gossamer/Gossamer.csproj",
 				"/p:Configuration=Run",
 				"/p:Platform=x64",
+			]
+		},
+		{
+			"label": "Compile Shaders",
+			"detail": "Compiles the shaders in the Backend/Shaders folder",
+			"problemMatcher": "$msCompile",
+			"type": "shell",
+			"command": "${workspaceFolder}/Gossamer.GfxCompiler/bin/x64/Release/Gossamer.GfxCompiler.exe",
+			"args": [
+				"${workspaceFolder}/Gossamer/Backend/Shaders",
+				"${workspaceFolder}/Gossamer/Backend/Shaders/built-in.shaders"
 			]
 		}
 	]
