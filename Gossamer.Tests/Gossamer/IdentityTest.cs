@@ -4,148 +4,69 @@ namespace Gossamer.Tests.Gossamer;
 public class IdentityTest
 {
     [TestMethod]
-    public void Create_WithName_ShouldReturnIdentityWithName()
+    public void Identity_Create()
     {
-        // Arrange
         string name = "TestName";
-
-        // Act
         Identity identity = Identity.Create(name);
-
-        // Assert
         Assert.AreEqual(name, identity.Name);
         Assert.AreNotEqual(Guid.Empty, identity.Id);
-    }
 
-    [TestMethod]
-    public void Create_WithoutName_ShouldReturnIdentityWithIdAsName()
-    {
-        // Act
-        Identity identity = Identity.Create();
-
-        // Assert
+        identity = Identity.Create();
         Assert.AreEqual(identity.Id.ToString(), identity.Name);
         Assert.AreNotEqual(Guid.Empty, identity.Id);
     }
 
     [TestMethod]
-    public void ToString_WithName_ShouldReturnName()
+    public void Identity_ToString()
     {
-        // Arrange
         string name = "TestName";
         Identity identity = Identity.Create(name);
-
-        // Act
         string result = identity.ToString();
-
-        // Assert
         Assert.AreEqual(name, result);
-    }
 
-    [TestMethod]
-    public void ToString_WithoutName_ShouldReturnId()
-    {
-        // Act
-        Identity identity = Identity.Create();
-
-        // Assert
+        identity = Identity.Create();
         Assert.AreEqual(identity.Id.ToString(), identity.ToString());
     }
 
     [TestMethod]
-    public void Equals_WithSameId_ShouldReturnTrue()
+    public void Identity_Equals()
     {
-        // Arrange
         Identity identity1 = Identity.Create();
-        Identity identity2 = new Identity(identity1.Id, "TestName");
-
-        // Act
+        Identity identity2 = new(identity1.Id, "TestName");
         bool result = identity1.Equals(identity2);
+        Assert.IsTrue(result);
 
-        // Assert
+        identity1 = Identity.Create();
+        identity2 = Identity.Create();
+        result = identity1.Equals(identity2);
+        Assert.IsFalse(result);
+
+        Identity identity = Identity.Create();
+        result = identity.Equals(null);
+        Assert.IsFalse(result);
+
+        identity = Identity.Create();
+        result = identity.Equals(new object());
+        Assert.IsFalse(result);
+
+        identity = Identity.Create();
+        result = identity.Equals(identity);
         Assert.IsTrue(result);
     }
 
     [TestMethod]
-    public void Equals_WithDifferentId_ShouldReturnFalse()
+    public void Identity_GetHashCode()
     {
-        // Arrange
         Identity identity1 = Identity.Create();
-        Identity identity2 = Identity.Create();
-
-        // Act
-        bool result = identity1.Equals(identity2);
-
-        // Assert
-        Assert.IsFalse(result);
-    }
-
-    [TestMethod]
-    public void GetHashCode_WithSameId_ShouldReturnSameHashCode()
-    {
-        // Arrange
-        Identity identity1 = Identity.Create();
-        Identity identity2 = new Identity(identity1.Id, "TestName");
-
-        // Act
+        Identity identity2 = new(identity1.Id, "TestName");
         int hashCode1 = identity1.GetHashCode();
         int hashCode2 = identity2.GetHashCode();
-
-        // Assert
         Assert.AreEqual(hashCode1, hashCode2);
-    }
 
-    [TestMethod]
-    public void GetHashCode_WithDifferentId_ShouldReturnDifferentHashCode()
-    {
-        // Arrange
-        Identity identity1 = Identity.Create();
-        Identity identity2 = Identity.Create();
-
-        // Act
-        int hashCode1 = identity1.GetHashCode();
-        int hashCode2 = identity2.GetHashCode();
-
-        // Assert
+        identity1 = Identity.Create();
+        identity2 = Identity.Create();
+        hashCode1 = identity1.GetHashCode();
+        hashCode2 = identity2.GetHashCode();
         Assert.AreNotEqual(hashCode1, hashCode2);
-    }
-
-    [TestMethod]
-    public void Equals_WithNull_ShouldReturnFalse()
-    {
-        // Arrange
-        Identity identity = Identity.Create();
-
-        // Act
-        bool result = identity.Equals(null);
-
-        // Assert
-        Assert.IsFalse(result);
-    }
-
-    [TestMethod]
-    public void Equals_WithDifferentType_ShouldReturnFalse()
-    {
-        // Arrange
-        Identity identity = Identity.Create();
-
-        // Act
-        bool result = identity.Equals(new object());
-
-        // Assert
-        Assert.IsFalse(result);
-    }
-
-    [TestMethod]
-    public void Equals_WithSameIdentity_ShouldReturnTrue()
-    {
-        // Arrange
-        Identity identity = Identity.Create();
-
-        // Act
-        bool result = identity.Equals(identity);
-
-        // Assert
-        Assert.IsTrue(result);
     }
 }

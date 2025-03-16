@@ -10,20 +10,16 @@ public class RingBufferTest
     const int TestCapacity = 3;
 
     [TestMethod]
-    public void TestConstructor()
+    public void RingBuffer_Construct()
     {
         var ringBuffer = new RingBuffer<int>(TestCapacity);
         Assert.AreEqual(TestCapacity, ringBuffer.Capacity);
-    }
 
-    [TestMethod]
-    public void TestConstructorOutOfRangeCapacity()
-    {
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => new RingBuffer<int>(0));
     }
 
     [TestMethod]
-    public void TestPushAndCount()
+    public void RingBuffer_Push()
     {
         // Arrange
         var ringBuffer = new RingBuffer<int>(TestCapacity);
@@ -44,7 +40,7 @@ public class RingBufferTest
     }
 
     [TestMethod]
-    public void TestPushOverCapacity()
+    public void RingBuffer_Push_OverCapacity()
     {
         // Arrange
         var ringBuffer = new RingBuffer<int>(TestCapacity);
@@ -63,7 +59,7 @@ public class RingBufferTest
     }
 
     [TestMethod]
-    public void TestClear()
+    public void RingBuffer_Clear()
     {
         // Arrange
         var ringBuffer = new RingBuffer<int>(TestCapacity);
@@ -85,7 +81,7 @@ public class RingBufferTest
     }
 
     [TestMethod]
-    public void TestIndexer()
+    public void RingBuffer_Indexer()
     {
         var ringBuffer = new RingBuffer<int>(3);
         ringBuffer.Push(1);
@@ -98,7 +94,7 @@ public class RingBufferTest
     }
 
     [TestMethod]
-    public void TestCalculateMinMaxMean()
+    public void RingBuffer_CalculateMinMaxMean()
     {
         var ringBuffer = new RingBuffer<int>(3);
         ringBuffer.Push(1);
@@ -132,7 +128,7 @@ public class RingBufferTest
     static readonly int[] enumerationExpected = [1, 2, 3];
 
     [TestMethod]
-    public void TestEnumeration()
+    public void RingBuffer_Enumeration()
     {
         var ringBuffer = new RingBuffer<int>(3);
         ringBuffer.Push(1);
@@ -152,6 +148,5 @@ public class RingBufferTest
             Assert.AreEqual(enumerationExpected[i], plainEnumerable.Current);
             Assert.AreEqual(enumerationExpected[i], genericEnumerable.Current);
         }
-
     }
 }

@@ -1,5 +1,3 @@
-using System.Numerics;
-
 using Gossamer.Utilities;
 
 namespace Gossamer.Tests.Gossamer.Utilities;
@@ -8,85 +6,85 @@ namespace Gossamer.Tests.Gossamer.Utilities;
 public class MathUtilitiesTest
 {
     [TestMethod]
-    public void TestDotProduct()
+    public void MathUtilities_DotProduct()
     {
-        Vector3 a = new Vector3(1, 2, 3);
-        Vector3 b = new Vector3(4, 5, 6);
+        Vector3 a = new(1, 2, 3);
+        Vector3 b = new(4, 5, 6);
         float result = MathUtilities.Dot(a, b);
         Assert.AreEqual(32, result);
     }
 
     [TestMethod]
-    public void TestCrossProduct()
+    public void MathUtilities_CrossProduct()
     {
-        Vector3 a = new Vector3(1, 2, 3);
-        Vector3 b = new Vector3(4, 5, 6);
+        Vector3 a = new(1, 2, 3);
+        Vector3 b = new(4, 5, 6);
         Vector3 result = MathUtilities.Cross(a, b);
         Assert.AreEqual(new Vector3(-3, 6, -3), result);
     }
 
     [TestMethod]
-    public void TestNormalize()
+    public void MathUtilities_Normalize()
     {
-        Vector3 v = new Vector3(1, 2, 3);
+        Vector3 v = new(1, 2, 3);
         Vector3 result = MathUtilities.Normalize(v);
         Assert.AreEqual(new Vector3(0.26726124f, 0.5345225f, 0.8017837f), result);
     }
 
     [TestMethod]
-    public void TestTransform()
+    public void MathUtilities_Transform()
     {
-        Vector3 v = new Vector3(1, 2, 3);
+        Vector3 v = new(1, 2, 3);
         Matrix4x4 m = Matrix4x4.Identity;
         Vector3 result = MathUtilities.Transform(v, m);
         Assert.AreEqual(v, result);
     }
 
     [TestMethod]
-    public void TestTransformNormal()
+    public void MathUtilities_TransformNormal()
     {
-        Vector3 v = new Vector3(1, 2, 3);
+        Vector3 v = new(1, 2, 3);
         Matrix4x4 m = Matrix4x4.Identity;
         Vector3 result = MathUtilities.TransformNormal(v, m);
         Assert.AreEqual(v, result);
     }
 
     [TestMethod]
-    public void TestAngleBetweenVectors2D()
+    public void MathUtilities_AngleBetweenVectors2D()
     {
-        Vector2 a = new Vector2(1, 0);
-        Vector2 b = new Vector2(0, 1);
+        Vector2 a = new(1, 0);
+        Vector2 b = new(0, 1);
         float result = MathUtilities.Angle(a, b);
         Assert.AreEqual(MathF.PI / 2, result);
     }
 
     [TestMethod]
-    public void TestAngleBetweenVectors3D()
+    public void MathUtilities_AngleBetweenVectors3D()
     {
-        Vector3 a = new Vector3(1, 0, 0);
-        Vector3 b = new Vector3(0, 1, 0);
+        Vector3 a = new(1, 0, 0);
+        Vector3 b = new(0, 1, 0);
         float result = MathUtilities.Angle(a, b);
         Assert.AreEqual(MathF.PI / 2, result);
     }
 
     [TestMethod]
-    public void TestReciprocalVector2()
+    public void MathUtilities_ReciprocalVector2()
     {
-        Vector2 v = new Vector2(2, 4);
+        Vector2 v = new(2, 4);
         Vector2 result = MathUtilities.Reciprocal(v);
         Assert.AreEqual(new Vector2(0.5f, 0.25f), result);
     }
 
     [TestMethod]
-    public void TestReciprocalVector3()
+    public void MathUtilities_ReciprocalVector3()
     {
-        Vector3 v = new Vector3(2, 4, 8);
+        Vector3 v = new(2, 4, 8);
         Vector3 result = MathUtilities.Reciprocal(v);
         Assert.AreEqual(new Vector3(0.5f, 0.25f, 0.125f), result);
     }
 
     [TestMethod]
-    public void TestInvertMatrix()
+    public void MathUtilities_InvertMatrix()
     {
         Matrix4x4 m = Matrix4x4.Identity;
         Matrix4x4 result = MathUtilities.Invert(m);
@@ -94,25 +92,25 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestAlmostEqualVector3()
+    public void MathUtilities_AlmostEqualVector3()
     {
-        Vector3 a = new Vector3(1, 2, 3);
-        Vector3 b = new Vector3(1.000001f, 2.000001f, 3.000001f);
+        Vector3 a = new(1, 2, 3);
+        Vector3 b = new(1.000001f, 2.000001f, 3.000001f);
         bool result = MathUtilities.AlmostEqual(a, b);
         Assert.IsTrue(result);
     }
 
     [TestMethod]
-    public void TestAlmostEqualVector2()
+    public void MathUtilities_AlmostEqualVector2()
     {
-        Vector2 a = new Vector2(1, 2);
-        Vector2 b = new Vector2(1.000001f, 2.000001f);
+        Vector2 a = new(1, 2);
+        Vector2 b = new(1.000001f, 2.000001f);
         bool result = MathUtilities.AlmostEqual(a, b);
         Assert.IsTrue(result);
     }
 
     [TestMethod]
-    public void TestAlmostEqualFloat()
+    public void MathUtilities_AlmostEqualFloat()
     {
         float a = 1.000001f;
         float b = 1.000002f;
@@ -122,7 +120,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestFrac()
+    public void MathUtilities_Frac()
     {
         float v = 1.5f;
         float result = MathUtilities.Frac(v);
@@ -130,7 +128,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestAlign()
+    public void MathUtilities_Align()
     {
         uint value = 5;
         uint alignment = 4;
@@ -139,7 +137,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestRadians()
+    public void MathUtilities_Radians()
     {
         float degrees = 180;
         float result = MathUtilities.Radians(degrees);
@@ -147,7 +145,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestDegrees()
+    public void MathUtilities_Degrees()
     {
         float radians = MathF.PI;
         float result = MathUtilities.Degrees(radians);
@@ -155,7 +153,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestClampInt()
+    public void MathUtilities_ClampInt()
     {
         int value = 5;
         int min = 1;
@@ -165,7 +163,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestClampFloat()
+    public void MathUtilities_ClampFloat()
     {
         float value = 5.5f;
         float min = 1.0f;
@@ -175,7 +173,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestWrapInt()
+    public void MathUtilities_WrapInt()
     {
         int value = 12;
         int min = 0;
@@ -185,7 +183,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestWrapIntWithNegativeValue()
+    public void MathUtilities_WrapIntWithNegativeValue()
     {
         int value = -2;
         int min = 0;
@@ -195,7 +193,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestWrapIntWithInvalidRange()
+    public void MathUtilities_WrapIntWithInvalidRange()
     {
         int value = 12;
         int min = 10;
@@ -204,7 +202,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestWrapFloat()
+    public void MathUtilities_WrapFloat()
     {
         float value = 12.5f;
         float min = 0.0f;
@@ -214,7 +212,7 @@ public class MathUtilitiesTest
     }
 
     [TestMethod]
-    public void TestWrapFloatWithInverseRange()
+    public void MathUtilities_WrapFloatWithInverseRange()
     {
         float value = 2.5f;
         float min = 10.0f;

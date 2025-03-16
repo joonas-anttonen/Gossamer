@@ -108,6 +108,7 @@ public struct Color(float r, float g, float b, float a) : IEquatable<Color>
     public static readonly Color Black = new(0, 0, 0, 1);
     public static readonly Color Transparent = new(0, 0, 0, 0);
 
+    [ExcludeFromCodeCoverage]
     public static class Palettes
     {
         /// <summary>
@@ -153,7 +154,6 @@ public struct Color(float r, float g, float b, float a) : IEquatable<Color>
             public static readonly Color Nord15_Purple = new(0.7058824f, 0.5568628f, 0.6784314f);
         }
 
-        [ExcludeFromCodeCoverage]
         public static class Swedish
         {
             public static readonly Color HighlighterRed = new(0.9372549f, 0.34117648f, 0.46666667f);

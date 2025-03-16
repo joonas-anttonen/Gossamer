@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="System.Numerics" />
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 

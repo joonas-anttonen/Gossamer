@@ -1,179 +1,171 @@
-using System.Numerics;
-
 namespace Gossamer.Tests.Gossamer;
 
 [TestClass]
 public class TransformTests
 {
     [TestMethod]
-    public void Apply_ShouldReturnCorrectTransformedVector()
+    public void Transform_Apply()
     {
-        var translation = new Vector3(1, 2, 3);
-        var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transform = new Transform3D(translation, rotation);
+        Vector3 translation = new(1, 2, 3);
+        Quaternion rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transform = new(translation, rotation);
 
-        var vector = new Vector3(4, 5, 6);
-        var transformedVector = Transform3D.Transform(vector, transform);
+        Vector3 vector = new(4, 5, 6);
+        Vector3 transformedVector = Transform3D.Transform(vector, transform);
 
-        var expectedTransformedVector = Vector3.Transform(vector, rotation) + translation;
+        Vector3 expectedTransformedVector = Vector3.Transform(vector, rotation) + translation;
 
         Assert.AreEqual(expectedTransformedVector, transformedVector);
     }
 
     [TestMethod]
-    public void ApplyNormal_ShouldReturnCorrectTransformedNormal()
+    public void Transform_ApplyNormal()
     {
-        var translation = new Vector3(1, 2, 3);
-        var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transform = new Transform3D(translation, rotation);
+        Vector3 translation = new(1, 2, 3);
+        Quaternion rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transform = new(translation, rotation);
 
-        var normal = new Vector3(4, 5, 6);
-        var transformedNormal = Transform3D.TransformNormal(normal, transform);
+        Vector3 normal = new(4, 5, 6);
+        Vector3 transformedNormal = Transform3D.TransformNormal(normal, transform);
 
-        var expectedTransformedNormal = Vector3.Transform(normal, rotation);
+        Vector3 expectedTransformedNormal = Vector3.Transform(normal, rotation);
 
         Assert.AreEqual(expectedTransformedNormal, transformedNormal);
     }
 
     [TestMethod]
-    public void Constructor_WithTranslationAndRotation_ShouldInitializeCorrectly()
+    public void Transform_Construct()
     {
-        var translation = new Vector3(1, 2, 3);
-        var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-
-        var transform = new Transform3D(translation, rotation);
+        Vector3 translation = new(1, 2, 3);
+        Quaternion rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transform = new(translation, rotation);
 
         Assert.AreEqual(translation, transform.Translation);
         Assert.AreEqual(rotation, transform.Rotation);
-    }
 
-    [TestMethod]
-    public void Constructor_WithTranslation_ShouldInitializeWithIdentityRotation()
-    {
-        var translation = new Vector3(1, 2, 3);
-
-        var transform = new Transform3D(translation);
+        translation = new Vector3(1, 2, 3);
+        transform = new Transform3D(translation);
 
         Assert.AreEqual(translation, transform.Translation);
         Assert.AreEqual(Quaternion.Identity, transform.Rotation);
     }
 
     [TestMethod]
-    public void ToMatrix_ShouldReturnCorrectMatrix()
+    public void Transform_ToMatrix()
     {
-        var translation = new Vector3(1, 2, 3);
-        var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transform = new Transform3D(translation, rotation);
+        Vector3 translation = new(1, 2, 3);
+        Quaternion rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transform = new(translation, rotation);
 
-        var matrix = transform.ToMatrix();
+        Matrix4x4 matrix = transform.ToMatrix();
 
-        var expectedMatrix = Matrix4x4.CreateFromQuaternion(rotation);
+        Matrix4x4 expectedMatrix = Matrix4x4.CreateFromQuaternion(rotation);
         expectedMatrix.Translation = translation;
 
         Assert.AreEqual(expectedMatrix, matrix);
     }
 
     [TestMethod]
-    public void Inverse_ShouldReturnCorrectInverseTransform()
+    public void Transform_Inverse()
     {
-        var translation = new Vector3(1, 2, 3);
-        var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transform = new Transform3D(translation, rotation);
+        Vector3 translation = new(1, 2, 3);
+        Quaternion rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transform = new(translation, rotation);
 
-        var inverseTransform = transform.Inverse();
+        Transform3D inverseTransform = transform.Inverse();
 
-        var expectedTranslation = Vector3.Transform(-translation, Quaternion.Inverse(rotation));
-        var expectedRotation = Quaternion.Inverse(rotation);
+        Vector3 expectedTranslation = Vector3.Transform(-translation, Quaternion.Inverse(rotation));
+        Quaternion expectedRotation = Quaternion.Inverse(rotation);
 
         Assert.AreEqual(expectedTranslation, inverseTransform.Translation);
         Assert.AreEqual(expectedRotation, inverseTransform.Rotation);
     }
 
     [TestMethod]
-    public void Interpolate_ShouldReturnCorrectInterpolatedTransform()
+    public void Transform_Interpolate()
     {
-        var translationA = new Vector3(1, 2, 3);
-        var rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transformA = new Transform3D(translationA, rotationA);
+        Vector3 translationA = new(1, 2, 3);
+        Quaternion rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transformA = new(translationA, rotationA);
 
-        var translationB = new Vector3(4, 5, 6);
-        var rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
-        var transformB = new Transform3D(translationB, rotationB);
+        Vector3 translationB = new(4, 5, 6);
+        Quaternion rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
+        Transform3D transformB = new(translationB, rotationB);
 
-        var t = 0.5f;
-        var interpolatedTransform = Transform3D.Interpolate(transformA, transformB, t);
+        float t = 0.5f;
+        Transform3D interpolatedTransform = Transform3D.Interpolate(transformA, transformB, t);
 
-        var expectedTranslation = Vector3.Lerp(translationA, translationB, t);
-        var expectedRotation = Quaternion.Slerp(rotationA, rotationB, t);
+        Vector3 expectedTranslation = Vector3.Lerp(translationA, translationB, t);
+        Quaternion expectedRotation = Quaternion.Slerp(rotationA, rotationB, t);
 
         Assert.AreEqual(expectedTranslation, interpolatedTransform.Translation);
         Assert.AreEqual(expectedRotation, interpolatedTransform.Rotation);
     }
 
     [TestMethod]
-    public void Multiply_ShouldReturnCorrectMultipliedTransform()
+    public void Transform_Multiply()
     {
-        var translationA = new Vector3(1, 2, 3);
-        var rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transformA = new Transform3D(translationA, rotationA);
+        Vector3 translationA = new(1, 2, 3);
+        Quaternion rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transformA = new(translationA, rotationA);
 
-        var translationB = new Vector3(4, 5, 6);
-        var rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
-        var transformB = new Transform3D(translationB, rotationB);
+        Vector3 translationB = new(4, 5, 6);
+        Quaternion rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
+        Transform3D transformB = new(translationB, rotationB);
 
-        var multipliedTransform = Transform3D.Multiply(transformA, transformB);
+        Transform3D multipliedTransform = Transform3D.Multiply(transformA, transformB);
 
-        var expectedTranslation = Vector3.Transform(translationB, rotationA) + translationA;
-        var expectedRotation = rotationA * rotationB;
+        Vector3 expectedTranslation = Vector3.Transform(translationB, rotationA) + translationA;
+        Quaternion expectedRotation = rotationA * rotationB;
 
         Assert.AreEqual(expectedTranslation, multipliedTransform.Translation);
         Assert.AreEqual(expectedRotation, multipliedTransform.Rotation);
     }
 
     [TestMethod]
-    public void OperatorMultiply_ShouldReturnCorrectMultipliedTransform()
+    public void Transform_OperatorMultiply()
     {
-        var translationA = new Vector3(1, 2, 3);
-        var rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transformA = new Transform3D(translationA, rotationA);
+        Vector3 translationA = new(1, 2, 3);
+        Quaternion rotationA = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transformA = new(translationA, rotationA);
 
-        var translationB = new Vector3(4, 5, 6);
-        var rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
-        var transformB = new Transform3D(translationB, rotationB);
+        Vector3 translationB = new(4, 5, 6);
+        Quaternion rotationB = Quaternion.CreateFromYawPitchRoll(0.4f, 0.5f, 0.6f);
+        Transform3D transformB = new(translationB, rotationB);
 
-        var multipliedTransform = transformA * transformB;
+        Transform3D multipliedTransform = transformA * transformB;
 
-        var expectedTranslation = Vector3.Transform(translationB, rotationA) + translationA;
-        var expectedRotation = rotationA * rotationB;
+        Vector3 expectedTranslation = Vector3.Transform(translationB, rotationA) + translationA;
+        Quaternion expectedRotation = rotationA * rotationB;
 
         Assert.AreEqual(expectedTranslation, multipliedTransform.Translation);
         Assert.AreEqual(expectedRotation, multipliedTransform.Rotation);
     }
 
     [TestMethod]
-    public void IdentityTransform_ShouldHaveZeroTranslationAndIdentityRotation()
+    public void Transform_Identity()
     {
-        var transform = new Transform3D(Vector3.Zero);
+        Transform3D transform = new(Vector3.Zero);
 
         Assert.AreEqual(Vector3.Zero, transform.Translation);
         Assert.AreEqual(Quaternion.Identity, transform.Rotation);
     }
 
     [TestMethod]
-    public void TransformWithZeroTranslation_ShouldHaveCorrectRotation()
+    public void Transform_IdentityTranslation()
     {
-        var rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
-        var transform = new Transform3D(Vector3.Zero, rotation);
+        Quaternion rotation = Quaternion.CreateFromYawPitchRoll(0.1f, 0.2f, 0.3f);
+        Transform3D transform = new(Vector3.Zero, rotation);
 
         Assert.AreEqual(Vector3.Zero, transform.Translation);
         Assert.AreEqual(rotation, transform.Rotation);
     }
 
     [TestMethod]
-    public void TransformWithIdentityRotation_ShouldHaveCorrectTranslation()
+    public void Transform_IdentityRotation()
     {
-        var translation = new Vector3(1, 2, 3);
-        var transform = new Transform3D(translation, Quaternion.Identity);
+        Vector3 translation = new(1, 2, 3);
+        Transform3D transform = new(translation, Quaternion.Identity);
 
         Assert.AreEqual(translation, transform.Translation);
         Assert.AreEqual(Quaternion.Identity, transform.Rotation);

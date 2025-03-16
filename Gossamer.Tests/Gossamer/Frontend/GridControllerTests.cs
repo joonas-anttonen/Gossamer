@@ -1,5 +1,3 @@
-using System.Numerics;
-
 using Gossamer.Frontend;
 
 namespace Gossamer.Tests.Gossamer.Frontend;
