@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
 
     <Platforms>x64</Platforms>
-    <Configurations>Debug;Release</Configurations>
+    <Configurations>Debug;Release;Run</Configurations>
 
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     
@@ -16,6 +16,12 @@
 
     <!-- Get rid of the "netX.X" in the output path -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <!-- In Run configuration, define the RUN constant and set the output type to Exe -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Run'">
+    <DefineConstants>RUN</DefineConstants>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <!-- References -->

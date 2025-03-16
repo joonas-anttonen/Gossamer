@@ -3,13 +3,13 @@
 	"tasks": [
 		{
 			"label": "Build",
-			"detail": "Builds the solution in debug mode",
+			"detail": "Builds the project in debug mode",
 			"problemMatcher": "$msCompile",
 			"type": "process",
 			"command": "dotnet",
 			"args": [
 				"build",
-				"${workspaceFolder}/Gossamer.sln",
+				"${workspaceFolder}/Gossamer/Gossamer.csproj",
 				"/p:Configuration=Debug",
 				"/p:Platform=x64",
 			]
@@ -23,6 +23,21 @@
 			"args": [
 				"${workspaceFolder}/Gossamer/Backend/Shaders",
 				"${workspaceFolder}/Gossamer/Backend/Shaders/built-in.shaders"
+			]
+		},
+		{
+			"label": "Run",
+			"detail": "Runs the project in debug mode",
+			"problemMatcher": "$msCompile",
+			"type": "process",
+			"command": "dotnet",
+			"args": [
+				"run",
+				"--debug",
+				"--project",
+				"${workspaceFolder}/Gossamer/Gossamer.csproj",
+				"/p:Configuration=Run",
+				"/p:Platform=x64",
 			]
 		}
 	]

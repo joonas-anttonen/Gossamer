@@ -17,7 +17,6 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         /// <summary>
         /// Creates <see cref="ApplicationInfo"/> using <see cref="System.Reflection.Assembly.GetCallingAssembly"/>.
         /// </summary>
-        /// <returns></returns>
         public static ApplicationInfo FromCallingAssembly()
         {
             var assembly = System.Reflection.Assembly.GetCallingAssembly();
@@ -66,7 +65,6 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
     int syncOperationCount;
     readonly ConcurrentObjectPool<SyncEntry> syncEntryPool = new(16);
     readonly ConcurrentQueue<SyncEntry> frontendSyncQueue = [];
-    readonly ConcurrentQueue<SyncEntry> backendSyncQueue = [];
 
     Gfx? gfx;
     Gui? gui;
@@ -93,6 +91,13 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
     public static Gossamer Instance
     {
         get => instance ?? throw new InvalidOperationException("Gossamer has not been initialized.");
+    }
+
+    static int Main(string[] args)
+    {
+        var parameters = Parameters.FromArgs(args);
+        using var gossamer = new Gossamer(parameters);
+        return gossamer.Run();
     }
 
     public Gossamer(Parameters parameters, ApplicationInfo? appInfo = default)
