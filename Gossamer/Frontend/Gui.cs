@@ -268,7 +268,7 @@ public class Gui : IDisposable
         glfwGetMonitorPhysicalSize(monitor, out int mpw, out int mph);
         GlfwVideoMode monitorVideoMode = glfwGetVideoMode(monitor);
 
-        Vector2 windowSize = parameters.Size ?? new Vector2(Math.Min(2560, (int)(monitorVideoMode.Width * 0.75f)), Math.Min(1440, (int)(monitorVideoMode.Height * 0.75f)));
+        Vector2 windowSize = parameters.Size ?? new Vector2(Math.Min(1920, (int)(monitorVideoMode.Width * 0.75f)), Math.Min(1080, (int)(monitorVideoMode.Height * 0.75f)));
         Vector2 windowPosition = parameters.Position ?? new Vector2(mx + (int)((mw - windowSize.X) / 2.0f), my + (int)((mh - windowSize.Y) / 2.0f));
 
         glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, "Gossamer");
@@ -348,7 +348,7 @@ public class Gui : IDisposable
 
         if (!isDamaged)
         {
-            return;
+            //return;
         }
 
         rootElement.UpdateCore(0, 0);
@@ -373,7 +373,7 @@ public class Gui : IDisposable
 
             cmdBuffer.FillRectangle(new(0, 0), new(ww, wh), parameters.ColorOfBackground);
 
-            //Color colorOfFrame = parameters.ColorOfFrame;
+            Color colorOfFrame = parameters.ColorOfFrame;
 
             rootElement.RenderCore(cmdBuffer);
 
@@ -381,71 +381,39 @@ public class Gui : IDisposable
             {
                 if (mode == FrameMode.Full)
                 {
-                    //cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(sizeOfFrame.X, wh), colorOfFrame);
-                    //cmdBuffer.FillRectangle(new Vector2(ww - sizeOfFrame.Z, 0), new Vector2(ww, wh), colorOfFrame);
-                    //cmdBuffer.FillRectangle(new Vector2(0, wh - sizeOfFrame.W), new Vector2(ww, wh), colorOfFrame);
+                    cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(sizeOfFrame.X, wh), colorOfFrame);
+                    cmdBuffer.FillRectangle(new Vector2(ww - sizeOfFrame.Z, 0), new Vector2(ww, wh), colorOfFrame);
+                    cmdBuffer.FillRectangle(new Vector2(0, wh - sizeOfFrame.W), new Vector2(ww, wh), colorOfFrame);
                 }
 
-                //cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(ww, sizeOfFrame.Y), colorOfFrame);
+                cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(ww, sizeOfFrame.Y), colorOfFrame);
 
-                //cmdBuffer.FillRectangle(controlsCloseRect, mouseOnClose ? new Color(Color.SizzlingRed, 0.75f) : colorOfFrame);
-                //cmdBuffer.FillRectangle(controlsMaximizeRect, mouseOnMaximize ? new Color(Color.White, 0.5f) : colorOfFrame);
-                //cmdBuffer.FillRectangle(controlsMinimizeRect, mouseOnMinimize ? new Color(Color.White, 0.5f) : colorOfFrame);
-                //
-                //cmdBuffer.FillRectangle(controlsCloseIconRect, Color.White);
-                //cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
-                //cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
+                cmdBuffer.FillRectangle(controlsCloseRect, mouseOnClose ? Color.Palettes.Swedish.SizzlingRed.WithAlpha(0.75f) : colorOfFrame);
+                cmdBuffer.FillRectangle(controlsMaximizeRect, mouseOnMaximize ? Color.White.WithAlpha(0.5f) : colorOfFrame);
+                cmdBuffer.FillRectangle(controlsMinimizeRect, mouseOnMinimize ? Color.White.WithAlpha(0.5f) : colorOfFrame);
+                
+                cmdBuffer.FillRectangle(controlsCloseIconRect, Color.White);
+                cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
+                cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
-                //cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.UnpackRGB(0x1f1e25), gfx2D.GetBuiltInFont());
+                cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.ParseUInt(0x1f1e25), gfx2D.GetBuiltInFont());
             }
 
-            var font = gfx2D.GetBuiltInFont();
-            var statsText = $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\nCPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\nGPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
-            cmdBuffer.DrawText(statsText, new(5, sizeOfFrame.Y), Color.White, parameters.ColorOfBackground, font);
-
-            Vector2 textAvailableSize = new(MathF.Max(ww, 1600), MathF.Max(wh, 900));
-
             {
-                var textToTest = """
-                Gossamer::Run OS: Ubuntu 24.10 (X64)
-                Gossamer::Run Runtime: .NET 9.0.2 (linux-x64)
-                Gossamer::Run Working directory: /home/jant/projects/Gossamer/Gossamer.Benchmark/bin/x64/Debug/net9.0
-                Gossamer::Run Frontend thread = 1
-                Gossamer::Run Backend thread = 4
-                libdecor-gtk-WARNING: Failed to initialize GTK
-                Failed to load plugin 'libdecor-gtk.so': failed to init
-                No plugins found, falling back on no decorations
-                Gfx::EnumeratePhysicalDevices Available physical device: GfxPhysicalDevice { Type = Discrete, Id = 222e6fd6-92e8-664c-7e98-55367237f806, Name = NVIDIA GeForce RTX 4060 Ti, Driver = 570.344.1024, Api = 1.4.303 }
-                Gfx::EnumeratePhysicalDevices Available physical device: GfxPhysicalDevice { Type = Discrete, Id = 222e6fd6-92e8-664c-7e98-55367237f806, Name = NVIDIA GeForce RTX 4060 Ti, Driver = 570.344.1024, Api = 1.4.303 }
-                Gfx::EnumeratePhysicalDevices Available physical device: GfxPhysicalDevice { Type = Cpu, Id = 322e3432-382e-312d-7562-756e7475317e, Name = llvmpipe (LLVM 19.1.1, 256 bits), Driver = 0.0.1, Api = 1.3.289 }
-                Gfx::CreateVulkanDevice Selected physical device: GfxPhysicalDevice { Type = Discrete, Id = 222e6fd6-92e8-664c-7e98-55367237f806, Name = NVIDIA GeForce RTX 4060 Ti, Driver = 570.344.1024, Api = 1.4.303 }
-                Gui::CreateSurface GLFW error: [1000C] Wayland: The platform does not support setting the window opacity
-                Gui::CreateSurface Required instance extensions: 2
-                Gui::CreateSurface Required instance extension: VK_KHR_surface
-                Gui::CreateSurface Required instance extension: VK_KHR_wayland_surface
-                Vma::Allocate 7.69 MiB
-                Gfx::CreateDynamicMemoryBuffer Vertex, [2.00 MiB] [DEVICE_LOCAL, HOST_VISIBLE, HOST_COHERENT]
-                Gfx::CreateDynamicMemoryBuffer Index, [128.00 KiB] [DEVICE_LOCAL, HOST_VISIBLE, HOST_COHERENT]
-                Gfx::CreateDynamicMemoryBuffer Uniform, [64 B] [DEVICE_LOCAL, HOST_VISIBLE, HOST_COHERENT]
-                Vma::Allocate 32.00 MiB
-                Gfx::CreatePixelBuffer Rgba8 512x512 [1.00 MiB] [DEVICE_LOCAL]
-                Vma::Allocate 32.00 MiB
-                Gfx::CreateDynamicMemoryBuffer TransferSrc, [1.00 MiB] [HOST_VISIBLE, HOST_COHERENT]
-                Vma::Allocate 15.00 MiB
-                Gfx::CreatePixelBuffer Bgra8 2560x1440 [15.00 MiB] [DEVICE_LOCAL]
-                """;
+                Rectangle windowRect = new(sizeOfFrame.X, sizeOfFrame.Y, ww - sizeOfFrame.X, wh - sizeOfFrame.Y);
+
+                var statsText = 
+                    $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\n" +
+                    $"CPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\n" +
+                    $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
+                    $"2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
                 var textLayout = gfx2D.ComputeTextLayout(
-                    textToTest,
+                    statsText,
                     gfx2D.GetFontOrBuiltIn("CascadiaCode", 16),
-                    textAvailableSize,
+                    windowRect.Size,
                     wordWrap: true);
 
-                Rectangle layoutRect = new(0, 0, textLayout.Size.X, textLayout.Size.Y);
-                Rectangle windowRect = new(0, 0, ww, wh);
-                Rectangle layoutCentered = layoutRect.CenterOn(windowRect);
-                cmdBuffer.DrawText(textLayout, Vector2.Round(layoutCentered.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.95f), parameters.ColorOfBackground);
-                cmdBuffer.DrawRectangle(layoutCentered.Position, layoutCentered.Position + textLayout.Size, Color.Palettes.Nord.Nord14_Green);
-                //cmdBuffer.DrawRectangle(windowRect.Position, windowRect.Position + textAvailableSize, Color.HighlighterRed);
+                cmdBuffer.DrawText(textLayout, Vector2.Round(windowRect.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.95f), parameters.ColorOfBackground);
 
                 gfx2D.ReleaseTextLayout(textLayout);
             }
