@@ -1,8 +1,13 @@
 # Gossamer
 
+## Repository
+
+When cloning the repository, use the `--recurse-submodules` flag to ensure all submodules are cloned as well.
+Alternatively, run `git submodule update --init --recursive` after cloning.
+
 ## Build
 
-Building this project from scratch is a 3-step process: build the shader compiler, built the shaders, and build the project.\
+Building this project from scratch is a 3-step process: build the shader compiler, build the shaders, and build the project.\
 First step is only required if changes have been made to the shader compiler.\
 Second step is only required if changes have been made to the shaders.
 
