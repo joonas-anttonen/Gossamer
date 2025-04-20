@@ -8,6 +8,7 @@ public sealed class FontCollection : IDisposable
 
     bool isDisposed;
 
+    readonly Dictionary<string, (nint, int)> fontData = [];
     readonly Dictionary<FontKey, Font> fonts = [];
     readonly Font defaultFont;
 
@@ -16,7 +17,6 @@ public sealed class FontCollection : IDisposable
     /// <summary>
     /// Gets the built-in font.
     /// </summary>
-    /// <returns></returns>
     public Font GetBuiltInFont()
     {
         return defaultFont;
@@ -28,15 +28,35 @@ public sealed class FontCollection : IDisposable
     /// <param name="name"></param>
     /// <param name="verticalSize"></param>
     /// <param name="font"></param>
-    public bool TryGetFontOrDefault(string name, int verticalSize, out Font font)
+    public bool TryGetFontOrDefault(string name, int verticalSize, out Font? font)
     {
-        if (!fonts.TryGetValue(new(name, verticalSize), out font!))
+        if (!fonts.TryGetValue(new FontKey(name, verticalSize), out font))
         {
             font = GetBuiltInFont();
             return false;
         }
 
         return true;
+    }
+
+    public bool TryCreateFont(string nameOrPath, int verticalSize, out Font? font)
+    {
+        string pureName = Path.GetFileNameWithoutExtension(nameOrPath);
+
+        if (fontData.TryGetValue(pureName, out (nint ptr, int length) data))
+        {
+            font = LoadFontFromHGlobal(pureName, data.ptr, data.length, verticalSize, verticalSize);
+            return true;
+        }
+
+        if (File.Exists(nameOrPath))
+        {
+            font = LoadFontFromFile(pureName, nameOrPath, verticalSize, verticalSize);
+            return true;
+        }
+
+        font = null;
+        return false;
     }
 
     public FontCollection()
@@ -92,20 +112,27 @@ public sealed class FontCollection : IDisposable
     /// <param name="verticalSize"></param>
     public Font LoadFontFromBytes(string name, byte[] data, int horizontalSize, int verticalSize)
     {
+        nint ftData = System.Runtime.InteropServices.Marshal.AllocHGlobal(data.Length);
+        System.Runtime.InteropServices.Marshal.Copy(data, 0, ftData, data.Length);
+
+        fontData[name] = (ftData, data.Length);
+
+        return LoadFontFromHGlobal(name, ftData, data.Length, horizontalSize, verticalSize);
+    }
+
+    Font LoadFontFromHGlobal(string name, nint data, int dataLength, int horizontalSize, int verticalSize)
+    {
         if (freetypeReference == default)
         {
             ThrowIfFailed(FT_Init_FreeType(out nint ft));
             freetypeReference = ft;
         }
 
+        ThrowIfFailed(FT_New_Memory_Face(freetypeReference, data, dataLength, 0, out nint ftFace));
+
+        Font font = new(name, ftFace, horizontalSize, verticalSize);
         FontKey key = new(name, verticalSize);
 
-        nint ftData = System.Runtime.InteropServices.Marshal.AllocHGlobal(data.Length);
-        System.Runtime.InteropServices.Marshal.Copy(data, 0, ftData, data.Length);
-
-        ThrowIfFailed(FT_New_Memory_Face(freetypeReference, ftData, data.Length, 0, out nint ftFace));
-
-        Font font = new(ftData, ftFace, horizontalSize, verticalSize);
         fonts[key] = font;
 
         return font;

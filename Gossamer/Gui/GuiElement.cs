@@ -722,7 +722,7 @@ public class GuiElement : IGridControllable
 
         }
 
-        logger.Debug($"Size required: {spaceRequired}");
+        //logger.Debug($"Size required: {spaceRequired}");
 
         //Vector2 sizeWanted = Measure(sizeAvailable);
         Vector2 sizeWanted = spaceRequired;

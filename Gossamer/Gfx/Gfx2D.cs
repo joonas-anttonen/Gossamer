@@ -540,15 +540,28 @@ class Gfx2D(GfxCore gfx) : IDisposable
     }
 
     /// <summary>
-    /// Gets a font by name and size. If the font is not found, the built-in font is returned.
+    /// Gets a font by name and size. 
+    /// If the font is not found, there is an attempt to create it. 
+    /// If the font cannot be created, the built-in font is returned.
     /// </summary>
     /// <param name="name"></param>
     /// <param name="size"></param>
-    /// <returns></returns>
-    public Font GetFontOrBuiltIn(string name, int size)
+    public Font GetFont(string name, int size)
     {
-        fontCache.TryGetFontOrDefault(name, size, out Font? font);
-        return font;
+        if (!fontCache.TryGetFontOrDefault(name, size, out Font? font))
+        {
+            if (fontCache.TryCreateFont(name, size, out font))
+            {
+                InitializeFont(ThrowInvalidDataIfNull(font));
+            }
+            else
+            {
+                logger.Warning($"{name} not found and could not be created");
+                font = GetBuiltInFont();
+            }
+        }
+
+        return font ?? GetBuiltInFont();
     }
 
     public Statistics GetStatistics()
@@ -631,6 +644,9 @@ class Gfx2D(GfxCore gfx) : IDisposable
         ArrayUtilities.Append(ref fontTextures, fontTexture);
 
         gfx.DestroyMemoryBuffer(fontStagingBuffer);
+
+        // Log font details
+        logger.Debug($"{font.Name} [{font.Size}]");
     }
 
     public void Create()

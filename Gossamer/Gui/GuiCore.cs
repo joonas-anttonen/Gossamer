@@ -389,7 +389,7 @@ public class GuiCore : IDisposable
                 cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
                 cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
-                cmdBuffer.DrawText(parameters.Name, new Vector2(10, 5), Color.White, Color.ParseUInt(0x1f1e25), gfx2D.GetBuiltInFont());
+                cmdBuffer.DrawText(parameters.Name, new Vector2(10, 5), Color.White, colorOfFrame, gfx2D.GetFont("ProggyClean", 24));
             }
 
             {
@@ -405,7 +405,7 @@ public class GuiCore : IDisposable
 
                 var textLayout = gfx2D.CreateTextLayout(
                     statsText,
-                    gfx2D.GetFontOrBuiltIn("CascadiaCode", 16),
+                    gfx2D.GetFont("ProggyClean", 32),
                     windowRect.Size,
                     wordWrap: true);
 

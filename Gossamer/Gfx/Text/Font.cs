@@ -21,7 +21,6 @@ public sealed class Font : IDisposable
 
     public readonly record struct Metrics(int Ascender, int Descender, int Height);
 
-    readonly nint ftBlob;
     readonly nint ftFace;
 
     readonly nint hbBuffer;
@@ -34,6 +33,25 @@ public sealed class Font : IDisposable
     readonly FontGlyph spaceGlyph;
 
     readonly Metrics metrics;
+
+    readonly int verticalSize;
+    readonly string name;
+
+    /// <summary>
+    /// The name of the font.
+    /// </summary>
+    public string Name
+    {
+        get => name;
+    }
+
+    /// <summary>
+    /// The vertical size of the font.
+    /// </summary>
+    public int Size
+    {
+        get => verticalSize;
+    }
 
     /// <summary>
     /// Retrieves the font's atlas.
@@ -85,9 +103,11 @@ public sealed class Font : IDisposable
         return GetGlyphByIndex(FT_Get_Char_Index(ftFace, codepoint));
     }
 
-    public Font(nint fontBlob, nint face, int horizontalSize, int verticalSize)
+    public Font(string name, nint face, int horizontalSize, int verticalSize)
     {
-        ftBlob = fontBlob;
+        this.name = name;
+        this.verticalSize = verticalSize;
+
         ftFace = face;
         ThrowIf(FT_Set_Char_Size(ftFace, horizontalSize * 64, verticalSize * 64, 72, 72) != FT_Error.Ok);
 
@@ -151,8 +171,6 @@ public sealed class Font : IDisposable
             hb_font_destroy(hbFont);
 
             FT_Done_Face(ftFace);
-
-            Marshal.FreeHGlobal(ftBlob);
         }
     }
 
