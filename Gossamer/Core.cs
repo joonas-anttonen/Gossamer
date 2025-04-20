@@ -106,65 +106,52 @@ public sealed class Core : SynchronizationContext, IDisposable
         var parameters = Parameters.FromArgs(args);
         using var gossamer = new Core(parameters);
 
-        unsafe
+        /*unsafe
         {
             byte[] data = File.ReadAllBytes(@"D:\nsfw\2g4gv8cc8tjd1.webp");
 
             fixed (byte* ptr = data)
             {
-                int width = 0, height = 0;
-                int err = External.Webp.Api.WebPGetInfo(ptr, (ulong)data.Length, &width, &height);
-                Console.WriteLine($"WebPGetInfo: {err} {width}x{height}");
+                int width = 0, height = 0, hasAlpha = 0;
+                External.Webp.WebPStatus status = External.Webp.Api.Analyze(ptr, (ulong)data.Length, &width, &height, &hasAlpha);
+                Console.WriteLine($"Analyze: {status} {width}x{height} {hasAlpha}");
 
-                byte* outPtr = External.Webp.Api.WebPDecodeRGB(ptr, (ulong)data.Length, &width, &height);
-                Console.WriteLine($"WebPDecodeRGB: {(nint)outPtr} {width}x{height}");
-            }
+                byte* decoded_data = null;
+                ulong decoded_data_size = 0;
+                status = External.Webp.Api.Decode(ptr, (ulong)data.Length, External.Webp.WebPFormat.RGBA, &decoded_data, &decoded_data_size);
+                Console.WriteLine($"Decode: {status} {decoded_data_size}");
 
-            // Print bytes
-            Console.WriteLine("Decoded image:");
-            for (int i = 0; i < 16; i++)
-            {
-                Console.Write($"{data[i]:X2} ");
-            }
-            Console.WriteLine();
+                byte[] outDataArray = new byte[decoded_data_size];
+                Marshal.Copy((IntPtr)decoded_data, outDataArray, 0, (int)decoded_data_size);
 
-            /*External.Spng.spng_ctx* ctx = External.Spng.Api.spng_ctx_new(0);
-            Console.WriteLine($"ctx: {(nint)ctx}");
-
-            External.Spng.spng_errno err = External.Spng.spng_errno.SPNG_OK;
-            byte[] data = File.ReadAllBytes(@"D:\Inspiration\NSFW\79no0d3c12ud1.png");
-
-            fixed (byte* ptr = data)
-            {
-                err = External.Spng.Api.spng_set_png_buffer(ctx, ptr, (ulong)data.Length);
-                Console.WriteLine($"spng_set_png_buffer: {err}");
-
-                External.Spng.spng_ihdr ihdr = new();
-                err = External.Spng.Api.spng_get_ihdr(ctx, &ihdr);
-                Console.WriteLine($"spng_get_ihdr: {err} {ihdr.width}x{ihdr.height} {ihdr.color_type} {ihdr.bit_depth}");
-
-                ulong out_size = 0;
-                err = External.Spng.Api.spng_decoded_image_size(ctx, External.Spng.spng_format.SPNG_FMT_RGBA8, &out_size);
-                Console.WriteLine($"spng_decoded_image_size: {err} {out_size}");
-
-                byte[] out_data = new byte[out_size];
-                fixed (byte* p_out = out_data)
+                // Print bytes
+                Console.WriteLine("Decoded image:");
+                for (int i = 0; i < 16; i++)
                 {
-                    err = External.Spng.Api.spng_decode_image(ctx, p_out, out_size, External.Spng.spng_format.SPNG_FMT_RGBA8, 0);
-                    Console.WriteLine($"spng_decode_image: {err}");
+                    Console.Write($"{outDataArray[i]:X2} ");
                 }
+                Console.WriteLine();
 
-                External.Spng.Api.spng_ctx_free(ctx);
-            }
+                // Encode the data back to WebP format
+                byte* encoded_data = null;
+                ulong encoded_data_size = 0;
 
-            // Print bytes
-            Console.WriteLine("Decoded image:");
-            for (int i = 0; i < 16; i++)
-            {
-                Console.Write($"{data[i]:X2} ");
+                status = External.Webp.Api.Encode(decoded_data, (ulong)decoded_data_size, External.Webp.WebPFormat.RGBA, width, height, &encoded_data, &encoded_data_size);
+                Console.WriteLine($"Encode: {status} {encoded_data_size}");
+
+                byte[] encodedDataArray = new byte[encoded_data_size];
+                Marshal.Copy((IntPtr)encoded_data, encodedDataArray, 0, (int)encoded_data_size);
+
+                // Free the encoded data
+                External.Webp.Api.Free(encoded_data);
+
+                // Free the decoded data
+                External.Webp.Api.Free(decoded_data);
+
+                // Save the encoded data to a file
+                File.WriteAllBytes(@"D:\output.webp", encodedDataArray);
             }
-            Console.WriteLine();*/
-        }
+        }*/
 
         return gossamer.Run();
     }
@@ -226,8 +213,6 @@ public sealed class Core : SynchronizationContext, IDisposable
                 return Load(External.FreeType.Api.BinaryName, assembly);
             case External.Vulkan.Vma.Api.BinaryName:
                 return Load(External.Vulkan.Vma.Api.BinaryName, assembly);
-            case External.Spng.Api.BinaryName:
-                return Load(External.Spng.Api.BinaryName, assembly);
             case External.Webp.Api.BinaryName:
                 return Load(External.Webp.Api.BinaryName, assembly);
             default:
