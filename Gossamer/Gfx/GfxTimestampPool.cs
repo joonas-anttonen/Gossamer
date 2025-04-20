@@ -5,7 +5,7 @@ using Gossamer.External.Vulkan;
 using static Gossamer.External.Vulkan.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.Backend;
+namespace Gossamer.Gfx;
 
 class GfxTimestampPool
 {

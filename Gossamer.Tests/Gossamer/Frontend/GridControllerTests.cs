@@ -1,6 +1,6 @@
-using Gossamer.Frontend;
+using Gossamer.Gui;
 
-namespace Gossamer.Tests.Gossamer.Frontend;
+namespace Gossamer.Tests.Gossamer.Gui;
 
 /*[TestClass]
 public class GridControllerTests

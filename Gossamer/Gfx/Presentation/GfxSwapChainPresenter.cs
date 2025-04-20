@@ -6,157 +6,11 @@ using Gossamer.Logging;
 using static Gossamer.External.Vulkan.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.Backend;
-
-public abstract class GfxPresenter : IDisposable
-{
-    public abstract bool BeginFrame();
-    public abstract void EndFrame();
-
-    protected abstract void Dispose(bool disposing);
-
-    internal abstract VkCommandBuffer GetCommandBuffer();
-    public abstract PixelBuffer GetPresentationBuffer();
-
-    public virtual TimeSpan GetTotalPauseDuration()
-    {
-        return TimeSpan.Zero;
-    }
-
-    /// <summary>
-    /// Invalidates the presentation surface.
-    /// </summary>
-    /// <param name="width"> The new width of the surface. </param>
-    /// <param name="height"> The new height of the surface. </param>
-    public abstract void Invalidate(uint width, uint height);
-
-    ~GfxPresenter()
-    {
-        Dispose(disposing: false);
-    }
-
-    public void Dispose()
-    {
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
-
-    internal unsafe static void TransitionImageLayout(PixelBuffer pixelBuffer, VkCommandBuffer commandBuffer, VkImageLayout srcLayout, VkImageLayout dstLayout, VkPipelineStage2 srcStage, VkPipelineStage2 dstStage)
-    {
-        VkAccessFlags2 srcAccess = srcLayout switch
-        {
-            VkImageLayout.UNDEFINED => VkAccessFlags2.NONE,
-            VkImageLayout.COLOR_ATTACHMENT_OPTIMAL => VkAccessFlags2.COLOR_ATTACHMENT_WRITE_BIT,
-            VkImageLayout.TRANSFER_DST_OPTIMAL => VkAccessFlags2.TRANSFER_WRITE_BIT,
-            _ => throw new NotSupportedException("Unsupported source layout."),
-        };
-        VkAccessFlags2 dstAccess = dstLayout switch
-        {
-            VkImageLayout.TRANSFER_DST_OPTIMAL => VkAccessFlags2.TRANSFER_WRITE_BIT,
-            VkImageLayout.COLOR_ATTACHMENT_OPTIMAL => VkAccessFlags2.COLOR_ATTACHMENT_WRITE_BIT,
-            VkImageLayout.PRESENT_SRC_KHR => VkAccessFlags2.NONE,
-            _ => throw new NotSupportedException("Unsupported destination layout."),
-        };
-
-        VkImageMemoryBarrier2 imageMemoryBarrier = new(default)
-        {
-            SrcAccessMask = srcAccess,
-            DstAccessMask = dstAccess,
-            SrcStageMask = srcStage,
-            DstStageMask = dstStage,
-            OldLayout = srcLayout,
-            NewLayout = dstLayout,
-            SrcQueueFamilyIndex = Constants.VK_QUEUE_FAMILY_IGNORED,
-            DstQueueFamilyIndex = Constants.VK_QUEUE_FAMILY_IGNORED,
-            Image = pixelBuffer.Image,
-            SubresourceRange = new VkImageSubresourceRange
-            {
-                AspectMask = (VkImageAspect)pixelBuffer.Aspect,
-                BaseMipLevel = 0,
-                LevelCount = 1,
-                BaseArrayLayer = 0,
-                LayerCount = 1
-            }
-        };
-
-        VkDependencyInfo dependencyInfo = new(default)
-        {
-            ImageMemoryBarrierCount = 1,
-            ImageMemoryBarriers = &imageMemoryBarrier
-        };
-        vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
-    }
-}
-
-public sealed class GfxHeadlessPresenter : GfxPresenter
-{
-    public override bool BeginFrame()
-    {
-        return false;
-    }
-
-    public override void EndFrame()
-    {
-    }
-
-    public override PixelBuffer GetPresentationBuffer()
-    {
-        throw new NotImplementedException();
-    }
-
-    public override void Invalidate(uint width, uint height)
-    {
-        throw new NotImplementedException();
-    }
-
-
-    protected override void Dispose(bool disposing)
-    {
-
-    }
-
-    internal override VkCommandBuffer GetCommandBuffer()
-    {
-        throw new NotImplementedException();
-    }
-}
-
-public sealed class GfxDirectXPresenter : GfxPresenter
-{
-    public override bool BeginFrame()
-    {
-        return false;
-    }
-
-    public override void EndFrame()
-    {
-    }
-
-    public override PixelBuffer GetPresentationBuffer()
-    {
-        throw new NotImplementedException();
-    }
-
-    public override void Invalidate(uint width, uint height)
-    {
-        throw new NotImplementedException();
-    }
-
-
-    protected override void Dispose(bool disposing)
-    {
-
-    }
-
-    internal override VkCommandBuffer GetCommandBuffer()
-    {
-        throw new NotImplementedException();
-    }
-}
+namespace Gossamer.Gfx.Presentation;
 
 internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 {
-    readonly Logger logger = Gossamer.GetLogger(nameof(GfxSwapChainPresenter));
+    readonly Logger logger = Core.GetLogger(nameof(GfxSwapChainPresenter));
 
     record PerFrame(
         VkCommandPool CommandPool,
@@ -256,7 +110,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
             TimeSpan afterWait = stopwatch.Elapsed;
             TimeSpan waitTime = afterWait - beforeWait;
-            waitingForPreviousFrame += waitTime;
+            waitingForPreviousFrame = waitTime;
         }
 
         TimeSpan beforeAcquire = stopwatch.Elapsed;
@@ -280,7 +134,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
                 TimeSpan afterAcquire = stopwatch.Elapsed;
                 TimeSpan acquireTime = afterAcquire - beforeAcquire;
-                waitingForNextFrame += acquireTime;
+                waitingForNextFrame = acquireTime;
 
                 /*if (frameCount % 100 == 0)
                 {
@@ -444,6 +298,28 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         ThrowVulkanIfFailed(vkDeviceWaitIdle(device),
             "Failed to wait for device idle.");
 
+        VkSurfaceCapabilitiesKhr surfaceCapabilities;
+        ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfaceCapabilitiesKhr(physicalDevice, surface, &surfaceCapabilities));
+
+        VkExtent2D swapChainExtent = new();
+        if (surfaceCapabilities.CurrentExtent.Width == uint.MaxValue)
+        {
+            // If the surface size is undefined, the size is set to the size of the images requested.
+            swapChainExtent.Width = Math.Max(surfaceCapabilities.MinImageExtent.Width, Math.Min(surfaceCapabilities.MaxImageExtent.Width, surfaceExtent.Width));
+            swapChainExtent.Height = Math.Max(surfaceCapabilities.MinImageExtent.Height, Math.Min(surfaceCapabilities.MaxImageExtent.Height, surfaceExtent.Height));
+        }
+        else if (surfaceCapabilities.CurrentExtent.Width > 0 && surfaceCapabilities.CurrentExtent.Height > 0)
+        {
+            // If the surface size is defined, the swap chain size must match
+            swapChainExtent = surfaceCapabilities.CurrentExtent;
+        }
+        else
+        {
+            // Can get here if the window is minimized or not visible. Bail out.
+            ReleaseSwapChainIfAny();
+            return false;
+        }
+
         VkSurfaceFormatKhr outputSurfaceFormat = default;
 
         var surfaceFormatCount = 0u;
@@ -486,36 +362,14 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
             }
         }
 
-        // Get surface capabilities and present modes
-
-        VkSurfaceCapabilitiesKhr surfaceCapabilities;
-        ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfaceCapabilitiesKhr(physicalDevice, surface, &surfaceCapabilities));
+        // Select a present mode for the swap chain, the VK_PRESENT_MODE_FIFO_KHR mode must always be present as per spec, this mode waits for the vertical blank ("v-sync")
+        VkPresentModeKhr swapChainPresentMode = VkPresentModeKhr.FIFO_KHR;
 
         uint presentModesCount = 0;
         ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfacePresentModesKhr(physicalDevice, surface, &presentModesCount));
 
         VkPresentModeKhr* presentModes = stackalloc VkPresentModeKhr[(int)presentModesCount];
         ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfacePresentModesKhr(physicalDevice, surface, &presentModesCount, presentModes));
-
-        VkExtent2D swapChainExtent = new();
-        if (surfaceCapabilities.CurrentExtent.Width == uint.MaxValue)
-        {
-            // If the surface size is undefined, the size is set to the size of the images requested.
-            swapChainExtent.Width = Math.Max(surfaceCapabilities.MinImageExtent.Width, Math.Min(surfaceCapabilities.MaxImageExtent.Width, surfaceExtent.Width));
-            swapChainExtent.Height = Math.Max(surfaceCapabilities.MinImageExtent.Height, Math.Min(surfaceCapabilities.MaxImageExtent.Height, surfaceExtent.Height));
-        }
-        else if (surfaceCapabilities.CurrentExtent.Width > 0 && surfaceCapabilities.CurrentExtent.Height > 0)
-        {
-            // If the surface size is defined, the swap chain size must match
-            swapChainExtent = surfaceCapabilities.CurrentExtent;
-        }
-        else
-        {
-            throw new NotSupportedException("Invalid surface size.");
-        }
-
-        // Select a present mode for the swap chain, the VK_PRESENT_MODE_FIFO_KHR mode must always be present as per spec, this mode waits for the vertical blank ("v-sync")
-        VkPresentModeKhr swapChainPresentMode = VkPresentModeKhr.FIFO_KHR;
 
         if (!enableVerticalSync)
         {
@@ -638,6 +492,12 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
             perFrame[i] = new PerFrame(commandPool, commandBuffer, releaseSemaphore, submissionFence, outputImage);
         }
+
+        // Log the swap chain details
+        logger.Debug(
+            $"{swapChainExtent.Width}x{swapChainExtent.Height} ({swapChainImageCount}) " +
+            $"{outputSurfaceFormat.Format} {outputSurfaceFormat.ColorSpace} " +
+            $"{swapChainPresentMode}");
 
         return true;
     }

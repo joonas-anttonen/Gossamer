@@ -1,16 +1,16 @@
 using System.Runtime.InteropServices;
 
-using Gossamer.Backend;
 using Gossamer.External.Glfw;
+using Gossamer.Gfx;
 using Gossamer.Logging;
 using Gossamer.Utilities;
 
 using static Gossamer.External.Glfw.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.Frontend;
+namespace Gossamer.Gui;
 
-public class Gui : IDisposable
+public class GuiCore : IDisposable
 {
     public enum Platform
     {
@@ -38,15 +38,15 @@ public class Gui : IDisposable
 
     readonly Platform platform = Platform.Auto;
 
-    readonly Logger logger = Gossamer.GetLogger(nameof(Gui));
+    readonly Logger logger = Core.GetLogger(nameof(GuiCore));
 
     bool isDisposed;
     bool isCreated;
 
-    readonly Gfx gfx;
-    readonly BackendMessageQueue messageQueue = new();
+    readonly GfxCore gfx;
+    readonly GfxMessageQueue messageQueue = new();
 
-    readonly GuiParameters parameters = new();
+    GuiParameters parameters = new(nameof(GuiCore));
 
     readonly GuiElement rootElement;
 
@@ -61,6 +61,7 @@ public class Gui : IDisposable
     bool isFullscreen;
     bool isDamaged;
     readonly bool useFullscreen = true;
+    Rectangle normalWindowRect;
 
     readonly GLFWwindowrefreshfun glfwCallbackWindowRefresh;
     readonly GLFWcursorenterfun glfwCallbackMouseEnter;
@@ -106,7 +107,7 @@ public class Gui : IDisposable
         get => glfwWindowShouldClose(glfwWindow) == 1;
     }
 
-    internal Gui(Gossamer.Parameters parameters, Gfx gfx, BackendMessageQueue messageQueue)
+    internal GuiCore(Core.Parameters parameters, GfxCore gfx, GfxMessageQueue messageQueue)
     {
         this.gfx = gfx;
         this.messageQueue = messageQueue;
@@ -185,10 +186,10 @@ public class Gui : IDisposable
             gridPlacement = new(0, 0, 1, 2),
             Style = new Style()
             {
-                Background = Color.ParseUInt(0x1f1e25),
+                Background = Color.ParseUInt(0x232731),
                 Border = new Border(
                     Visibility: BorderVisibility.All,
-                    Color: Color.ParseUInt(0x2b313c),
+                    Color: Color.ParseUInt(0x282c34),
                     Spacing: Spacing.Create(
                         Measure.Px(3),
                         Measure.Px(32),
@@ -221,7 +222,7 @@ public class Gui : IDisposable
                 Background = Color.Palettes.Nord.Nord11_Red,
             },
         };
-        testElement.AttachTo(rootElement);
+        //testElement.AttachTo(rootElement);
     }
 
     public void Dispose()
@@ -250,9 +251,10 @@ public class Gui : IDisposable
         return new(surface, new((uint)ww, (uint)wh));
     }
 
-    public void Create()
+    public void Create(GuiParameters parameters)
     {
         ThrowInvalidOperationIf(isCreated);
+        this.parameters = parameters;
 
         // Disable OpenGL
         glfwWindowHint(Constants.GLFW_CLIENT_API, 0);
@@ -271,7 +273,7 @@ public class Gui : IDisposable
         Vector2 windowSize = parameters.Size ?? new Vector2(Math.Min(1920, (int)(monitorVideoMode.Width * 0.75f)), Math.Min(1080, (int)(monitorVideoMode.Height * 0.75f)));
         Vector2 windowPosition = parameters.Position ?? new Vector2(mx + (int)((mw - windowSize.X) / 2.0f), my + (int)((mh - windowSize.Y) / 2.0f));
 
-        glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, "Gossamer");
+        glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, parameters.Name);
         ThrowInvalidOperationIf(!glfwWindow.HasValue, "Failed to create GLFW window.");
 
         glfwSetWindowSizeLimits(glfwWindow, 256, 144, -1, -1);
@@ -379,36 +381,27 @@ public class Gui : IDisposable
 
             if (mode != FrameMode.None)
             {
-                if (mode == FrameMode.Full)
-                {
-                    cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(sizeOfFrame.X, wh), colorOfFrame);
-                    cmdBuffer.FillRectangle(new Vector2(ww - sizeOfFrame.Z, 0), new Vector2(ww, wh), colorOfFrame);
-                    cmdBuffer.FillRectangle(new Vector2(0, wh - sizeOfFrame.W), new Vector2(ww, wh), colorOfFrame);
-                }
-
-                cmdBuffer.FillRectangle(new Vector2(0, 0), new Vector2(ww, sizeOfFrame.Y), colorOfFrame);
-
-                cmdBuffer.FillRectangle(controlsCloseRect, mouseOnClose ? Color.Palettes.Swedish.SizzlingRed.WithAlpha(0.75f) : colorOfFrame);
+                cmdBuffer.FillRectangle(controlsCloseRect, mouseOnClose ? Color.Palettes.Nord.Nord11_Red : colorOfFrame);
                 cmdBuffer.FillRectangle(controlsMaximizeRect, mouseOnMaximize ? Color.White.WithAlpha(0.5f) : colorOfFrame);
                 cmdBuffer.FillRectangle(controlsMinimizeRect, mouseOnMinimize ? Color.White.WithAlpha(0.5f) : colorOfFrame);
-                
+
                 cmdBuffer.FillRectangle(controlsCloseIconRect, Color.White);
                 cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
                 cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
-                cmdBuffer.DrawText("Gossamer", new Vector2(10, 5), Color.White, Color.ParseUInt(0x1f1e25), gfx2D.GetBuiltInFont());
+                cmdBuffer.DrawText(parameters.Name, new Vector2(10, 5), Color.White, Color.ParseUInt(0x1f1e25), gfx2D.GetBuiltInFont());
             }
 
             {
                 Rectangle windowRect = new(sizeOfFrame.X, sizeOfFrame.Y, ww - sizeOfFrame.X, wh - sizeOfFrame.Y);
 
                 var statsText =
-                    $"UPTIME: {Gossamer.GetTime()}\n" +
+                    $"UPTIME: {Core.GetTime()}\n" +
                     $"GC PAUSE: {GC.GetTotalPauseDuration()}\n" +
-                    $"GFX PAUSE: {gfxStats.TotalPauseDuration}\n" +
+                    $"GFX PAUSE: {StringUtilities.TimeShort(gfxStats.TotalPauseDuration)}\n" +
                     $"CPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\n" +
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
-                    $"2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
+                    $"GFX2D: {gfx2DStats.DrawCalls}d {gfx2DStats.Vertices}v {gfx2DStats.Indices}i";
 
                 var textLayout = gfx2D.CreateTextLayout(
                     statsText,
@@ -430,16 +423,19 @@ public class Gui : IDisposable
 
     public void PostEmptyEvent()
     {
+        ThrowInvalidOperationIfNot(isCreated);
         glfwPostEmptyEvent();
     }
 
     public void WaitForEvents()
     {
+        ThrowInvalidOperationIfNot(isCreated);
         glfwWaitEvents();
     }
 
     public void WaitForEvents(double timeout)
     {
+        ThrowInvalidOperationIfNot(isCreated);
         glfwWaitEventsTimeout(timeout);
     }
 
@@ -517,7 +513,7 @@ public class Gui : IDisposable
             return;
         }
 
-        // route to element that captured mouse
+        // Route to element that captured mouse
         if (elementThatCapturedMouse != null)
         {
             elementThatCapturedMouse.OnMouseMove(elementThatCapturedMouse.WindowToElement(lastMousePosition));
@@ -526,7 +522,7 @@ public class Gui : IDisposable
         {
             GuiElement? lastElementThatHadMouse = elementThatHasMouse;
 
-            // check if the mouse is inside any element
+            // Check if the mouse is inside any element
             if (rootElement.Contains(lastMousePosition, out elementThatHasMouse))
             {
                 if (elementThatHasMouse != lastElementThatHadMouse && lastElementThatHadMouse != null)
@@ -542,7 +538,7 @@ public class Gui : IDisposable
 
             if (elementThatHasMouse != null)
             {
-                // should always be atleast root element...
+                // Should always be atleast root element...
                 ThrowInvalidOperationIfNull(elementThatHasMouse);
 
                 elementThatHasMouse.OnMouseMove(lastMousePosition - elementThatHasMouse.ActualArea.Position);
@@ -597,25 +593,23 @@ public class Gui : IDisposable
             }
         }
 
-        // route to element that captured mouse
-        //
+        // Route to element that captured mouse
         if (elementThatCapturedMouse != null)
         {
             elementThatCapturedMouse.OnMouseButton(elementThatCapturedMouse.WindowToElement(lastMousePosition), iButton, iAction, iMods);
 
-            // end capture when mouse is released
+            // End capture when mouse is released
             if (iAction == InputAction.Release)
             {
                 elementThatCapturedMouse = null;
             }
         }
-        // route to element that contains mouse
-        //
+        // Route to element that contains mouse
         else if (elementThatHasMouse != null)
         {
             elementThatHasMouse.OnMouseButton(elementThatHasMouse.WindowToElement(lastMousePosition), iButton, iAction, iMods);
 
-            // begin capture when mouse is pressed - if the element can capture
+            // Begin capture when mouse is pressed - if the element can capture
             if (iAction == InputAction.Press && elementThatHasMouse.Enabled && elementThatHasMouse.Focusable)
             {
                 elementThatCapturedMouse = elementThatHasMouse;
@@ -640,14 +634,9 @@ public class Gui : IDisposable
         messageQueue.PostKeyboardChar((int)c, 0);
     }
 
-    int normalWindowX = 0;
-    int normalWindowY = 0;
-    int normalWindowW = 0;
-    int normalWindowH = 0;
-
     void CommitMaximize()
     {
-        if (!useFullscreen && !isMaximized || useFullscreen && !isFullscreen)
+        if ((!useFullscreen && !isMaximized) || (useFullscreen && !isFullscreen))
         {
             mode = FrameMode.Title;
 
@@ -655,12 +644,21 @@ public class Gui : IDisposable
             {
                 isFullscreen = true;
 
-                glfwGetWindowPos(glfwWindow, out normalWindowX, out normalWindowY);
-                glfwGetWindowSize(glfwWindow, out normalWindowW, out normalWindowH);
+                glfwGetWindowPos(glfwWindow, out int normalWindowX, out int normalWindowY);
+                glfwGetWindowSize(glfwWindow, out int normalWindowW, out int normalWindowH);
+                normalWindowRect = Rectangle.FromXYWH(normalWindowX, normalWindowY, normalWindowW, normalWindowH);
 
+                // FIXME: Support multiple monitors
                 GlfwMonitor primaryMonitor = glfwGetPrimaryMonitor();
                 GlfwVideoMode videoMode = glfwGetVideoMode(primaryMonitor);
-                glfwSetWindowMonitor(glfwWindow, primaryMonitor, 0, 0, (int)videoMode.Width, (int)videoMode.Height, (int)videoMode.RefreshRate);
+                glfwSetWindowMonitor(
+                    glfwWindow,
+                    primaryMonitor,
+                    0,
+                    0,
+                    (int)videoMode.Width,
+                    (int)videoMode.Height,
+                    (int)videoMode.RefreshRate);
             }
             else
             {
@@ -674,12 +672,19 @@ public class Gui : IDisposable
             if (useFullscreen)
             {
                 isFullscreen = false;
-                glfwSetWindowMonitor(glfwWindow, default, normalWindowX, normalWindowY, normalWindowW, normalWindowH, default);
+                glfwSetWindowMonitor(
+                    glfwWindow,
+                    default,
+                    (int)normalWindowRect.Left,
+                    (int)normalWindowRect.Top,
+                    (int)normalWindowRect.Width,
+                    (int)normalWindowRect.Height,
+                    default);
 
                 // Window size callback is not called on Wayland when restoring from fullscreen - call it manually
                 if (platform == Platform.Wayland)
                 {
-                    Callback_WindowSize(glfwWindow, normalWindowW, normalWindowH);
+                    Callback_WindowSize(glfwWindow, (int)normalWindowRect.Width, (int)normalWindowRect.Height);
                 }
             }
             else

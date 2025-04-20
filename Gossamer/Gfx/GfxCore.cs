@@ -3,9 +3,10 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 
-using Gossamer.Backend.Shaders;
 using Gossamer.External.Vulkan;
 using Gossamer.External.Vulkan.Vma;
+using Gossamer.Gfx.Presentation;
+using Gossamer.Gfx.Shaders;
 using Gossamer.Logging;
 using Gossamer.Utilities;
 
@@ -13,13 +14,17 @@ using static Gossamer.External.Vulkan.Api;
 using static Gossamer.External.Vulkan.Vma.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.Backend;
+namespace Gossamer.Gfx;
 
-public unsafe class Gfx : IDisposable
+public unsafe class GfxCore : IDisposable
 {
-    public readonly record struct Statistics(ulong Frame, TimeSpan CpuFrameTime, TimeSpan GpuFrameTime, TimeSpan TotalPauseDuration);
+    public readonly record struct Statistics(
+        ulong Frame,
+        TimeSpan CpuFrameTime,
+        TimeSpan GpuFrameTime,
+        TimeSpan TotalPauseDuration);
 
-    readonly Logger logger = Gossamer.GetLogger(nameof(Gfx));
+    readonly Logger logger = Core.GetLogger(nameof(GfxCore));
 
     PFN_vkDebugUtilsMessengerCallbackEXT? VulkanDebugMessengerCallback;
     PFN_vkSetDebugUtilsObjectNameEXT? VulkanDebugSetObjectName;
@@ -35,6 +40,8 @@ public unsafe class Gfx : IDisposable
     VkPhysicalDevice physicalDevice;
     VkDevice device;
 
+    VkFormat deviceDepthFormat;
+    VkSampleCount deviceSampleCount;
     VkQueue deviceQueue;
     uint deviceQueueIndex;
     float deviceTimestampPeriodInNanoseconds;
@@ -42,21 +49,18 @@ public unsafe class Gfx : IDisposable
     VkCommandPool deviceCommandPool;
     GfxTimestampPool? timestampPool;
 
-    VkFormat deviceDepthFormat;
-    VkSampleCount deviceSampleCount;
-
     readonly GfxApiParameters apiParameters;
     GfxParameters? parameters;
 
     GfxCapabilities capabilities = new(
-        CanDebug: false,
-        CanSwap: false,
-        CanTimestamp: false
+        Debugging: false,
+        SwapChain: false,
+        Timestamps: false
     );
 
     GfxPresenter? presenter;
-
     Gfx2D? gfx2D;
+    Gfx3D? gfx3D;
 
     ulong frameCounter;
     Statistics statistics;
@@ -73,12 +77,27 @@ public unsafe class Gfx : IDisposable
         return (GfxSamples)deviceSampleCount;
     }
 
+    /// <summary>
+    /// Returns the 2D renderer.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">If the 2D renderer is not available.</exception>
     internal Gfx2D Get2D()
     {
-        ThrowInvalidOperationIfNull(gfx2D, "No 2D renderer available.");
-        return gfx2D;
+        return ThrowInvalidOperationIfNull(gfx2D, "No 2D renderer available.");
     }
 
+    /// <summary>
+    /// Returns the 3D renderer.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">If the 3D renderer is not available.</exception>
+    internal Gfx3D Get3D()
+    {
+        return ThrowInvalidOperationIfNull(gfx3D, "No 3D renderer available.");
+    }
+
+    /// <summary>
+    /// Returns the current presenter. Can be null if no presenter is currently available.
+    /// </summary>
     internal GfxPresenter? GetPresenter()
     {
         if (presenter == null)
@@ -88,11 +107,11 @@ public unsafe class Gfx : IDisposable
         return presenter;
     }
 
-    public Gfx(GfxApiParameters apiParameters)
+    public GfxCore(GfxApiParameters apiParameters)
     {
         this.apiParameters = apiParameters;
 
-        CreateVulkanInstance();
+        CreateInstance();
     }
 
     public void Render()
@@ -112,28 +131,31 @@ public unsafe class Gfx : IDisposable
             return;
         }
 
-        timestampPool?.Reset(device, presenter.GetCommandBuffer());
-
         TimeSpan cpuFrameTime = TimeSpan.Zero;
         TimeSpan gpuFrameTime = TimeSpan.Zero;
         if (timestampPool != null)
         {
+            timestampPool.Reset(device, presenter.GetCommandBuffer());
+
             cpuFrameTime = timestampPool.GetCpuDuration(0, 1);
             gpuFrameTime = timestampPool.GetGpuDuration(0, 1);
-        }
 
-        timestampPool?.BeginCpuTimestamp();
-        timestampPool?.BeginGpuTimestamp(presenter.GetCommandBuffer());
+            timestampPool.BeginCpuTimestamp();
+            timestampPool.BeginGpuTimestamp(presenter.GetCommandBuffer());
+        }
 
         gfx2D.BeginFrame(presenter);
         gfx2D.EndFrame(presenter);
 
-        timestampPool?.EndGpuTimestamp(presenter.GetCommandBuffer());
-        timestampPool?.EndCpuTimestamp();
+        if (timestampPool != null)
+        {
+            timestampPool.EndGpuTimestamp(presenter.GetCommandBuffer());
+            timestampPool.EndCpuTimestamp();
+        }
 
-        presenter?.EndFrame();
+        presenter.EndFrame();
 
-        statistics = new(frameCounter, cpuFrameTime, gpuFrameTime, presenter!.GetTotalPauseDuration());
+        statistics = new(frameCounter, cpuFrameTime, gpuFrameTime, presenter.GetTotalPauseDuration());
         frameCounter++;
     }
 
@@ -141,15 +163,17 @@ public unsafe class Gfx : IDisposable
     {
         this.parameters = parameters;
 
-        CreateVulkanDevice();
-        CreateVulkanMemoryAllocator();
+        CreateDevice();
+        CreateMemoryAllocator();
         CreateDeviceCommandPool();
 
-        LoadShaders(ReflectionUtilities.LoadEmbeddedResourceAsStream("Gossamer.Backend.Shaders.built-in.shaders"));
+        LoadShaders(ReflectionUtilities.LoadEmbeddedResourceAsStream("Gossamer.Gfx.Shaders.built-in.shaders"));
 
         gfx2D = new Gfx2D(this);
         gfx2D.Create();
         gfx2D.InitializeRendering(DisplayParameters.Empty);
+
+        gfx3D = new Gfx3D(this);
     }
 
     public void CreatePresenter(GfxPresentation presentation)
@@ -276,7 +300,7 @@ public unsafe class Gfx : IDisposable
 
     internal GfxTimestampPool CreateTimestampPool(int capacity)
     {
-        ThrowNotSupportedIf(!capabilities.CanTimestamp, "Timestamps are not supported.");
+        ThrowNotSupportedIf(!capabilities.Timestamps, "Timestamps are not supported.");
 
         VkQueryPoolCreateInfo queryPoolCreateInfo = new(default)
         {
@@ -702,7 +726,7 @@ public unsafe class Gfx : IDisposable
 
     internal void LoadShaders(Stream stream)
     {
-        foreach (var shaderProgram in ShaderPackage.Deserialize(stream))
+        foreach (var shaderProgram in GfxShaderPackage.Deserialize(stream))
         {
             cachedPipelineShaders[shaderProgram.Key] = shaderProgram.Value;
         }
@@ -829,7 +853,7 @@ public unsafe class Gfx : IDisposable
         {
             ColorAttachmentCount = (uint)attachmentCount,
             ColorAttachmentFormats = colorAttachmentFormats,
-            DepthAttachmentFormat = (parameters.DepthTest || parameters.DepthWrite) ? deviceDepthFormat : VkFormat.UNDEFINED
+            DepthAttachmentFormat = parameters.DepthTest || parameters.DepthWrite ? deviceDepthFormat : VkFormat.UNDEFINED
         };
 
         VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo = new(default)
@@ -893,7 +917,7 @@ public unsafe class Gfx : IDisposable
         return new GfxPipeline(pPipeline, pipelineLayout, descriptorSetLayout);
     }
 
-    void CreateVulkanInstance()
+    void CreateInstance()
     {
         HashSet<string> availableInstanceLayers = [];
         HashSet<string> availableInstanceExtensions = [];
@@ -960,7 +984,7 @@ public unsafe class Gfx : IDisposable
                     if (availableInstanceExtensions.Contains(VK_KHR_win32_surface))
                     {
                         enabledExtensionNames.Add(VK_KHR_win32_surface);
-                        capabilities = capabilities with { CanSwap = true };
+                        capabilities = capabilities with { SwapChain = true };
                     }
                     else
                     {
@@ -976,20 +1000,20 @@ public unsafe class Gfx : IDisposable
                     if (availableInstanceExtensions.Contains(VK_KHR_wayland_surface))
                     {
                         enabledExtensionNames.Add(VK_KHR_wayland_surface);
-                        capabilities = capabilities with { CanSwap = true };
+                        capabilities = capabilities with { SwapChain = true };
                     }
                     if (availableInstanceExtensions.Contains(VK_KHR_xcb_surface))
                     {
                         enabledExtensionNames.Add(VK_KHR_xcb_surface);
-                        capabilities = capabilities with { CanSwap = true };
+                        capabilities = capabilities with { SwapChain = true };
                     }
                     if (availableInstanceExtensions.Contains(VK_KHR_xlib_surface))
                     {
                         enabledExtensionNames.Add(VK_KHR_xlib_surface);
-                        capabilities = capabilities with { CanSwap = true };
+                        capabilities = capabilities with { SwapChain = true };
                     }
 
-                    if (!capabilities.CanSwap)
+                    if (!capabilities.SwapChain)
                     {
                         logger.Warning($"Swapchain is enabled but {VK_KHR_wayland_surface} or {VK_KHR_xcb_surface} or {VK_KHR_xlib_surface} is not available.");
                     }
@@ -1006,7 +1030,7 @@ public unsafe class Gfx : IDisposable
                 if (availableInstanceLayers.Contains(VK_LAYER_KHRONOS_validation))
                 {
                     enabledLayerNames.Add(VK_LAYER_KHRONOS_validation);
-                    capabilities = capabilities with { CanDebug = true };
+                    capabilities = capabilities with { Debugging = true };
                 }
                 else
                 {
@@ -1017,7 +1041,7 @@ public unsafe class Gfx : IDisposable
                 if (availableInstanceExtensions.Contains(VK_EXT_debug_utils))
                 {
                     enabledExtensionNames.Add(VK_EXT_debug_utils);
-                    capabilities = capabilities with { CanDebug = true };
+                    capabilities = capabilities with { Debugging = true };
                 }
                 else
                 {
@@ -1026,7 +1050,7 @@ public unsafe class Gfx : IDisposable
             }
         }
 
-        Gossamer.ApplicationInfo engineInfo = Gossamer.ApplicationInfo.FromCallingAssembly();
+        Core.ApplicationInfo engineInfo = Core.ApplicationInfo.FromCallingAssembly();
 
         using SafeNativeString applicationName = new(apiParameters.AppInfo.Name);
         using SafeNativeString engineName = new(engineInfo.Name);
@@ -1057,7 +1081,7 @@ public unsafe class Gfx : IDisposable
         ThrowVulkanIfFailed(vkCreateInstance(&instanceCreateInfo, default, &instance), "Failed to create instance.");
         this.instance = instance;
 
-        if (apiParameters.EnableDebugging && capabilities.CanDebug)
+        if (apiParameters.EnableDebugging && capabilities.Debugging)
         {
             const string STR_vkCreateDebugUtilsMessengerEXT = "vkCreateDebugUtilsMessengerEXT";
             const string STR_vkDestroyDebugUtilsMessengerEXT = "vkDestroyDebugUtilsMessengerEXT";
@@ -1089,19 +1113,19 @@ public unsafe class Gfx : IDisposable
             else
             {
                 logger.Warning("Debugging is enabled but some required functions are not available.");
-                capabilities = capabilities with { CanDebug = false };
+                capabilities = capabilities with { Debugging = false };
             }
         }
     }
 
-    void CreateVulkanDevice()
+    void CreateDevice()
     {
         ThrowInvalidOperationIfNull(parameters);
 
         VkPhysicalDevice physicalDevice = GetVulkanPhysicalDevice(parameters.PhysicalDevice);
         this.physicalDevice = physicalDevice;
 
-        logger.Debug($"Selected physical device: {parameters.PhysicalDevice}");
+        logger.Debug($"{parameters.PhysicalDevice}");
 
         VkPhysicalDeviceProperties physicalDeviceProperties;
         vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
@@ -1109,7 +1133,7 @@ public unsafe class Gfx : IDisposable
         deviceTimestampPeriodInNanoseconds = physicalDeviceProperties.Limits.TimestampPeriod;
         if (deviceTimestampPeriodInNanoseconds > 0)
         {
-            capabilities = capabilities with { CanTimestamp = true };
+            capabilities = capabilities with { Timestamps = true };
         }
 
         HashSet<string> availableDeviceExtensions = [];
@@ -1279,9 +1303,9 @@ public unsafe class Gfx : IDisposable
         // Get device function pointers
         const string STR_vkCmdPushDescriptorSetKHR = "vkCmdPushDescriptorSetKHR";
         _vkCmdPushDescriptorSetKhr = (delegate* unmanaged[Stdcall]<VkCommandBuffer, VkPipelineBindPoint, VkPipelineLayout, uint, uint, VkWriteDescriptorSet*, void>)vkGetDeviceProcAddr(device, STR_vkCmdPushDescriptorSetKHR);
-        ThrowVulkanIf(_vkCmdPushDescriptorSetKhr == null, $"Failed to get {STR_vkCmdPushDescriptorSetKHR} function pointer.");
+        ThrowVulkanIf(_vkCmdPushDescriptorSetKhr == null, $"{nameof(vkGetDeviceProcAddr)} [{STR_vkCmdPushDescriptorSetKHR}]");
 
-        if (capabilities.CanDebug && capabilities.CanTimestamp)
+        if (capabilities.Debugging && capabilities.Timestamps)
         {
             timestampPool = CreateTimestampPool(8);
         }
@@ -1290,7 +1314,7 @@ public unsafe class Gfx : IDisposable
         ResolveDepthFormat();
     }
 
-    void CreateVulkanMemoryAllocator()
+    void CreateMemoryAllocator()
     {
         uint availableApiVersionRaw = 0;
         ThrowVulkanIfFailed(vkEnumerateInstanceVersion(&availableApiVersionRaw));
@@ -1373,16 +1397,14 @@ public unsafe class Gfx : IDisposable
     VkPhysicalDevice GetVulkanPhysicalDevice(GfxPhysicalDevice gfxPhysicalDevice)
     {
         var physicalDeviceCount = 0u;
-        ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, default),
-            "Failed to get physical device count.");
+        ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, default));
 
         var physicalDevices = stackalloc VkPhysicalDevice[(int)physicalDeviceCount];
-        ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices),
-            "Failed to get physical devices.");
+        ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices));
 
         for (int i = 0; i < physicalDeviceCount; i++)
         {
-            GfxPhysicalDevice physicalDevice = ParsePhysicalDevice(physicalDevices[i]);
+            GfxPhysicalDevice physicalDevice = GetPhysicalDevice(physicalDevices[i]);
 
             if (gfxPhysicalDevice.Id == physicalDevice.Id)
             {
@@ -1390,10 +1412,10 @@ public unsafe class Gfx : IDisposable
             }
         }
 
-        throw new InvalidOperationException($"Physical device {gfxPhysicalDevice} not found.");
+        throw new InvalidOperationException($"Not Found: {gfxPhysicalDevice}");
     }
 
-    static GfxPhysicalDevice ParsePhysicalDevice(VkPhysicalDevice physicalDevice)
+    static GfxPhysicalDevice GetPhysicalDevice(VkPhysicalDevice physicalDevice)
     {
         VkPhysicalDeviceProperties properties;
         vkGetPhysicalDeviceProperties(physicalDevice, &properties);
@@ -1408,11 +1430,11 @@ public unsafe class Gfx : IDisposable
         };
 
         return new GfxPhysicalDevice(
-            Type: type,
-            Id: new Guid(new ReadOnlySpan<byte>(properties.PipelineCacheUuid, 16)),
             Name: new string((sbyte*)properties.DeviceName),
+            Vulkan: ParseVersion(properties.ApiVersion),
             Driver: ParseVersion(properties.DriverVersion),
-            Api: ParseVersion(properties.ApiVersion)
+            Type: type,
+            Id: new Guid(new ReadOnlySpan<byte>(properties.PipelineCacheUuid, 16))
         );
     }
 
@@ -1423,33 +1445,15 @@ public unsafe class Gfx : IDisposable
     public GfxPhysicalDevice[] EnumeratePhysicalDevices()
     {
         uint physicalDeviceCount = 0;
-        ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, default), "Failed to get physical device count.");
+        ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, default));
 
         VkPhysicalDevice* physicalDevices = stackalloc VkPhysicalDevice[(int)physicalDeviceCount];
-        ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices), "Failed to get physical devices.");
+        ThrowVulkanIfFailed(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices));
 
         GfxPhysicalDevice[] devices = new GfxPhysicalDevice[(int)physicalDeviceCount];
         for (int i = 0; i < physicalDeviceCount; i++)
         {
-            VkPhysicalDeviceProperties properties;
-            vkGetPhysicalDeviceProperties(physicalDevices[i], &properties);
-
-            GfxPhysicalDeviceType type = properties.DeviceType switch
-            {
-                VkPhysicalDeviceType.INTEGRATED_GPU => GfxPhysicalDeviceType.Integrated,
-                VkPhysicalDeviceType.DISCRETE_GPU => GfxPhysicalDeviceType.Discrete,
-                VkPhysicalDeviceType.VIRTUAL_GPU => GfxPhysicalDeviceType.Virtual,
-                VkPhysicalDeviceType.CPU => GfxPhysicalDeviceType.Cpu,
-                _ => GfxPhysicalDeviceType.Other
-            };
-
-            devices[i] = new GfxPhysicalDevice(
-                Type: type,
-                Id: new Guid(new ReadOnlySpan<byte>(properties.PipelineCacheUuid, 16)),
-                Name: new string((sbyte*)properties.DeviceName),
-                Driver: ParseVersion(properties.DriverVersion),
-                Api: ParseVersion(properties.ApiVersion)
-            );
+            devices[i] = GetPhysicalDevice(physicalDevices[i]);
         }
 
         return devices;

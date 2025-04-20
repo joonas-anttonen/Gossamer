@@ -2,17 +2,17 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
-using Gossamer.Backend.Text;
-
 using Gossamer.Collections;
 using Gossamer.External.Vulkan;
+using Gossamer.Gfx.Presentation;
+using Gossamer.Gfx.Text;
 using Gossamer.Logging;
 using Gossamer.Utilities;
 
 using static Gossamer.External.Vulkan.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.Backend;
+namespace Gossamer.Gfx;
 
 [StructLayout(LayoutKind.Sequential)]
 readonly struct Vertex2D(Vector2 position, Vector2 uv, Color color)
@@ -483,15 +483,15 @@ public class Gfx2DCommandBuffer
     }
 }
 
-class Gfx2D(Gfx gfx) : IDisposable
+class Gfx2D(GfxCore gfx) : IDisposable
 {
     public const int MaxVertices = 65536;
 
     public readonly record struct Statistics(ulong Frame, int DrawCalls, int Vertices, int Indices);
 
-    readonly Logger logger = Gossamer.GetLogger(nameof(Gfx2D));
+    readonly Logger logger = Core.GetLogger(nameof(Gfx2D));
 
-    readonly Gfx gfx = gfx;
+    readonly GfxCore gfx = gfx;
 
     readonly FontCollection fontCache = new();
 

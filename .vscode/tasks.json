@@ -56,8 +56,8 @@
 			"type": "shell",
 			"command": "${workspaceFolder}/Gossamer.GfxCompiler/bin/x64/Release/Gossamer.GfxCompiler.exe",
 			"args": [
-				"${workspaceFolder}/Gossamer/Backend/Shaders",
-				"${workspaceFolder}/Gossamer/Backend/Shaders/built-in.shaders"
+				"${workspaceFolder}/Gossamer/Gfx/Shaders",
+				"${workspaceFolder}/Gossamer/Gfx/Shaders/built-in.shaders"
 			]
 		}
 	]

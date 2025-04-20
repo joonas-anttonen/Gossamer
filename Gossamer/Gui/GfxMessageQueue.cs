@@ -1,22 +1,22 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
-using Gossamer.Backend;
+using Gossamer.Gfx;
 using Gossamer.Collections;
 
-namespace Gossamer.Frontend;
+namespace Gossamer.Gui;
 
-class BackendMessageQueue(int initialCapacity = 4)
+class GfxMessageQueue(int initialCapacity = 4)
 {
-    readonly ConcurrentObjectPool<BackendMessage> messagePool = new(initialCapacity: initialCapacity);
-    readonly ConcurrentQueue<BackendMessage> messageQueue = new();
+    readonly ConcurrentObjectPool<GfxMessage> messagePool = new(initialCapacity: initialCapacity);
+    readonly ConcurrentQueue<GfxMessage> messageQueue = new();
 
-    public bool TryDequeue([NotNullWhen(true)] out BackendMessage? message)
+    public bool TryDequeue([NotNullWhen(true)] out GfxMessage? message)
     {
         return messageQueue.TryDequeue(out message);
     }
 
-    public void Return(BackendMessage message)
+    public void Return(GfxMessage message)
     {
         messagePool.Return(message);
     }

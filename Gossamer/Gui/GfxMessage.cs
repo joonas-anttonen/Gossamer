@@ -1,10 +1,10 @@
-using Gossamer.Backend;
+using Gossamer.Gfx;
 
-namespace Gossamer.Frontend;
+namespace Gossamer.Gui;
 
 using static Utilities.ExceptionUtilities;
 
-enum BackendMessageType
+enum GfxMessageType
 {
     Quit,
     SurfaceDamaged,
@@ -16,9 +16,9 @@ enum BackendMessageType
     KeyboardChar,
 }
 
-class BackendMessage
+class GfxMessage
 {
-    public BackendMessageType Type { get; private set; }
+    public GfxMessageType Type { get; private set; }
 
     int field0;
     int field1;
@@ -27,14 +27,14 @@ class BackendMessage
 
     public void GetMouseXY(out int x, out int y)
     {
-        ThrowInvalidOperationIfNot(Type == BackendMessageType.MouseXY);
+        ThrowInvalidOperationIfNot(Type == GfxMessageType.MouseXY);
         x = field0;
         y = field1;
     }
 
     public void GetMouseButton(out InputButton button, out InputAction action, out InputMods mods)
     {
-        ThrowInvalidOperationIfNot(Type == BackendMessageType.MouseButton);
+        ThrowInvalidOperationIfNot(Type == GfxMessageType.MouseButton);
         button = (InputButton)field0;
         action = (InputAction)field1;
         mods = (InputMods)field2;
@@ -42,14 +42,14 @@ class BackendMessage
 
     public void GetMouseWheel(out int x, out int y)
     {
-        ThrowInvalidOperationIfNot(Type == BackendMessageType.MouseWheel);
+        ThrowInvalidOperationIfNot(Type == GfxMessageType.MouseWheel);
         x = field0;
         y = field1;
     }
 
     public void GetKeyboardKey(out InputKey key, out int scancode, out InputAction action, out InputMods mods)
     {
-        ThrowInvalidOperationIfNot(Type == BackendMessageType.KeyboardKey);
+        ThrowInvalidOperationIfNot(Type == GfxMessageType.KeyboardKey);
         key = (InputKey)field0;
         scancode = field1;
         action = (InputAction)field2;
@@ -58,45 +58,45 @@ class BackendMessage
 
     public void GetKeyboardChar(out int codepoint, out InputMods mods)
     {
-        ThrowInvalidOperationIfNot(Type == BackendMessageType.KeyboardChar);
+        ThrowInvalidOperationIfNot(Type == GfxMessageType.KeyboardChar);
         codepoint = field0;
         mods = (InputMods)field1;
     }
 
     public void GetSurfaceLost(out int x, out int y)
     {
-        ThrowInvalidOperationIfNot(Type == BackendMessageType.SurfaceLost);
+        ThrowInvalidOperationIfNot(Type == GfxMessageType.SurfaceLost);
         x = field0;
         y = field1;
     }
 
     public void SetQuit()
     {
-        Type = BackendMessageType.Quit;
+        Type = GfxMessageType.Quit;
     }
 
     public void SetSurfaceDamaged()
     {
-        Type = BackendMessageType.SurfaceDamaged;
+        Type = GfxMessageType.SurfaceDamaged;
     }
 
     public void SetSurfaceLost(int x, int y)
     {
-        Type = BackendMessageType.SurfaceLost;
+        Type = GfxMessageType.SurfaceLost;
         field0 = x;
         field1 = y;
     }
 
     public void SetMouseXY(int x, int y)
     {
-        Type = BackendMessageType.MouseXY;
+        Type = GfxMessageType.MouseXY;
         field0 = x;
         field1 = y;
     }
 
     public void SetMouseButton(InputButton button, InputAction action, InputMods mods)
     {
-        Type = BackendMessageType.MouseButton;
+        Type = GfxMessageType.MouseButton;
         field0 = (int)button;
         field1 = (int)action;
         field2 = (int)mods;
@@ -104,14 +104,14 @@ class BackendMessage
 
     public void SetMouseWheel(int x, int y)
     {
-        Type = BackendMessageType.MouseWheel;
+        Type = GfxMessageType.MouseWheel;
         field0 = x;
         field1 = y;
     }
 
     public void SetKeyboardKey(InputKey key, int scancode, InputAction action, InputMods mods)
     {
-        Type = BackendMessageType.KeyboardKey;
+        Type = GfxMessageType.KeyboardKey;
         field0 = (int)key;
         field1 = scancode;
         field2 = (int)action;
@@ -120,7 +120,7 @@ class BackendMessage
 
     public void SetKeyboardChar(int codepoint, InputMods mods)
     {
-        Type = BackendMessageType.KeyboardChar;
+        Type = GfxMessageType.KeyboardChar;
         field0 = codepoint;
         field1 = (int)mods;
     }

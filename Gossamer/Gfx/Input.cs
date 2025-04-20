@@ -1,4 +1,4 @@
-namespace Gossamer.Backend;
+namespace Gossamer.Gfx;
 
 public enum MouseMode
 {

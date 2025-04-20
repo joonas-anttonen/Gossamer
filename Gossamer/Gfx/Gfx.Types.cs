@@ -6,10 +6,10 @@ using Gossamer.External.Vulkan;
 using Gossamer.External.Vulkan.Vma;
 using Gossamer.Utilities;
 
-namespace Gossamer.Backend;
+namespace Gossamer.Gfx;
 
 public record GfxPresentation();
-public record GfxSwapChainPresentation(Frontend.Gui Gui, bool EnableVerticalSync) : GfxPresentation();
+public record GfxSwapChainPresentation(Gui.GuiCore Gui, bool EnableVerticalSync) : GfxPresentation();
 public record GfxDirectXPresentation(nint Handle, GfxFormat Format, uint Width, uint Height) : GfxPresentation();
 
 internal record GfxSwapChainSurface(VkSurfaceKhr Surface, VkExtent2D Extent);
@@ -22,7 +22,7 @@ public enum GfxPresentationMode
 }
 
 public record GfxApiParameters(
-    Gossamer.ApplicationInfo AppInfo,
+    Core.ApplicationInfo AppInfo,
     bool EnableDebugging,
     GfxPresentationMode PresentationMode
 );
@@ -32,26 +32,32 @@ public record GfxParameters(
 );
 
 public record GfxCapabilities(
-    bool CanDebug,
-    bool CanSwap,
-    bool CanTimestamp
+    bool Debugging,
+    bool SwapChain,
+    bool Timestamps
 );
 
 /// <summary>
 /// Represents a physical device.
 /// </summary>
+/// <param name="Name">Name of the physical device.</param>
+/// <param name="Driver">Driver version.</param>
+/// <param name="Api">Vulkan api version.</param>
 /// <param name="Type">Type of the physical device.</param>
 /// <param name="Id">Unique identifier of the physical device.</param>
-/// <param name="Name">Name of the physical device.</param>
-/// <param name="Driver">Vulkan driver version.</param>
-/// <param name="Api">Vulkan api version.</param>
 public record GfxPhysicalDevice(
-    GfxPhysicalDeviceType Type,
-    Guid Id,
     string Name,
+    Version Vulkan,
     Version Driver,
-    Version Api
-);
+    GfxPhysicalDeviceType Type,
+    Guid Id
+)
+{
+    public override string ToString()
+    {
+        return $"{Name} [Vulkan: {Vulkan}] [Driver: {Driver}]";
+    }
+}
 
 public enum AntialiasingMode
 {

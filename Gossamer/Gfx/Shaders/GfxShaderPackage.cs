@@ -3,9 +3,9 @@ using Gossamer.Utilities;
 
 using static Gossamer.Utilities.ExceptionUtilities;
 
-namespace Gossamer.Backend.Shaders;
+namespace Gossamer.Gfx.Shaders;
 
-record ShaderPackage(Dictionary<string, ShaderPackage.ShaderProgram> Pipelines)
+record GfxShaderPackage(Dictionary<string, GfxShaderPackage.ShaderProgram> Pipelines)
 {
     public record ShaderStage(uint Stage, string EntryPoint, long Offset, long Size);
     public record ShaderProgram(string Name, ShaderStage[] Stages);
@@ -31,7 +31,7 @@ record ShaderPackage(Dictionary<string, ShaderPackage.ShaderProgram> Pipelines)
         uint bytecodeChunkType = reader.ReadUInt32();
         ThrowInvalidDataIf(bytecodeChunkType != 2, "Invalid bytecode chunk type.");
 
-        ShaderPackage packageDefinition = JsonUtilities.Deserialize<ShaderPackage>(jsonChunkData);
+        GfxShaderPackage packageDefinition = JsonUtilities.Deserialize<GfxShaderPackage>(jsonChunkData);
         byte[] packageBytecode = reader.ReadBytes((int)bytecodeChunkLength);
 
         Dictionary<string, GfxPipelineShader> shaderPrograms = new(capacity: packageDefinition.Pipelines.Count);

@@ -2,16 +2,17 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-using Gossamer.Backend;
 using Gossamer.Collections;
-using Gossamer.Frontend;
+using Gossamer.Gfx;
+using Gossamer.Gfx.Presentation;
+using Gossamer.Gui;
 using Gossamer.Logging;
 
 using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer;
 
-public sealed class Gossamer : SynchronizationContext, IDisposable
+public sealed class Core : SynchronizationContext, IDisposable
 {
     public record ApplicationInfo(string Name, Version Version)
     {
@@ -26,7 +27,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         }
     }
 
-    public record Parameters(bool EnableDebugging = false, Gui.Platform Platform = Gui.Platform.Auto)
+    public record Parameters(bool EnableDebugging = false, GuiCore.Platform Platform = GuiCore.Platform.Auto)
     {
         public static Parameters FromArgs(string[] args)
         {
@@ -48,7 +49,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
             return new Parameters(
                 EnableDebugging: argMap.ContainsKey("debug"),
-                Platform: argMap.TryGetValue("platform", out string? platformArg) ? Enum.Parse<Gui.Platform>(platformArg, ignoreCase: true) : Gui.Platform.Auto
+                Platform: argMap.TryGetValue("platform", out string? platformArg) ? Enum.Parse<GuiCore.Platform>(platformArg, ignoreCase: true) : GuiCore.Platform.Auto
             );
         }
     }
@@ -58,73 +59,69 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     bool isDisposed;
 
-    readonly BackendMessageQueue backendMessageQueue = new(initialCapacity: 16);
+    readonly GfxMessageQueue gfxMessageQueue = new(initialCapacity: 16);
 
-    readonly int frontendThreadId;
-    readonly int backendThreadId;
-    readonly Thread backendThread;
-    int syncOperationCount;
-    readonly ConcurrentObjectPool<SyncEntry> syncEntryPool = new(16);
-    readonly ConcurrentQueue<SyncEntry> frontendSyncQueue = [];
+    readonly int guiThreadId;
+    readonly int gfxThreadId;
+    readonly Thread gfxThread;
 
-    Gfx? gfx;
-    Gui? gui;
+    int guiSyncOperationCount;
+    readonly ConcurrentObjectPool<SyncEntry> guiSyncEntryPool = new(16);
+    readonly ConcurrentQueue<SyncEntry> guiSyncQueue = [];
+
+    GfxCore? gfx;
+    GuiCore? gui;
 
     readonly Stopwatch stopwatch = Stopwatch.StartNew();
 
     readonly Parameters parameters;
     readonly ApplicationInfo appInfo;
 
-    static Gossamer? instance;
+    static Core? instance;
 
     public static TimeSpan GetTime()
     {
         return Instance.stopwatch.Elapsed;
     }
 
-    /// <inheritdoc cref="Log.GetLogger(string)"/>
+    /// <summary>
+    /// Gets a <see cref="Logger"/> from the <see cref="Log"/> of the <see cref="Core"/> singleton instance. 
+    /// </summary>
+    /// <param name="name"></param>
     public static Logger GetLogger(string name)
     {
         return Instance.log.GetLogger(name);
     }
 
-    public static void Log(string message, string typeName = "", [System.Runtime.CompilerServices.CallerMemberName] string callerName = "")
-    {
-        Instance.logger.Debug(message, typeName, callerName);
-    }
-
     /// <summary>
-    /// The singleton instance of <see cref="Gossamer"/>. Safe to use only after an instance has been created.
+    /// The singleton instance of <see cref="Core"/>. Safe to use only after an instance has been created.
     /// </summary>
-    public static Gossamer Instance
+    public static Core Instance
     {
-        get => instance ?? throw new InvalidOperationException("Gossamer has not been initialized.");
+        get => ThrowInvalidOperationIfNull(instance, $"{nameof(Core)} has not been initialized.");
     }
 
     static int Main(string[] args)
     {
         var parameters = Parameters.FromArgs(args);
-        using var gossamer = new Gossamer(parameters);
+        using var gossamer = new Core(parameters);
         return gossamer.Run();
     }
 
-    public Gossamer(Parameters parameters, ApplicationInfo? appInfo = default)
+    public Core(Parameters parameters, ApplicationInfo? appInfo = default)
     {
-        if (instance != null)
-        {
-            throw new InvalidOperationException("Gossamer has already been initialized.");
-        }
+        ThrowInvalidOperationIf(instance != null, $"{nameof(Core)} has already been initialized.");
         instance = this;
 
         this.parameters = parameters;
         this.appInfo = appInfo ?? ApplicationInfo.FromCallingAssembly();
 
-        frontendThreadId = Environment.CurrentManagedThreadId;
-        backendThread = new(RunBackend);
-        backendThreadId = backendThread.ManagedThreadId;
+        guiThreadId = Environment.CurrentManagedThreadId;
+        gfxThread = new(RunGfx);
+        gfxThreadId = gfxThread.ManagedThreadId;
 
         log = new Log();
-        logger = log.GetLogger(nameof(Gossamer));
+        logger = log.GetLogger(nameof(Core));
 
         if (parameters.EnableDebugging)
         {
@@ -133,7 +130,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
         SetSynchronizationContext(this);
 
-        NativeLibrary.SetDllImportResolver(typeof(Gossamer).Assembly, NativeImportResolver);
+        NativeLibrary.SetDllImportResolver(typeof(Core).Assembly, NativeImportResolver);
     }
 
     /// <summary>
@@ -191,50 +188,48 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
     }
 
     /// <summary>
-    /// Runs <see cref="Gossamer"/> in full application mode. This method will block until the frontend is closed.
+    /// Runs Gossamer. This method will block until the user interface is closed.
     /// </summary>
     public int Run()
     {
         try
         {
-            // Set the current directory to the directory of the executable
-            Directory.SetCurrentDirectory(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location!)!);
-
             if (parameters.EnableDebugging)
             {
                 logger.Debug($"OS: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
                 logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
-                logger.Debug($"Working directory: {Directory.GetCurrentDirectory()}");
-                logger.Debug($"Frontend = {frontendThreadId}");
-                logger.Debug($"Backend = {backendThreadId}");
+                logger.Debug($"Directory: {Directory.GetCurrentDirectory()}");
+                logger.Debug($"Gui: {guiThreadId} Gfx: {gfxThreadId}");
             }
 
-            // 1. Create Gfx
-            using Gfx gfx = new(new GfxApiParameters(
+            // 1. Create graphics
+            using GfxCore gfx = new(new GfxApiParameters(
                 appInfo,
                 EnableDebugging: parameters.EnableDebugging,
                 PresentationMode: GfxPresentationMode.SwapChain
             ));
 
-            // 2. Initialize Gfx
+            // 2. Initialize graphics
             gfx.Create(new GfxParameters(
                 PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices())
             ));
 
-            // 3. Create Gui
-            using Gui gui = new(parameters, gfx, backendMessageQueue);
+            // 3. Create user interface
+            using GuiCore gui = new(parameters, gfx, gfxMessageQueue);
 
-            // 4. Initialize Gui
-            gui.Create();
+            // 4. Initialize user interface
+            gui.Create(new GuiParameters(
+                name: appInfo.Name
+            ));
 
-            // 5. Create Gfx presenter (depends on Gui)
+            // 5. Create graphics swap chain presenter (depends on user interface)
             gfx.CreatePresenter(new GfxSwapChainPresentation(gui, EnableVerticalSync: false));
 
-            RunBackend(gfx);
-            RunFrontend(gui);
+            RunGfx(gfx);
+            RunGui(gui);
 
-            backendMessageQueue.PostQuit();
-            backendThread?.Join();
+            gfxMessageQueue.PostQuit();
+            gfxThread?.Join();
 
             return 0;
         }
@@ -247,30 +242,30 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
     }
 
     /// <summary>
-    /// Runs the backend on a separate thread. This method will return immediately.
+    /// Runs the graphics on a separate thread. This method will return immediately.
     /// </summary>
     /// <param name="gfx"></param>
-    public void RunBackend(Gfx gfx)
+    public void RunGfx(GfxCore gfx)
     {
         ThrowInvalidOperationIfNull(gfx, "Gfx is null.");
         this.gfx = gfx;
 
-        backendThread.Start();
+        gfxThread.Start();
     }
 
     /// <summary>
-    /// Runs the frontend on the current thread. This method will block until the frontend is closed.
+    /// Runs the user interface on the current thread. This method will block until the user interface is closed.
     /// </summary>
     /// <param name="gui"></param>
-    public void RunFrontend(Gui gui)
+    public void RunGui(GuiCore gui)
     {
         ThrowInvalidOperationIfNull(gui, "Gui is null.");
         this.gui = gui;
 
         while (true)
         {
-            FrontendDispatchSyncQueue();
-            FrontendFrame();
+            GuiDispatchSyncQueue();
+            GuiFrame();
 
             if (gui.IsClosing)
             {
@@ -281,9 +276,9 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         logger.Debug("Exit");
     }
 
-    void FrontendDispatchSyncQueue()
+    void GuiDispatchSyncQueue()
     {
-        while (frontendSyncQueue.TryDequeue(out SyncEntry? entry))
+        while (guiSyncQueue.TryDequeue(out SyncEntry? entry))
         {
             logger.Debug($"FrontendDispatchSyncQueue on thread = {Environment.CurrentManagedThreadId}");
 
@@ -291,11 +286,11 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             // TODO: Handle exceptions
             entry.Complete();
 
-            syncEntryPool.Return(entry);
+            guiSyncEntryPool.Return(entry);
         }
     }
 
-    void FrontendFrame()
+    void GuiFrame()
     {
         ThrowInvalidOperationIfNull(gui);
 
@@ -303,16 +298,16 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
         gui.Render();
     }
 
-    void FrontendWakeUp()
+    void GuiWakeUp()
     {
         ThrowInvalidOperationIfNull(gui);
 
         gui.PostEmptyEvent();
     }
 
-    void RunBackend()
+    void RunGfx()
     {
-        Gfx localGfx = ThrowInvalidOperationIfNull(gfx);
+        GfxCore localGfx = ThrowInvalidOperationIfNull(gfx);
 
         bool keepRunning = true;
         while (keepRunning)
@@ -320,20 +315,20 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
             bool keepDequeueing = true;
             while (keepDequeueing)
             {
-                if (!backendMessageQueue.TryDequeue(out BackendMessage? message))
+                if (!gfxMessageQueue.TryDequeue(out GfxMessage? message))
                 {
                     break;
                 }
 
                 switch (message.Type)
                 {
-                    case BackendMessageType.Quit:
+                    case GfxMessageType.Quit:
                         {
                             keepDequeueing = false;
                             keepRunning = false;
                             break;
                         }
-                    case BackendMessageType.SurfaceLost:
+                    case GfxMessageType.SurfaceLost:
                         {
                             message.GetSurfaceLost(out int w, out int h);
 
@@ -343,7 +338,7 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
                         }
                 }
 
-                backendMessageQueue.Return(message);
+                gfxMessageQueue.Return(message);
             }
 
             localGfx.Render();
@@ -363,12 +358,12 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     public override void OperationStarted()
     {
-        Interlocked.Increment(ref syncOperationCount);
+        Interlocked.Increment(ref guiSyncOperationCount);
     }
 
     public override void OperationCompleted()
     {
-        Interlocked.Decrement(ref syncOperationCount);
+        Interlocked.Decrement(ref guiSyncOperationCount);
     }
 
     public override void Post(SendOrPostCallback d, object? state)
@@ -389,18 +384,18 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
 
     SyncEntry EnqueueSync(SendOrPostCallback d, object? state, bool synchronous)
     {
-        var entry = syncEntryPool.Rent();
+        var entry = guiSyncEntryPool.Rent();
         entry.Initialize(synchronous, d, state);
 
-        frontendSyncQueue.Enqueue(entry);
+        guiSyncQueue.Enqueue(entry);
 
-        if (Environment.CurrentManagedThreadId == frontendThreadId)
+        if (Environment.CurrentManagedThreadId == guiThreadId)
         {
-            FrontendDispatchSyncQueue();
+            GuiDispatchSyncQueue();
         }
         else
         {
-            FrontendWakeUp();
+            GuiWakeUp();
         }
 
         return entry;

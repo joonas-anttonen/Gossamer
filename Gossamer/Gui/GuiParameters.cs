@@ -2,15 +2,15 @@ using System.Text.Json.Serialization;
 
 using Gossamer.Utilities;
 
-namespace Gossamer.Frontend;
+namespace Gossamer.Gui;
 
-public class GuiParameters
+public class GuiParameters(string name)
 {
     /// <summary>
     /// Name and title of the <see cref="Window"/>.
     /// </summary>
     [JsonIgnore]
-    public string Name { get; set; } = string.Empty;
+    public string Name { get; set; } = name;
 
     /// <summary>
     /// Determines whether or not the graphics debugging layer is enabled. Defaults to true in debug builds.
@@ -55,10 +55,10 @@ public class GuiParameters
     /// Color of the edges of the <see cref="Window"/>.
     /// </summary>
     [JsonConverter(typeof(JsonColorConverter))]
-    public Color ColorOfFrame { get; set; } = Color.ParseUInt(0x2B2A33);
+    public Color ColorOfFrame { get; set; } = Color.ParseUInt(0x282c34);
     /// <summary>
     /// Color of the client area of the <see cref="Window"/>.
     /// </summary>
     [JsonConverter(typeof(JsonColorConverter))]
-    public Color ColorOfBackground { get; set; } = Color.ParseUInt(0x1f1e25);
+    public Color ColorOfBackground { get; set; } = Color.ParseUInt(0x232731);
 }

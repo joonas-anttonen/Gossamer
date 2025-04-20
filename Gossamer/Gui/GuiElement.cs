@@ -1,7 +1,7 @@
-using Gossamer.Backend;
+using Gossamer.Gfx;
 using Gossamer.Utilities;
 
-namespace Gossamer.Frontend;
+namespace Gossamer.Gui;
 
 /// <summary>
 /// Represents the units of measurement for GUI elements.
@@ -342,7 +342,7 @@ public class GuiElement : IGridControllable
     PartialStyle? focusedStyle;
     PartialStyle? focusedVisibleStyle;
 
-    internal Gui gui;
+    internal GuiCore gui;
 
     internal GuiElement? parent;
 
@@ -479,12 +479,12 @@ public class GuiElement : IGridControllable
         internal set;
     }
 
-    internal GuiElement(Gui gui, Identity id)
+    internal GuiElement(GuiCore gui, Identity id)
     {
         this.gui = gui;
         Id = id;
 
-        logger = Gossamer.GetLogger($"{nameof(GuiElement)}({id})");
+        logger = Core.GetLogger($"{nameof(GuiElement)}({id})");
     }
 
     /// <summary>

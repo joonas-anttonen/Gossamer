@@ -2,7 +2,7 @@
     Enums for the graphics backend. Collected in one file for convenience.
 */
 
-namespace Gossamer.Backend;
+namespace Gossamer.Gfx;
 
 public enum GfxFormat
 {

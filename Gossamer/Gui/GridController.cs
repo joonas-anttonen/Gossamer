@@ -1,4 +1,4 @@
-namespace Gossamer.Frontend;
+namespace Gossamer.Gui;
 
 public class GridController : IGridControllable
 {
