@@ -103,6 +103,46 @@ public sealed class Core : SynchronizationContext, IDisposable
 
     static int Main(string[] args)
     {
+        unsafe
+        {
+            /*External.Spng.spng_ctx* ctx = External.Spng.Api.spng_ctx_new(0);
+            Console.WriteLine($"ctx: {(nint)ctx}");
+
+            External.Spng.spng_errno err = External.Spng.spng_errno.SPNG_OK;
+            byte[] data = File.ReadAllBytes(@"D:\Inspiration\NSFW\79no0d3c12ud1.png");
+
+            fixed (byte* ptr = data)
+            {
+                err = External.Spng.Api.spng_set_png_buffer(ctx, ptr, (ulong)data.Length);
+                Console.WriteLine($"spng_set_png_buffer: {err}");
+
+                External.Spng.spng_ihdr ihdr = new();
+                err = External.Spng.Api.spng_get_ihdr(ctx, &ihdr);
+                Console.WriteLine($"spng_get_ihdr: {err} {ihdr.width}x{ihdr.height} {ihdr.color_type} {ihdr.bit_depth}");
+
+                ulong out_size = 0;
+                err = External.Spng.Api.spng_decoded_image_size(ctx, External.Spng.spng_format.SPNG_FMT_RGBA8, &out_size);
+                Console.WriteLine($"spng_decoded_image_size: {err} {out_size}");
+
+                byte[] out_data = new byte[out_size];
+                fixed (byte* p_out = out_data)
+                {
+                    err = External.Spng.Api.spng_decode_image(ctx, p_out, out_size, External.Spng.spng_format.SPNG_FMT_RGBA8, 0);
+                    Console.WriteLine($"spng_decode_image: {err}");
+                }
+
+                External.Spng.Api.spng_ctx_free(ctx);
+            }
+
+            // Print bytes
+            Console.WriteLine("Decoded image:");
+            for (int i = 0; i < 16; i++)
+            {
+                Console.Write($"{data[i]:X2} ");
+            }
+            Console.WriteLine();*/
+        }
+
         var parameters = Parameters.FromArgs(args);
         using var gossamer = new Core(parameters);
         return gossamer.Run();
@@ -156,22 +196,20 @@ public sealed class Core : SynchronizationContext, IDisposable
                 {
                     return NativeLibrary.Load("libvulkan.so.1");
                 }
-                break;
-
+                return nint.Zero;
             case External.Glfw.Api.BinaryName:
                 return Load(External.Glfw.Api.BinaryName, assembly);
-
             case External.HarfBuzz.Api.BinaryName:
                 return Load(External.HarfBuzz.Api.BinaryName, assembly);
-
             case External.FreeType.Api.BinaryName:
                 return Load(External.FreeType.Api.BinaryName, assembly);
-
             case External.Vulkan.Vma.Api.BinaryName:
                 return Load(External.Vulkan.Vma.Api.BinaryName, assembly);
+            case External.Spng.Api.BinaryName:
+                return Load(External.Spng.Api.BinaryName, assembly);
+            default:
+                return nint.Zero;
         }
-
-        return nint.Zero;
     }
 
     public void Dispose()

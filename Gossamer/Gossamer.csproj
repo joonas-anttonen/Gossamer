@@ -54,6 +54,12 @@
     <None Update="External/libgossamer-vma.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- SPNG -->
+    <None Update="External/libspng-0.7.4.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!-- Dependency binaries for Linux -->
