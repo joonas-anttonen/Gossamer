@@ -103,8 +103,31 @@ public sealed class Core : SynchronizationContext, IDisposable
 
     static int Main(string[] args)
     {
+        var parameters = Parameters.FromArgs(args);
+        using var gossamer = new Core(parameters);
+
         unsafe
         {
+            byte[] data = File.ReadAllBytes(@"D:\nsfw\2g4gv8cc8tjd1.webp");
+
+            fixed (byte* ptr = data)
+            {
+                int width = 0, height = 0;
+                int err = External.Webp.Api.WebPGetInfo(ptr, (ulong)data.Length, &width, &height);
+                Console.WriteLine($"WebPGetInfo: {err} {width}x{height}");
+
+                byte* outPtr = External.Webp.Api.WebPDecodeRGB(ptr, (ulong)data.Length, &width, &height);
+                Console.WriteLine($"WebPDecodeRGB: {(nint)outPtr} {width}x{height}");
+            }
+
+            // Print bytes
+            Console.WriteLine("Decoded image:");
+            for (int i = 0; i < 16; i++)
+            {
+                Console.Write($"{data[i]:X2} ");
+            }
+            Console.WriteLine();
+
             /*External.Spng.spng_ctx* ctx = External.Spng.Api.spng_ctx_new(0);
             Console.WriteLine($"ctx: {(nint)ctx}");
 
@@ -143,8 +166,6 @@ public sealed class Core : SynchronizationContext, IDisposable
             Console.WriteLine();*/
         }
 
-        var parameters = Parameters.FromArgs(args);
-        using var gossamer = new Core(parameters);
         return gossamer.Run();
     }
 
@@ -207,6 +228,8 @@ public sealed class Core : SynchronizationContext, IDisposable
                 return Load(External.Vulkan.Vma.Api.BinaryName, assembly);
             case External.Spng.Api.BinaryName:
                 return Load(External.Spng.Api.BinaryName, assembly);
+            case External.Webp.Api.BinaryName:
+                return Load(External.Webp.Api.BinaryName, assembly);
             default:
                 return nint.Zero;
         }
