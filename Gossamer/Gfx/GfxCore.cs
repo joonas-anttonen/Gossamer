@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 
+using Gossamer.Assets;
 using Gossamer.External.Vulkan;
 using Gossamer.External.Vulkan.Vma;
 using Gossamer.Gfx.Presentation;
@@ -674,6 +675,69 @@ public unsafe class GfxCore : IDisposable
         ThrowVulkanIfFailed(vkCreateImageView(device, &imageViewCreateInfo, default, &view));
 
         return new PixelBuffer(format, aspect, samples, width, height, image, view, allocation);
+    }
+
+    internal PixelBuffer CreatePixelBuffer(ImageAsset image, GfxPixelBufferUsage usage)
+    {
+        return CreatePixelBuffer(
+            data: image.Data,
+            width: image.Width,
+            height: image.Height,
+            format: image.Format,
+            usage: usage);
+    }
+
+    internal PixelBuffer CreatePixelBuffer(byte[] data, uint width, uint height, GfxFormat format, GfxPixelBufferUsage usage)
+    {
+        PixelBuffer pixelBuffer = CreatePixelBuffer(
+            width: width,
+            height: height,
+            format: format,
+            usage: usage | GfxPixelBufferUsage.TransferDst,
+            aspect: GfxAspect.Color,
+            samples: GfxSamples.X1);
+
+        MemoryBuffer<byte> fontStagingBuffer = CreateDynamicMemoryBuffer<byte>(length: data.Length, GfxMemoryBufferUsage.TransferSrc);
+        UpdateDynamicBuffer(fontStagingBuffer, data);
+
+        GfxSingleCommand fontStagingCommand = BeginSingleCommand();
+
+        PixelBufferBarrier(
+            fontStagingCommand.CommandBuffer,
+            pixelBuffer: pixelBuffer,
+            srcLayout: VkImageLayout.UNDEFINED,
+            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+
+        VkBufferImageCopy bufferImageCopy = new()
+        {
+            BufferOffset = 0,
+            BufferRowLength = 0,
+            BufferImageHeight = 0,
+            ImageSubresource = new()
+            {
+                Aspect = VkImageAspect.COLOR,
+                MipLevel = 0,
+                BaseArrayLayer = 0,
+                LayerCount = 1,
+            },
+            ImageOffset = new(0, 0, 0),
+            ImageExtent = new(width, height, 1),
+        };
+
+        vkCmdCopyBufferToImage(fontStagingCommand.CommandBuffer, fontStagingBuffer.Buffer, pixelBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
+
+        PixelBufferBarrier(
+            fontStagingCommand.CommandBuffer,
+            pixelBuffer: pixelBuffer,
+            srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
+            dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
+
+        SubmitSingleCommand(fontStagingCommand);
+        EndSingleCommand(fontStagingCommand);
+
+        DestroyMemoryBuffer(fontStagingBuffer);
+
+        return pixelBuffer;
     }
 
     internal VkDescriptorSetLayout CreateDescriptorLayout(VkDescriptorSetLayoutBinding[] bindings)
