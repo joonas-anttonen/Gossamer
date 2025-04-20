@@ -17,7 +17,7 @@ namespace Gossamer.Backend;
 
 public unsafe class Gfx : IDisposable
 {
-    public readonly record struct Statistics(ulong Frame, TimeSpan CpuFrameTime, TimeSpan GpuFrameTime);
+    public readonly record struct Statistics(ulong Frame, TimeSpan CpuFrameTime, TimeSpan GpuFrameTime, TimeSpan TotalPauseDuration);
 
     readonly Logger logger = Gossamer.GetLogger(nameof(Gfx));
 
@@ -41,8 +41,6 @@ public unsafe class Gfx : IDisposable
 
     VkCommandPool deviceCommandPool;
     GfxTimestampPool? timestampPool;
-    readonly Stopwatch globalRenderStopwatch = Stopwatch.StartNew();
-    TimeSpan globalRenderTimestamp;
 
     VkFormat deviceDepthFormat;
     VkSampleCount deviceSampleCount;
@@ -107,9 +105,6 @@ public unsafe class Gfx : IDisposable
 
         ThrowInvalidOperationIfNull(gfx2D);
 
-        TimeSpan globalRenderElapsed = globalRenderStopwatch.Elapsed - globalRenderTimestamp;
-        globalRenderTimestamp = globalRenderStopwatch.Elapsed;
-
         bool canRender = presenter.BeginFrame();
         if (!canRender)
         {
@@ -138,7 +133,7 @@ public unsafe class Gfx : IDisposable
 
         presenter?.EndFrame();
 
-        statistics = new(frameCounter, cpuFrameTime, gpuFrameTime);
+        statistics = new(frameCounter, cpuFrameTime, gpuFrameTime, presenter!.GetTotalPauseDuration());
         frameCounter++;
     }
 

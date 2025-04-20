@@ -46,7 +46,7 @@ public class RingBuffer<T>(int capacity) : IEnumerable<T> where T : INumber<T>
     /// <summary>
     /// Pushes an item onto the ring buffer.
     /// </summary>
-    /// <param name="item"></param>
+    /// <param name="item"> The item to push. </param>
     public void Push(T item)
     {
         buffer[head] = item;
@@ -57,12 +57,12 @@ public class RingBuffer<T>(int capacity) : IEnumerable<T> where T : INumber<T>
     /// <summary>
     /// Calculates the minimum, maximum, and average values in the ring buffer.
     /// </summary>
-    /// <param name="min"></param>
-    /// <param name="max"></param>
-    /// <param name="average"></param>
-    public void CalculateMinMaxMean(out T min, out T max, out T average)
+    /// <param name="min"> The minimum. </param>
+    /// <param name="max"> The maximum. </param>
+    /// <param name="mean"> The mean. </param>
+    public void CalculateMinMaxMean(out T min, out T max, out T mean)
     {
-        min = max = average = buffer[0];
+        min = max = mean = buffer[0];
 
         if (Count == 0)
         {
@@ -82,10 +82,10 @@ public class RingBuffer<T>(int capacity) : IEnumerable<T> where T : INumber<T>
                 max = value;
             }
 
-            average += value;
+            mean += value;
         }
 
-        average /= T.CreateChecked(Count);
+        mean /= T.CreateChecked(Count);
     }
 
     IEnumerator<T> IEnumerable<T>.GetEnumerator()

@@ -1,3 +1,5 @@
+using Gossamer.Collections;
+
 namespace Gossamer.Utilities;
 
 /// <summary>
@@ -16,6 +18,18 @@ public static class StringUtilities
     /// <returns></returns>
     public static string FormatInvariant(string format, params object?[] args)
         => string.Format(System.Globalization.CultureInfo.InvariantCulture, format, args);
+
+    /// <summary>
+    /// Formats the minimum, maximum, and mean values of the specified ring buffer. Ring buffer values are interpreted as time values.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="ringBuffer"></param>
+    /// <returns>A formatted string representing the minimum, maximum, and mean time values.</returns>
+    public static string TimeMinMaxMean<T>(RingBuffer<T> ringBuffer) where T : INumber<T>
+    {
+        ringBuffer.CalculateMinMaxMean(out T min, out T max, out T mean);
+        return $"Min: {TimeShortInvariant(double.CreateChecked(min))} Max: {TimeShortInvariant(double.CreateChecked(max))} Mean: {TimeShortInvariant(double.CreateChecked(mean))}";
+    }
 
     /// <summary>
     /// Converts the specified count to a user-friendly format with thousand separators. <br/>
@@ -64,9 +78,9 @@ public static class StringUtilities
     /// <returns>A string representation of the seconds in a user-friendly format.</returns>
     public static string TimeShort(double seconds)
     {
-        if (seconds >= 3600) return $"{seconds / 3600:F1} h";
-        else if (seconds >= 60) return $"{seconds / 60:F1} m";
-        else if (seconds >= 1) return $"{seconds:F1} s";
+        if (seconds >= 3600) return $"{seconds / 3600:F0} h";
+        else if (seconds >= 60) return $"{seconds / 60:F0} m";
+        else if (seconds >= 1) return $"{seconds:F0} s";
         else if (seconds >= 1e-3) return $"{seconds * 1e3:F0} ms";
         else if (seconds >= 1e-6) return $"{seconds * 1e6:F0} us";
         else return $"{seconds * 1e9:F0} ns";
@@ -79,9 +93,9 @@ public static class StringUtilities
     /// <returns>A string representation of the seconds in a user-friendly format using the invariant culture.</returns>
     public static string TimeShortInvariant(double seconds)
     {
-        if (seconds >= 3600) return FormatInvariant("{0:F1} h", seconds / 3600);
-        else if (seconds >= 60) return FormatInvariant("{0:F1} m", seconds / 60);
-        else if (seconds >= 1) return FormatInvariant("{0:F1} s", seconds);
+        if (seconds >= 3600) return FormatInvariant("{0:F0} h", seconds / 3600);
+        else if (seconds >= 60) return FormatInvariant("{0:F0} m", seconds / 60);
+        else if (seconds >= 1) return FormatInvariant("{0:F0} s", seconds);
         else if (seconds >= 1e-3) return FormatInvariant("{0:F0} ms", seconds * 1e3);
         else if (seconds >= 1e-6) return FormatInvariant("{0:F0} us", seconds * 1e6);
         else return FormatInvariant("{0:F0} ns", seconds * 1e9);

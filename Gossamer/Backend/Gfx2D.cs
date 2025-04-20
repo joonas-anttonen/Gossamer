@@ -1161,7 +1161,7 @@ class Gfx2D(Gfx gfx) : IDisposable
     /// <param name="text"></param>
     /// <param name="availableSize"></param>
     /// <param name="wordWrap"></param>
-    public TextLayout ComputeTextLayout(ReadOnlySpan<char> text, Font font, Vector2 availableSize, bool wordWrap)
+    public TextLayout CreateTextLayout(ReadOnlySpan<char> text, Font font, Vector2 availableSize, bool wordWrap)
     {
         const int spaceCodepoint = 32;
 

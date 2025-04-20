@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 using Gossamer.Backend;
@@ -69,10 +70,17 @@ public sealed class Gossamer : SynchronizationContext, IDisposable
     Gfx? gfx;
     Gui? gui;
 
+    readonly Stopwatch stopwatch = Stopwatch.StartNew();
+
     readonly Parameters parameters;
     readonly ApplicationInfo appInfo;
 
     static Gossamer? instance;
+
+    public static TimeSpan GetTime()
+    {
+        return Instance.stopwatch.Elapsed;
+    }
 
     /// <inheritdoc cref="Log.GetLogger(string)"/>
     public static Logger GetLogger(string name)

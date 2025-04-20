@@ -402,12 +402,15 @@ public class Gui : IDisposable
             {
                 Rectangle windowRect = new(sizeOfFrame.X, sizeOfFrame.Y, ww - sizeOfFrame.X, wh - sizeOfFrame.Y);
 
-                var statsText = 
-                    $"GC: {StringUtilities.TimeShort(GC.GetTotalPauseDuration())}\n" +
+                var statsText =
+                    $"UPTIME: {Gossamer.GetTime()}\n" +
+                    $"GC PAUSE: {GC.GetTotalPauseDuration()}\n" +
+                    $"GFX PAUSE: {gfxStats.TotalPauseDuration}\n" +
                     $"CPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\n" +
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
                     $"2D Draws: {gfx2DStats.DrawCalls} ({gfx2DStats.Vertices}v {gfx2DStats.Indices}i)";
-                var textLayout = gfx2D.ComputeTextLayout(
+
+                var textLayout = gfx2D.CreateTextLayout(
                     statsText,
                     gfx2D.GetFontOrBuiltIn("CascadiaCode", 16),
                     windowRect.Size,
