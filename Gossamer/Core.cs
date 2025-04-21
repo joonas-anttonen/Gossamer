@@ -7,6 +7,7 @@ using Gossamer.Gfx;
 using Gossamer.Gfx.Presentation;
 using Gossamer.Gui;
 using Gossamer.Logging;
+using Gossamer.Utilities;
 
 using static Gossamer.Utilities.ExceptionUtilities;
 
@@ -113,40 +114,30 @@ public sealed class Core : SynchronizationContext, IDisposable
             fixed (byte* ptr = data)
             {
                 int width = 0, height = 0, hasAlpha = 0;
-                External.Webp.WebPStatus status = External.Webp.Api.Analyze(ptr, (ulong)data.Length, &width, &height, &hasAlpha);
-                Console.WriteLine($"Analyze: {status} {width}x{height} {hasAlpha}");
+                External.Webp.WebPStatus status = External.Webp.Api.webpAnalyze(ptr, (ulong)data.Length, &width, &height, &hasAlpha);
+                Console.WriteLine($"webpAnalyze: {status} {width}x{height} {hasAlpha}");
 
-                byte* decoded_data = null;
-                ulong decoded_data_size = 0;
-                status = External.Webp.Api.Decode(ptr, (ulong)data.Length, External.Webp.WebPFormat.RGBA, &decoded_data, &decoded_data_size);
-                Console.WriteLine($"Decode: {status} {decoded_data_size}");
-
-                byte[] outDataArray = new byte[decoded_data_size];
-                Marshal.Copy((IntPtr)decoded_data, outDataArray, 0, (int)decoded_data_size);
-
-                // Print bytes
-                Console.WriteLine("Decoded image:");
-                for (int i = 0; i < 16; i++)
-                {
-                    Console.Write($"{outDataArray[i]:X2} ");
-                }
-                Console.WriteLine();
+                int decoded_data_size = width * height * 4;
+                byte* decoded_data = (byte*)Marshal.AllocHGlobal(decoded_data_size);
+                status = External.Webp.Api.webpDecodeInto(ptr, (ulong)data.Length, External.Webp.WebPFormat.RGBA, decoded_data, (ulong)decoded_data_size, width * 4);
+                Console.WriteLine($"webpDecodeInto: {status} {StringUtilities.ByteSizeShortIEC((ulong)decoded_data_size)}");
 
                 // Encode the data back to WebP format
                 byte* encoded_data = null;
                 ulong encoded_data_size = 0;
 
-                status = External.Webp.Api.Encode(decoded_data, (ulong)decoded_data_size, External.Webp.WebPFormat.RGBA, width, height, &encoded_data, &encoded_data_size);
-                Console.WriteLine($"Encode: {status} {encoded_data_size}");
+                status = External.Webp.Api.webpEncode(decoded_data, (ulong)decoded_data_size, External.Webp.WebPFormat.RGBA, width, height, &encoded_data, &encoded_data_size, width * 4);
+                Console.WriteLine($"webpEncode: {status} {StringUtilities.ByteSizeShortIEC(encoded_data_size)}");
 
                 byte[] encodedDataArray = new byte[encoded_data_size];
                 Marshal.Copy((IntPtr)encoded_data, encodedDataArray, 0, (int)encoded_data_size);
 
                 // Free the encoded data
-                External.Webp.Api.Free(encoded_data);
+                External.Webp.Api.webpFree(encoded_data);
 
                 // Free the decoded data
-                External.Webp.Api.Free(decoded_data);
+                //External.Webp.Api.webpFree(decoded_data);
+                Marshal.FreeHGlobal((nint)decoded_data);
 
                 // Save the encoded data to a file
                 File.WriteAllBytes(@"D:\output.webp", encodedDataArray);
@@ -238,6 +229,9 @@ public sealed class Core : SynchronizationContext, IDisposable
     /// </summary>
     public int Run()
     {
+        GfxCore? gfx = null;
+        GuiCore? gui = null;
+
         try
         {
             if (parameters.EnableDebugging)
@@ -249,11 +243,11 @@ public sealed class Core : SynchronizationContext, IDisposable
             }
 
             // 1. Create graphics
-            using GfxCore gfx = new(new GfxApiParameters(
-                appInfo,
-                EnableDebugging: parameters.EnableDebugging,
-                PresentationMode: GfxPresentationMode.SwapChain
-            ));
+            gfx = new(new GfxApiParameters(
+               appInfo,
+               EnableDebugging: parameters.EnableDebugging,
+               PresentationMode: GfxPresentationMode.SwapChain
+           ));
 
             // 2. Initialize graphics
             gfx.Create(new GfxParameters(
@@ -261,7 +255,7 @@ public sealed class Core : SynchronizationContext, IDisposable
             ));
 
             // 3. Create user interface
-            using GuiCore gui = new(parameters, gfx, gfxMessageQueue);
+            gui = new(parameters, gfx, gfxMessageQueue);
 
             // 4. Initialize user interface
             gui.Create(new GuiParameters(
@@ -270,6 +264,8 @@ public sealed class Core : SynchronizationContext, IDisposable
 
             // 5. Create graphics swap chain presenter (depends on user interface)
             gfx.CreatePresenter(new GfxSwapChainPresentation(gui, EnableVerticalSync: false));
+
+            //gfx.CreatePixelBufferFromFile(@"D:\nsfw\2g4gv8cc8tjd1.webp", GfxPixelBufferUsage.Sampled);
 
             RunGfx(gfx);
             RunGui(gui);
@@ -282,6 +278,11 @@ public sealed class Core : SynchronizationContext, IDisposable
         catch (Exception ex)
         {
             logger.Error(ex.ToString());
+        }
+        finally
+        {
+            gfx?.Dispose();
+            gui?.Dispose();
         }
 
         return 1;

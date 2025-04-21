@@ -904,7 +904,7 @@ struct VmaAllocationInfo
 [System.Security.SuppressUnmanagedCodeSecurity]
 static unsafe class Api
 {
-    public const string BinaryName = "External/libgossamer-vma";
+    public const string BinaryName = "External/Gossamer.Vma";
     const CallingConvention CallConvention = CallingConvention.Cdecl;
 
     /// <summary>
@@ -1058,7 +1058,7 @@ static unsafe class Api
     /// <param name="allocation"></param>
     /// <returns></returns>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern VkResult vmaDestroyBuffer(
+    public static extern void vmaDestroyBuffer(
         VmaAllocator allocator,
         VkBuffer buffer,
         VmaAllocation allocation);
@@ -1077,7 +1077,7 @@ static unsafe class Api
     /// <param name="allocation"></param>
     /// <returns></returns>
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern VkResult vmaDestroyImage(
+    public static extern void vmaDestroyImage(
         VmaAllocator allocator,
         VkImage image,
         VmaAllocation allocation);

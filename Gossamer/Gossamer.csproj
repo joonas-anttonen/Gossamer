@@ -51,7 +51,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <!-- Vulkan Memory Allocator -->
-    <None Update="External/libgossamer-vma.dll">
+    <None Update="External/Gossamer.Vma.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <!-- WebP -->
@@ -75,7 +75,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <!-- Vulkan Memory Allocator -->
-    <None Update="External/libgossamer-vma.so">
+    <None Update="External/Gossamer.Vma.so">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- WebP -->
+    <None Update="External/Gossamer.WebP.so">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
