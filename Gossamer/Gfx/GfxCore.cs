@@ -146,8 +146,7 @@ public unsafe class GfxCore : IDisposable
             timestampPool.BeginGpuTimestamp(presenter.GetCommandBuffer());
         }
 
-        gfx2D.BeginFrame(presenter);
-        gfx2D.EndFrame(presenter);
+        gfx2D.Render(presenter);
 
         if (timestampPool != null)
         {
@@ -536,8 +535,17 @@ public unsafe class GfxCore : IDisposable
         UpdateDynamicBuffer(memoryBuffer, &data, sizeof(T));
     }
 
+    /// <summary>
+    /// Updates a dynamic memory buffer with the specified data.
+    /// <para>Safe to call with an empty span.</para>
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="memoryBuffer"></param>
+    /// <param name="data"></param>
     internal void UpdateDynamicBuffer<T>(MemoryBuffer<T> memoryBuffer, ReadOnlySpan<T> data) where T : unmanaged
     {
+        if (data.IsEmpty) return;
+
         fixed (void* pData = data)
         {
             int srcSize = data.Length * sizeof(T);

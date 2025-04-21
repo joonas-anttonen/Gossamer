@@ -2,7 +2,6 @@ struct PerCommand
 {
 	float2 Scale;
 	float2 Translation;
-	float3 Color;
 };
 
 [[vk::push_constant]] PerCommand command;

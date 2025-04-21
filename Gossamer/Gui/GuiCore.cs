@@ -360,7 +360,7 @@ public class GuiCore : IDisposable
         var gfxStats = gfx.GetStatistics();
         var gfx2DStats = gfx2D.GetStatistics();
 
-        var cmdBuffer = gfx2D.BeginCommandBuffer();
+        var cmdBuffer = gfx2D.GetCommandBuffer();
         {
             cmdBuffer.BeginBatch();
 
@@ -410,7 +410,7 @@ public class GuiCore : IDisposable
                     $"GFX PAUSE: {StringUtilities.TimeShort(gfxStats.TotalPauseDuration)}\n" +
                     $"CPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\n" +
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
-                    $"GFX2D: {gfx2DStats.DrawCalls}d {gfx2DStats.Vertices}v {gfx2DStats.Indices}i";
+                    $"GFX2D Commands: {gfx2DStats.Commands} Triangles: {gfx2DStats.Triangles}";
 
                 var textShaper = gfx2D.GetTextShaper();
 
@@ -427,7 +427,7 @@ public class GuiCore : IDisposable
 
             cmdBuffer.EndBatch();
         }
-        gfx2D.EndCommandBuffer(cmdBuffer);
+        gfx2D.SubmitCommandBuffer(cmdBuffer);
 
         isDamaged = false;
     }

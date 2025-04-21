@@ -25,12 +25,10 @@ readonly struct Vertex2D(Vector2 position, Vector2 uv, Color color)
 }
 
 [StructLayout(LayoutKind.Sequential)]
-readonly struct PerCommandData(Vector2 scale, Vector2 translation, Vector3 color)
+readonly struct PerCommandData(Vector2 scale, Vector2 translation)
 {
     public readonly Vector2 Scale = scale;
     public readonly Vector2 Translation = translation;
-    public readonly Vector3 Color = color;
-    readonly float _padding;
 }
 
 record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, Font? Font, Vector3 Color);
@@ -51,468 +49,11 @@ public enum ImageFit
     FillAspect,
 }
 
-public class Gfx2DCommandBuffer
-{
-    const int InitialArraySize = 8192 * 4;
-
-    readonly Vector2[] temp_points = new Vector2[InitialArraySize];
-    readonly Vector2[] temp_normals = new Vector2[InitialArraySize];
-    readonly Vector2[] scratchVertices = new Vector2[InitialArraySize];
-    int scratchVertexCount;
-
-    Vertex2D[] vertices = new Vertex2D[InitialArraySize];
-    int frameVertexCount;
-    ushort[] indices = new ushort[InitialArraySize];
-    int frameIndexCount;
-
-    int commandsCount;
-    int batchCount;
-    Command[] commands = new Command[32];
-
-    CommandBatch[] batches = new CommandBatch[8];
-
-    bool batchInProgress = false;
-    int batchFirstCommandIndex;
-    int batchCommandCount;
-
-    public void Reset()
-    {
-        frameVertexCount = 0;
-        frameIndexCount = 0;
-        commandsCount = 0;
-        batchCount = 0;
-        scratchVertexCount = 0;
-    }
-
-    internal void GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches)
-    {
-        vertices = this.vertices.AsSpan(0, frameVertexCount);
-        indices = this.indices.AsSpan(0, frameIndexCount);
-        commandBatches = batches.AsSpan(0, batchCount);
-    }
-
-    internal void GetBatchData(CommandBatch batch, out ReadOnlySpan<Command> commands)
-    {
-        commands = this.commands.AsSpan(batch.FirstCommandIndex, batch.CommandCount);
-    }
-
-    public void BeginBatch()
-    {
-        ThrowInvalidOperationIf(batchInProgress);
-
-        batchInProgress = true;
-        batchFirstCommandIndex = commandsCount;
-        batchCommandCount = 0;
-
-        BeginCommand();
-    }
-
-    public void EndBatch(PixelBuffer? surface = null)
-    {
-        ThrowInvalidOperationIfNot(batchInProgress);
-        batchInProgress = false;
-
-        ArrayUtilities.Reserve(ref batches, batchCount + 1);
-
-        batches[batchCount] = new CommandBatch(batchFirstCommandIndex, batchCommandCount, surface);
-        batchCount++;
-    }
-
-    ref Command BeginCommand()
-    {
-        ArrayUtilities.Reserve(ref commands, commandsCount + 1);
-
-        Command command = new((uint)frameVertexCount, (uint)frameIndexCount, 0, default, default, Color.Black.ToVector3());
-        commands[commandsCount++] = command;
-
-        batchCommandCount++;
-
-        return ref GetCurrentCommand();
-    }
-
-    ref Command GetCurrentCommand()
-    {
-        ThrowInvalidOperationIfNot(batchInProgress);
-
-        return ref commands[commandsCount - 1];
-    }
-
-    public void DrawImage(PixelBuffer image, Vector2 targetPosition, Vector2 targetExtent, ImageFit imageFit)
-    {
-        ThrowInvalidOperationIfNot(batchInProgress);
-
-        ref Command newCommand = ref BeginCommand();
-        newCommand.Texture = image;
-        newCommand.Color = Color.Black.ToVector3();
-
-        Vector2 imageExtent = new(image.Width, image.Height);
-        Vector2 uv0 = new(0, 0);
-        Vector2 uv1 = new(1, 1);
-
-        Vector2 finalImagePosition = targetPosition;
-        Vector2 finalImageExtent = targetExtent;
-
-        if (imageFit == ImageFit.None)
-        {
-            finalImagePosition = targetPosition;
-            finalImageExtent = imageExtent;
-        }
-        else if (imageFit == ImageFit.Fill)
-        {
-            finalImagePosition = targetPosition;
-            finalImageExtent = targetExtent;
-        }
-        else if (imageFit == ImageFit.FillAspect)
-        {
-            bool horizontal = imageExtent.X > imageExtent.Y;
-            float scale = horizontal
-                        ? targetExtent.X / imageExtent.X
-                        : targetExtent.Y / imageExtent.Y;
-            finalImageExtent = imageExtent * scale;
-
-            Vector2 offset = (targetExtent - finalImageExtent) * 0.5f;
-            finalImagePosition = targetPosition + offset;
-        }
-        else if (imageFit == ImageFit.Center)
-        {
-            Vector2 offset = (targetExtent - imageExtent) * 0.5f;
-            finalImagePosition = targetPosition + offset;
-            finalImageExtent = imageExtent;
-        }
-
-        PushQuadUV(finalImagePosition, finalImagePosition + finalImageExtent, uv0, uv1, Color.White);
-    }
-
-    public void DrawText(TextLayout layout, Vector2 position, Color color, Color backgroundColor)
-    {
-        ThrowInvalidOperationIfNot(batchInProgress);
-
-        ref Command newCommand = ref BeginCommand();
-        newCommand.Font = layout.Font;
-        newCommand.Color = backgroundColor.ToVector3();
-
-        for (int i = 0; i < layout.GlyphCount; i++)
-        {
-            var glyph = layout.Glyphs[i];
-            Vector2 a = position + glyph.Position;
-            Vector2 c = a + glyph.Size;
-
-            PushQuadUV(a, c, glyph.UV0, glyph.UV1, color);
-        }
-    }
-
-    public void DrawCircle(Vector2 center, float radius, Color color, float thickness = 1.0f, bool useAntialiasing = true)
-    {
-        ThrowInvalidOperationIfNot(batchInProgress);
-
-        if (radius <= 0.0f)
-            return;
-
-        int num_segments = (int)(radius * 2.0f * MathF.PI);
-        if (num_segments < 2)
-            num_segments = 2;
-        if (num_segments > 512)
-            num_segments = 512;
-
-        float angle_step = 2.0f * MathF.PI / num_segments;
-
-        for (int i = 0; i < num_segments; i++)
-        {
-            float a0 = i * angle_step;
-            float a1 = (i + 1) * angle_step;
-
-            Vector2 p0 = new(center.X + MathF.Cos(a0) * radius, center.Y + MathF.Sin(a0) * radius);
-            Vector2 p1 = new(center.X + MathF.Cos(a1) * radius, center.Y + MathF.Sin(a1) * radius);
-
-            scratchVertices[scratchVertexCount++] = p0;
-            scratchVertices[scratchVertexCount++] = p1;
-
-            PushPolyline(scratchVertices.AsSpan(0, scratchVertexCount), thickness, color, useAntialiasing, isClosed: false);
-
-            scratchVertexCount = 0;
-        }
-    }
-
-    public void DrawRectangle(Rectangle rectangle, Color color, float thickness = 1.0f)
-    {
-        DrawRectangle(rectangle.Position, rectangle.Position + rectangle.Size, color, thickness);
-    }
-
-    public void DrawRectangle(Vector2 a, Vector2 c, Color color, float thickness = 1.0f)
-    {
-        float half_thickness = thickness * 0.5f;
-
-        PushQuadUV(new(a.X - half_thickness, a.Y - half_thickness), new(c.X + half_thickness, a.Y + half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-        PushQuadUV(new(a.X - half_thickness, c.Y - half_thickness), new(c.X + half_thickness, c.Y + half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-        PushQuadUV(new(a.X - half_thickness, a.Y + half_thickness), new(a.X + half_thickness, c.Y - half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-        PushQuadUV(new(c.X - half_thickness, a.Y + half_thickness), new(c.X + half_thickness, c.Y - half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-    }
-
-    public void FillRectangle(Rectangle rectangle, Color color)
-    {
-        PushQuadUV(rectangle.Position, rectangle.Position + rectangle.Size, Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-    }
-
-    public void FillRectangle(Vector2 a, Vector2 c, Color color)
-    {
-        PushQuadUV(a, c, Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-    }
-
-    void PushQuadUV(Vector2 a, Vector2 c, Vector2 a_uv, Vector2 c_uv, Color color)
-    {
-        ArrayUtilities.Reserve(ref vertices, frameVertexCount + 4);
-        ArrayUtilities.Reserve(ref indices, frameIndexCount + 6);
-
-        Vector2 b = new(c.X, a.Y);
-        Vector2 d = new(a.X, c.Y);
-        Vector2 b_uv = new(c_uv.X, a_uv.Y);
-        Vector2 d_uv = new(a_uv.X, c_uv.Y);
-
-        indices[frameIndexCount + 0] = (ushort)(frameVertexCount + 0);
-        indices[frameIndexCount + 1] = (ushort)(frameVertexCount + 1);
-        indices[frameIndexCount + 2] = (ushort)(frameVertexCount + 2);
-        indices[frameIndexCount + 3] = (ushort)(frameVertexCount + 0);
-        indices[frameIndexCount + 4] = (ushort)(frameVertexCount + 2);
-        indices[frameIndexCount + 5] = (ushort)(frameVertexCount + 3);
-        frameIndexCount += 6;
-
-        vertices[frameVertexCount + 0] = new Vertex2D(a, a_uv, color);
-        vertices[frameVertexCount + 1] = new Vertex2D(b, b_uv, color);
-        vertices[frameVertexCount + 2] = new Vertex2D(c, c_uv, color);
-        vertices[frameVertexCount + 3] = new Vertex2D(d, d_uv, color);
-        frameVertexCount += 4;
-
-        ref Command currentCommand = ref GetCurrentCommand();
-        currentCommand.IndexCount += 6;
-    }
-
-    void PushPolyline(ReadOnlySpan<Vector2> points, float thickness, Color color, bool useAntialiasing, bool isClosed)
-    {
-        static void NormalizeOverZero(ref float VX, ref float VY)
-        {
-            float d2 = VX * VX + VY * VY;
-            if (d2 > 0.0f)
-            {
-                float inv_len = 1.0f / MathF.Sqrt(d2);
-                VX *= inv_len;
-                VY *= inv_len;
-            }
-        }
-
-        static void FixNormal(ref float VX, ref float VY)
-        {
-            float d2 = VX * VX + VY * VY;
-            if (d2 > 0.000001f)
-            {
-                float inv_len2 = 1.0f / d2;
-                if (inv_len2 > 100.0f)
-                    inv_len2 = 100.0f;
-                VX *= inv_len2;
-                VY *= inv_len2;
-            }
-        }
-
-        int points_count = points.Length;
-        bool closed = isClosed;
-        int count = closed ? points_count : points_count - 1;
-        bool thick_line = thickness > 1.0f;
-
-        int frameIndexCountStart = frameIndexCount;
-
-        if (useAntialiasing)
-        {
-            float AA_SIZE = 1.0f;
-
-            thickness = MathF.Max(thickness, 1.0f);
-
-            int vtx_count = thick_line ? points_count * 4 : points_count * 3;
-            int idx_count = thick_line ? count * 18 : count * 12;
-
-            ArrayUtilities.Reserve(ref vertices, frameVertexCount + vtx_count);
-            ArrayUtilities.Reserve(ref indices, frameIndexCount + idx_count);
-
-            for (int i1 = 0; i1 < count; i1++)
-            {
-                int i2 = (i1 + 1) == points_count ? 0 : i1 + 1;
-                float dx = points[i2].X - points[i1].X;
-                float dy = points[i2].Y - points[i1].Y;
-                NormalizeOverZero(ref dx, ref dy);
-                temp_normals[i1].X = dy;
-                temp_normals[i1].Y = -dx;
-            }
-            if (!closed)
-                temp_normals[points_count - 1] = temp_normals[points_count - 2];
-
-            if (!thick_line)
-            {
-                float half_draw_size = AA_SIZE;
-
-                if (!closed)
-                {
-                    temp_points[0] = points[0] + temp_normals[0] * half_draw_size;
-                    temp_points[1] = points[0] - temp_normals[0] * half_draw_size;
-                    temp_points[(points_count - 1) * 2 + 0] = points[points_count - 1] + temp_normals[points_count - 1] * half_draw_size;
-                    temp_points[(points_count - 1) * 2 + 1] = points[points_count - 1] - temp_normals[points_count - 1] * half_draw_size;
-                }
-
-                int idx1 = frameVertexCount;
-                for (int i1 = 0; i1 < count; i1++)
-                {
-                    int i2 = (i1 + 1) == points_count ? 0 : i1 + 1;
-                    int idx2 = ((i1 + 1) == points_count) ? frameVertexCount : (idx1 + 3);
-
-                    float dm_x = (temp_normals[i1].X + temp_normals[i2].X) * 0.5f;
-                    float dm_y = (temp_normals[i1].Y + temp_normals[i2].Y) * 0.5f;
-                    FixNormal(ref dm_x, ref dm_y);
-                    dm_x *= half_draw_size;
-                    dm_y *= half_draw_size;
-
-                    temp_points[i2 * 2 + 0].X = points[i2].X + dm_x;
-                    temp_points[i2 * 2 + 0].Y = points[i2].Y + dm_y;
-                    temp_points[i2 * 2 + 1].X = points[i2].X - dm_x;
-                    temp_points[i2 * 2 + 1].Y = points[i2].Y - dm_y;
-
-                    indices[frameIndexCount + 0] = (ushort)(idx2 + 0);
-                    indices[frameIndexCount + 1] = (ushort)(idx1 + 0);
-                    indices[frameIndexCount + 2] = (ushort)(idx1 + 2);
-                    indices[frameIndexCount + 3] = (ushort)(idx1 + 2);
-                    indices[frameIndexCount + 4] = (ushort)(idx2 + 2);
-                    indices[frameIndexCount + 5] = (ushort)(idx2 + 0);
-                    indices[frameIndexCount + 6] = (ushort)(idx2 + 1);
-                    indices[frameIndexCount + 7] = (ushort)(idx1 + 1);
-                    indices[frameIndexCount + 8] = (ushort)(idx1 + 0);
-                    indices[frameIndexCount + 9] = (ushort)(idx1 + 0);
-                    indices[frameIndexCount + 10] = (ushort)(idx2 + 0);
-                    indices[frameIndexCount + 11] = (ushort)(idx2 + 1);
-                    frameIndexCount += 12;
-
-                    idx1 = idx2;
-                }
-
-                for (int i = 0; i < points_count; i++)
-                {
-                    vertices[frameVertexCount + 0] = new Vertex2D(points[i], Vertex2D.DefaultUV, color);
-                    vertices[frameVertexCount + 1] = new Vertex2D(temp_points[i * 2 + 0], Vertex2D.DefaultUV, Color.Transparent);
-                    vertices[frameVertexCount + 2] = new Vertex2D(temp_points[i * 2 + 1], Vertex2D.DefaultUV, Color.Transparent);
-                    frameVertexCount += 3;
-                }
-            }
-            else
-            {
-                float half_inner_thickness = (thickness - AA_SIZE) * 0.5f;
-
-                if (!closed)
-                {
-                    int points_last = points_count - 1;
-                    temp_points[0] = points[0] + temp_normals[0] * (half_inner_thickness + AA_SIZE);
-                    temp_points[1] = points[0] + temp_normals[0] * half_inner_thickness;
-                    temp_points[2] = points[0] - temp_normals[0] * half_inner_thickness;
-                    temp_points[3] = points[0] - temp_normals[0] * (half_inner_thickness + AA_SIZE);
-                    temp_points[points_last * 4 + 0] = points[points_last] + temp_normals[points_last] * (half_inner_thickness + AA_SIZE);
-                    temp_points[points_last * 4 + 1] = points[points_last] + temp_normals[points_last] * half_inner_thickness;
-                    temp_points[points_last * 4 + 2] = points[points_last] - temp_normals[points_last] * half_inner_thickness;
-                    temp_points[points_last * 4 + 3] = points[points_last] - temp_normals[points_last] * (half_inner_thickness + AA_SIZE);
-                }
-
-                int idx1 = frameVertexCount;
-                for (int i1 = 0; i1 < count; i1++)
-                {
-                    int i2 = (i1 + 1) == points_count ? 0 : (i1 + 1);
-                    int idx2 = (i1 + 1) == points_count ? frameVertexCount : (idx1 + 4);
-
-                    float dm_x = (temp_normals[i1].X + temp_normals[i2].X) * 0.5f;
-                    float dm_y = (temp_normals[i1].Y + temp_normals[i2].Y) * 0.5f;
-                    FixNormal(ref dm_x, ref dm_y);
-                    float dm_out_x = dm_x * (half_inner_thickness + AA_SIZE);
-                    float dm_out_y = dm_y * (half_inner_thickness + AA_SIZE);
-                    float dm_in_x = dm_x * half_inner_thickness;
-                    float dm_in_y = dm_y * half_inner_thickness;
-
-                    temp_points[i2 * 4 + 0].X = points[i2].X + dm_out_x;
-                    temp_points[i2 * 4 + 0].Y = points[i2].Y + dm_out_y;
-                    temp_points[i2 * 4 + 1].X = points[i2].X + dm_in_x;
-                    temp_points[i2 * 4 + 1].Y = points[i2].Y + dm_in_y;
-                    temp_points[i2 * 4 + 2].X = points[i2].X - dm_in_x;
-                    temp_points[i2 * 4 + 2].Y = points[i2].Y - dm_in_y;
-                    temp_points[i2 * 4 + 3].X = points[i2].X - dm_out_x;
-                    temp_points[i2 * 4 + 3].Y = points[i2].Y - dm_out_y;
-
-                    indices[frameIndexCount + 0] = (ushort)(idx2 + 1);
-                    indices[frameIndexCount + 1] = (ushort)(idx1 + 1);
-                    indices[frameIndexCount + 2] = (ushort)(idx1 + 2);
-                    indices[frameIndexCount + 3] = (ushort)(idx1 + 2);
-                    indices[frameIndexCount + 4] = (ushort)(idx2 + 2);
-                    indices[frameIndexCount + 5] = (ushort)(idx2 + 1);
-                    indices[frameIndexCount + 6] = (ushort)(idx2 + 1);
-                    indices[frameIndexCount + 7] = (ushort)(idx1 + 1);
-                    indices[frameIndexCount + 8] = (ushort)(idx1 + 0);
-                    indices[frameIndexCount + 9] = (ushort)(idx1 + 0);
-                    indices[frameIndexCount + 10] = (ushort)(idx2 + 0);
-                    indices[frameIndexCount + 11] = (ushort)(idx2 + 1);
-                    indices[frameIndexCount + 12] = (ushort)(idx2 + 2);
-                    indices[frameIndexCount + 13] = (ushort)(idx1 + 2);
-                    indices[frameIndexCount + 14] = (ushort)(idx1 + 3);
-                    indices[frameIndexCount + 15] = (ushort)(idx1 + 3);
-                    indices[frameIndexCount + 16] = (ushort)(idx2 + 3);
-                    indices[frameIndexCount + 17] = (ushort)(idx2 + 2);
-                    frameIndexCount += 18;
-
-                    idx1 = idx2;
-                }
-
-                for (int i = 0; i < points_count; i++)
-                {
-                    vertices[frameVertexCount + 0] = new Vertex2D(temp_points[i * 4 + 0], Vertex2D.DefaultUV, Color.Transparent);
-                    vertices[frameVertexCount + 1] = new Vertex2D(temp_points[i * 4 + 1], Vertex2D.DefaultUV, color);
-                    vertices[frameVertexCount + 2] = new Vertex2D(temp_points[i * 4 + 2], Vertex2D.DefaultUV, color);
-                    vertices[frameVertexCount + 3] = new Vertex2D(temp_points[i * 4 + 3], Vertex2D.DefaultUV, Color.Transparent);
-                    frameVertexCount += 4;
-                }
-            }
-        }
-        else
-        {
-            ArrayUtilities.Reserve(ref vertices, frameVertexCount + count * 4);
-            ArrayUtilities.Reserve(ref indices, frameIndexCount + count * 6);
-
-            for (int i1 = 0; i1 < count; i1++)
-            {
-                int i2 = (i1 + 1) == points_count ? 0 : i1 + 1;
-                Vector2 p1 = points[i1];
-                Vector2 p2 = points[i2];
-
-                float dx = p2.X - p1.X;
-                float dy = p2.Y - p1.Y;
-                NormalizeOverZero(ref dx, ref dy);
-                dx *= thickness * 0.5f;
-                dy *= thickness * 0.5f;
-
-                indices[frameIndexCount + 0] = (ushort)(frameVertexCount + 0);
-                indices[frameIndexCount + 1] = (ushort)(frameVertexCount + 1);
-                indices[frameIndexCount + 2] = (ushort)(frameVertexCount + 2);
-                indices[frameIndexCount + 3] = (ushort)(frameVertexCount + 0);
-                indices[frameIndexCount + 4] = (ushort)(frameVertexCount + 2);
-                indices[frameIndexCount + 5] = (ushort)(frameVertexCount + 3);
-                frameIndexCount += 6;
-
-                vertices[frameVertexCount + 0] = new Vertex2D(new(p1.X + dy, p1.Y - dx), Vertex2D.DefaultUV, color);
-                vertices[frameVertexCount + 1] = new Vertex2D(new(p2.X + dy, p2.Y - dx), Vertex2D.DefaultUV, color);
-                vertices[frameVertexCount + 2] = new Vertex2D(new(p2.X - dy, p2.Y + dx), Vertex2D.DefaultUV, color);
-                vertices[frameVertexCount + 3] = new Vertex2D(new(p1.X - dy, p1.Y + dx), Vertex2D.DefaultUV, color);
-                frameVertexCount += 4;
-            }
-        }
-
-        ref Command currentCommand = ref GetCurrentCommand();
-        currentCommand.IndexCount += (uint)(frameIndexCount - frameIndexCountStart);
-    }
-}
-
 class Gfx2D(GfxCore gfx) : IDisposable
 {
     public const int MaxVertices = 65536;
 
-    public readonly record struct Statistics(ulong Frame, int DrawCalls, int Vertices, int Indices);
+    public readonly record struct Statistics(int Commands, int Triangles);
 
     readonly Logger logger = Core.GetLogger(nameof(Gfx2D));
 
@@ -521,34 +62,27 @@ class Gfx2D(GfxCore gfx) : IDisposable
     readonly FontCollection fontCache = new();
     readonly TextShaper textShaper = new();
 
-    bool renderingInitialized;
-
     DisplayParameters? parameters;
 
     VkSampler nearestSampler;
     VkSampler linearSampler;
 
-    GfxPipeline? pipeline;
+    GfxPipeline? mainPipeline;
     GfxPipeline? compositionPipeline;
 
     PixelBuffer? backBuffer;
 
-    MemoryBuffer<PerCommandData>? uniformBuffer;
     MemoryBuffer<Vertex2D>? vertexBuffer;
     MemoryBuffer<ushort>? indexBuffer;
 
+    // FIXME: Fonts should know their textures to avoid this mess. This is also giga unsafe in terms of threading.
     readonly Dictionary<Font, int> fontTextureIndices = [];
     PixelBuffer[] fontTextures = [];
 
-    bool frameInProgress = false;
-
-    readonly Lock commandBufferLock = new();
-    bool usingBufferA = true;
-    readonly Gfx2DCommandBuffer commandBufferA = new();
-    readonly Gfx2DCommandBuffer commandBufferB = new();
+    readonly ConcurrentObjectPool<Gfx2DCommandBuffer> commandBufferPool = new(initialCapacity: 2);
+    readonly ConcurrentQueue<Gfx2DCommandBuffer> commandBufferQueue = new();
     Gfx2DCommandBuffer? currentCommandBuffer;
 
-    ulong frameCounter;
     Statistics frameStatistics;
 
     /// <summary>
@@ -592,33 +126,32 @@ class Gfx2D(GfxCore gfx) : IDisposable
         return font ?? GetBuiltInFont();
     }
 
+    /// <summary>
+    /// Returns the statistics of the last rendered frame.
+    /// </summary>
     public Statistics GetStatistics()
     {
         return frameStatistics;
     }
 
-    public Gfx2DCommandBuffer BeginCommandBuffer()
+    /// <summary>
+    /// Returns a free command buffer from the pool.
+    /// </summary>
+    public Gfx2DCommandBuffer GetCommandBuffer()
     {
-        // Return the free command buffer. Must lock to ensure that the command buffer is not used by the rendering thread.
-        using (commandBufferLock.EnterScope())
-        {
-            var freeCommandBuffer = usingBufferA ? commandBufferB : commandBufferA;
-            freeCommandBuffer.Reset();
-            return freeCommandBuffer;
-        }
+        return commandBufferPool.Rent();
     }
 
-    public void EndCommandBuffer(Gfx2DCommandBuffer commandBuffer)
+    /// <summary>
+    /// Submits a command buffer to the queue for processing.
+    /// </summary>
+    /// <param name="commandBuffer"></param>
+    public void SubmitCommandBuffer(Gfx2DCommandBuffer commandBuffer)
     {
-        // Must lock to ensure that the command buffer is not used by the rendering thread.
-        using (commandBufferLock.EnterScope())
-        {
-            currentCommandBuffer = commandBuffer;
-            usingBufferA = !usingBufferA;
-        }
+        commandBufferQueue.Enqueue(commandBuffer);
     }
 
-    unsafe void InitializeFont(Font font)
+    void InitializeFont(Font font)
     {
         Font.Atlas fontAtlas = font.GetAtlas();
 
@@ -638,13 +171,11 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
     public void Create()
     {
-        ThrowInvalidOperationIf(uniformBuffer != null);
         ThrowInvalidOperationIf(vertexBuffer != null);
         ThrowInvalidOperationIf(indexBuffer != null);
 
         vertexBuffer = gfx.CreateDynamicMemoryBuffer<Vertex2D>(length: MaxVertices, GfxMemoryBufferUsage.Vertex);
         indexBuffer = gfx.CreateDynamicMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryBufferUsage.Index);
-        uniformBuffer = gfx.CreateDynamicMemoryBuffer<PerCommandData>(length: 1, GfxMemoryBufferUsage.Uniform);
 
         VkSamplerCreateInfo samplerCreateInfo = new(default)
         {
@@ -690,9 +221,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
             gfx.DestroyPixelBuffer(fontTexture);
         fontTextures = [];
 
-        gfx.DestroyMemoryBuffer(uniformBuffer);
-        uniformBuffer = default;
-
         gfx.DestroyMemoryBuffer(vertexBuffer);
         vertexBuffer = default;
 
@@ -700,14 +228,8 @@ class Gfx2D(GfxCore gfx) : IDisposable
         indexBuffer = default;
     }
 
-    /// <summary>
-    /// Begins a frame of rendering. Resets the internal state.
-    /// </summary>
-    public unsafe void BeginFrame(GfxPresenter presenter)
+    unsafe void PrepareFrame(GfxPresenter presenter)
     {
-        ThrowInvalidOperationIf(frameInProgress);
-        ThrowInvalidOperationIfNot(renderingInitialized);
-
         PixelBuffer presentationBuffer = presenter.GetPresentationBuffer();
 
         bool needsCreate = backBuffer == null || backBuffer.Width != presentationBuffer.Width || backBuffer.Height != presentationBuffer.Height;
@@ -724,8 +246,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
             );
             gfx.AssingName(backBuffer, StringUtilities.DebugName<Gfx2D>(nameof(backBuffer)));
         }
-
-        frameInProgress = true;
 
         VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
 
@@ -764,182 +284,22 @@ class Gfx2D(GfxCore gfx) : IDisposable
             dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
     }
 
-    /// <summary>
-    /// Ends a frame of rendering. Flushes the vertex and index buffers to the GPU.
-    /// </summary>
-    public unsafe void EndFrame(GfxPresenter presenter)
+    unsafe void FinishFrame(GfxPresenter presenter)
     {
-        frameCounter++;
+        VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
+        PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
 
-        ThrowInvalidOperationIfNot(frameInProgress);
-        ThrowInvalidOperationIfNull(vertexBuffer);
-        ThrowInvalidOperationIfNull(indexBuffer);
-        ThrowInvalidOperationIfNull(backBuffer);
-        ThrowInvalidOperationIfNull(compositionPipeline);
+        gfx.PixelBufferBarrier(
+            commandBuffer,
+            pixelBuffer: presentBuffer,
+            srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
+            dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
 
-        if (currentCommandBuffer == null)
-        {
-            //logger.Debug("No commands to render.");
-            frameInProgress = false;
-            return;
-        }
-
-        using (commandBufferLock.EnterScope())
-        {
-            currentCommandBuffer.GetFrameData(out ReadOnlySpan<Vertex2D> vertices, out ReadOnlySpan<ushort> indices, out ReadOnlySpan<CommandBatch> commandBatches);
-
-            if (vertices.Length > 0)
-            {
-                gfx.UpdateDynamicBuffer(vertexBuffer, vertices);
-                gfx.UpdateDynamicBuffer(indexBuffer, indices);
-            }
-
-            int statisticsVertices = vertices.Length;
-            int statisticsIndices = indices.Length;
-            int statisticsDrawCalls = 0;
-
-            VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
-            PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
-
-            for (int i = 0; i < commandBatches.Length; i++)
-            {
-                CommandBatch batch = commandBatches[i];
-                currentCommandBuffer.GetBatchData(batch, out ReadOnlySpan<Command> commands);
-
-                statisticsDrawCalls += batch.CommandCount;
-
-                RecordBatch(commandBuffer, commands, backBuffer);
-            }
-
-            frameStatistics = new(frameCounter, statisticsDrawCalls, statisticsVertices, statisticsIndices);
-
-            /*if (true)
-            {
-                gfx.PixelBufferBarrier(
-                    commandBuffer,
-                    pixelBuffer: backBuffer,
-                    srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-                    dstLayout: VkImageLayout.TRANSFER_SRC_OPTIMAL);
-
-                VkImageBlit imageBlit = new()
-                {
-                    Src = new()
-                    {
-                        Aspect = VkImageAspect.COLOR,
-                        MipLevel = 0,
-                        BaseArrayLayer = 0,
-                        LayerCount = 1,
-                    },
-                    SrcOffsets1 = new((int)backBuffer.Width, (int)backBuffer.Height, 1),
-                    Dst = new()
-                    {
-                        Aspect = VkImageAspect.COLOR,
-                        MipLevel = 0,
-                        BaseArrayLayer = 0,
-                        LayerCount = 1,
-                    },
-                    DstOffsets1 = new((int)presentBuffer.Width, (int)presentBuffer.Height, 1),
-                };
-
-                vkCmdBlitImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_SRC_OPTIMAL, presentBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &imageBlit, VkFilter.LINEAR);
-
-                gfx.FIXME_OmegaBarrier(commandBuffer);
-                return;
-            }*/
-
-            gfx.PixelBufferBarrier(
-                commandBuffer,
-                pixelBuffer: presentBuffer,
-                srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
-                dstLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL);
-
-            gfx.PixelBufferBarrier(
-                commandBuffer,
-                pixelBuffer: backBuffer,
-                srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-                dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
-
-            VkRenderingAttachmentInfo colorAttachment = new(default)
-            {
-                ImageView = presentBuffer.View,
-                ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-                LoadOp = VkAttachmentLoadOp.LOAD,
-                StoreOp = VkAttachmentStoreOp.STORE,
-            };
-
-            VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
-            VkRenderingInfo renderingInfo = new(default)
-            {
-                RenderArea = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height)),
-                ColorAttachmentCount = 1,
-                ColorAttachments = colorAttachments,
-                LayerCount = 1,
-            };
-
-            VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
-            VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
-
-            vkCmdBeginRendering(commandBuffer, &renderingInfo);
-
-            vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Pipeline);
-
-            vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-            VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
-
-            VkDescriptorImageInfo descriptorImageInfo = new()
-            {
-                ImageView = backBuffer.View,
-                ImageLayout = VkImageLayout.SHADER_READ_ONLY_OPTIMAL,
-            };
-            descriptorWrites[0] = new(default)
-            {
-                DestinationBinding = 0,
-                DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
-                DescriptorCount = 1,
-                ImageInfo = &descriptorImageInfo,
-            };
-
-            VkDescriptorImageInfo descriptorImageInfo2 = new()
-            {
-                Sampler = nearestSampler,
-            };
-            descriptorWrites[1] = new(default)
-            {
-                DestinationBinding = 1,
-                DescriptorType = VkDescriptorType.SAMPLER,
-                DescriptorCount = 1,
-                ImageInfo = &descriptorImageInfo2,
-            };
-
-            vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Layout, 0, 2, descriptorWrites);
-            vkCmdDraw(commandBuffer, 4, 1, 0, 0);
-
-            vkCmdEndRendering(commandBuffer);
-
-            gfx.FullBarrier(commandBuffer);
-
-            gfx.PixelBufferBarrier(
-                commandBuffer,
-                pixelBuffer: presentBuffer,
-                srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-                dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
-
-            frameInProgress = false;
-        }
-    }
-
-    public unsafe void RecordBatch(VkCommandBuffer commandBuffer, ReadOnlySpan<Command> commands, PixelBuffer presentBuffer)
-    {
-        ThrowInvalidOperationIfNot(frameInProgress);
-        ThrowInvalidOperationIfNull(backBuffer);
-        ThrowInvalidOperationIfNull(pipeline);
-        ThrowInvalidOperationIfNull(vertexBuffer);
-        ThrowInvalidOperationIfNull(indexBuffer);
-        ThrowInvalidOperationIfNull(uniformBuffer);
-
-        GfxPipeline activePipeline = pipeline;
+        gfx.PixelBufferBarrier(
+            commandBuffer,
+            pixelBuffer: ThrowInvalidOperationIfNull(backBuffer),
+            srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+            dstLayout: VkImageLayout.SHADER_READ_ONLY_OPTIMAL);
 
         VkRenderingAttachmentInfo colorAttachment = new(default)
         {
@@ -947,7 +307,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
             ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
             LoadOp = VkAttachmentLoadOp.LOAD,
             StoreOp = VkAttachmentStoreOp.STORE,
-            ClearValue = VkClearValue.FromColor(Color.Transparent),
         };
 
         VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
@@ -961,6 +320,138 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
         VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
         VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
+
+        vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+        ThrowInvalidOperationIfNull(compositionPipeline);
+        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Pipeline);
+
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+        VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
+
+        VkDescriptorImageInfo descriptorImageInfo = new()
+        {
+            ImageView = backBuffer.View,
+            ImageLayout = VkImageLayout.SHADER_READ_ONLY_OPTIMAL,
+        };
+        descriptorWrites[0] = new(default)
+        {
+            DestinationBinding = 0,
+            DescriptorType = VkDescriptorType.SAMPLED_IMAGE,
+            DescriptorCount = 1,
+            ImageInfo = &descriptorImageInfo,
+        };
+
+        VkDescriptorImageInfo descriptorImageInfo2 = new()
+        {
+            Sampler = nearestSampler,
+        };
+        descriptorWrites[1] = new(default)
+        {
+            DestinationBinding = 1,
+            DescriptorType = VkDescriptorType.SAMPLER,
+            DescriptorCount = 1,
+            ImageInfo = &descriptorImageInfo2,
+        };
+
+        vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Layout, 0, 2, descriptorWrites);
+        vkCmdDraw(commandBuffer, 4, 1, 0, 0);
+
+        vkCmdEndRendering(commandBuffer);
+
+        gfx.FullBarrier(commandBuffer);
+
+        gfx.PixelBufferBarrier(
+            commandBuffer,
+            pixelBuffer: presentBuffer,
+            srcLayout: VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+    }
+
+    /// <summary>
+    /// Renders a frame.
+    /// </summary>
+    /// <param name="presenter"></param>
+    public unsafe void Render(GfxPresenter presenter)
+    {
+        // Check if we have a pending command buffer to process
+        if (commandBufferQueue.TryDequeue(out Gfx2DCommandBuffer? pendingCommandBuffer))
+        {
+            // If we have a current command buffer, reset it and return it to the pool
+            if (currentCommandBuffer != null)
+            {
+                currentCommandBuffer.Reset();
+                commandBufferPool.Return(currentCommandBuffer);
+            }
+
+            currentCommandBuffer = pendingCommandBuffer;
+
+            if (!commandBufferQueue.IsEmpty && commandBufferQueue.Count > 1)
+            {
+                logger.Warning($"Lag [{commandBufferQueue.Count}]");
+            }
+        }
+
+        PrepareFrame(presenter);
+
+        // Maybe there's no work to do? Usually should only happen during startup.
+        if (currentCommandBuffer != null)
+        {
+            ThrowInvalidOperationIfNull(backBuffer);
+            ThrowInvalidOperationIfNull(vertexBuffer);
+            ThrowInvalidOperationIfNull(indexBuffer);
+
+            VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
+
+            gfx.UpdateDynamicBuffer(vertexBuffer, currentCommandBuffer.GetVertices());
+            gfx.UpdateDynamicBuffer(indexBuffer, currentCommandBuffer.GetIndices());
+
+            frameStatistics = currentCommandBuffer.GetStatistics();
+
+            ReadOnlySpan<CommandBatch> commandBatches = currentCommandBuffer.GetBatches();
+            for (int i = 0; i < commandBatches.Length; i++)
+            {
+                CommandBatch batch = commandBatches[i];
+                currentCommandBuffer.GetBatchData(batch, out ReadOnlySpan<Command> commands);
+
+                RecordBatch(commandBuffer, commands, backBuffer);
+            }
+        }
+
+        FinishFrame(presenter);
+    }
+
+    unsafe void RecordBatch(VkCommandBuffer commandBuffer, ReadOnlySpan<Command> commands, PixelBuffer renderBuffer)
+    {
+        ThrowInvalidOperationIfNull(backBuffer);
+        ThrowInvalidOperationIfNull(mainPipeline);
+        ThrowInvalidOperationIfNull(vertexBuffer);
+        ThrowInvalidOperationIfNull(indexBuffer);
+
+        GfxPipeline activePipeline = mainPipeline;
+
+        VkRenderingAttachmentInfo colorAttachment = new(default)
+        {
+            ImageView = renderBuffer.View,
+            ImageLayout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+            LoadOp = VkAttachmentLoadOp.LOAD,
+            StoreOp = VkAttachmentStoreOp.STORE,
+            ClearValue = VkClearValue.FromColor(Color.Transparent),
+        };
+
+        VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
+        VkRenderingInfo renderingInfo = new(default)
+        {
+            RenderArea = new(new(0, 0), new(renderBuffer.Width, renderBuffer.Height)),
+            ColorAttachmentCount = 1,
+            ColorAttachments = colorAttachments,
+            LayerCount = 1,
+        };
+
+        VkViewport viewport = new(0, 0, renderBuffer.Width, renderBuffer.Height, 0, 1);
+        VkRect2D scissor = new(new(0, 0), new(renderBuffer.Width, renderBuffer.Height));
 
         vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
@@ -984,9 +475,8 @@ class Gfx2D(GfxCore gfx) : IDisposable
             ref readonly Command command = ref commands[i];
 
             commandData = new(
-                scale: new(2.0f / presentBuffer.Width, 2.0f / presentBuffer.Height),
-                translation: new(-1.0f, -1.0f),
-                color: command.Color
+                scale: new(2.0f / renderBuffer.Width, 2.0f / renderBuffer.Height),
+                translation: new(-1.0f, -1.0f)
             );
             vkCmdPushConstants(commandBuffer, activePipeline.Layout, VkShaderStage.VERTEX | VkShaderStage.FRAGMENT, 0, (uint)Unsafe.SizeOf<PerCommandData>(), &commandData);
 
@@ -1047,13 +537,11 @@ class Gfx2D(GfxCore gfx) : IDisposable
         gfx.DestroyPixelBuffer(backBuffer);
         backBuffer = null;
 
-        gfx.DestroyPipeline(pipeline);
-        pipeline = null;
+        gfx.DestroyPipeline(mainPipeline);
+        mainPipeline = null;
 
         gfx.DestroyPipeline(compositionPipeline);
         compositionPipeline = null;
-
-        renderingInitialized = false;
     }
 
     public void InitializeRendering(DisplayParameters parameters)
@@ -1074,7 +562,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
             ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
         };
 
-        pipeline = gfx.CreatePipeline(new GfxPipelineParameters(
+        mainPipeline = gfx.CreatePipeline(new GfxPipelineParameters(
             ShaderProgram: gfx.GetShaderProgram("built-in-2d"),
             PushConstants: [
                 new()
@@ -1178,7 +666,5 @@ class Gfx2D(GfxCore gfx) : IDisposable
                 }
             ]
         ));
-
-        renderingInitialized = true;
     }
 }

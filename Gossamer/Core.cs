@@ -70,6 +70,8 @@ public sealed class Core : SynchronizationContext, IDisposable
     readonly ConcurrentObjectPool<SyncEntry> guiSyncEntryPool = new(16);
     readonly ConcurrentQueue<SyncEntry> guiSyncQueue = [];
 
+    readonly ManualResetEventSlim guiSyncEvent = new(initialState: false);
+
     GfxCore? gfx;
     GuiCore? gui;
 
@@ -351,8 +353,7 @@ public sealed class Core : SynchronizationContext, IDisposable
 
             localGfx.Render();
 
-            // FIXME: This is a temporary solution to prevent the backend from spinning too fast
-            Thread.Sleep(1);
+            gfxMessageQueue.WaitForMessage(1);
         }
 
         logger.Debug("Exit");
