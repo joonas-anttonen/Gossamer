@@ -36,14 +36,13 @@ fragment_input vertex(vertex_input input, in uint vertexIndex : SV_VertexID)
 
 [shader("pixel")]
 float4 fragment(fragment_input input) : SV_TARGET
-{
+{ 
 	float4 geometryColor = input.Color;
 	float4 textureColor = commandTexture.Sample(commandSampler, input.UV);
 
-    float r = textureColor.r * geometryColor.r * geometryColor.a + command.Color.r * (1.0 - textureColor.r * geometryColor.a);
-    float g = textureColor.g * geometryColor.g * geometryColor.a + command.Color.g * (1.0 - textureColor.g * geometryColor.a);
-    float b = textureColor.b * geometryColor.b * geometryColor.a + command.Color.b * (1.0 - textureColor.b * geometryColor.a);
-	float a = all(textureColor.rgb == float3(0, 0, 0)) ? 0 : textureColor.a * geometryColor.a;
+    float distanceFromOutline = textureColor.r - 0.5;
+    float distanceChangePerFragment = length(float2(ddx(distanceFromOutline), ddy(distanceFromOutline)));
+	float alpha = smoothstep(-distanceChangePerFragment, distanceChangePerFragment, distanceFromOutline);
 
-	return float4(r, g, b, a);
+    return float4(geometryColor.rgb, alpha * geometryColor.a);
 }

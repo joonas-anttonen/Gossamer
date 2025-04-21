@@ -219,7 +219,7 @@ unsafe class Api
     internal static extern void hb_buffer_set_message_func(nint buffer, nint func, nint user_data, nint destroy);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern nint hb_ft_font_set_load_flags(nint font, FreeType.FT_Load load_flags);
+    public static extern nint hb_ft_font_set_load_flags(nint font, int load_flags);
 
     /// <summary>
     /// Set the FreeType font functions for the HarfBuzz font.

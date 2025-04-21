@@ -9,7 +9,7 @@ using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Gfx.Text;
 
-public readonly record struct FontGlyph(uint Index, float U0, float V0, float U1, float V1, int Width, int Height, int BearingX, int BearingY);
+public readonly record struct FontGlyph(int Index, float U0, float V0, float U1, float V1, int Width, int Height, int BearingX, int BearingY);
 
 public readonly record struct ShapedGlyph(float XAdvance, float YAdvance, float XOffset, float YOffset, FontGlyph Glyph);
 
@@ -21,14 +21,14 @@ public sealed class Font : IDisposable
 
     public readonly record struct Metrics(int Ascender, int Descender, int Height);
 
-    readonly nint ftFace;
+    readonly FreeTypeFaceData ftFace;
 
     readonly nint hbBuffer;
     readonly nint hbFont;
 
     readonly Atlas atlas;
 
-    readonly Dictionary<uint, FontGlyph> glyphMap = [];
+    readonly Dictionary<int, FontGlyph> glyphMap = [];
     readonly FontGlyph unknownGlyph;
     readonly FontGlyph spaceGlyph;
 
@@ -89,7 +89,7 @@ public sealed class Font : IDisposable
     /// Retrieves a glyph by its index.
     /// </summary>
     /// <param name="index"></param>
-    FontGlyph GetGlyphByIndex(uint index)
+    FontGlyph GetGlyphByIndex(int index)
     {
         return glyphMap.TryGetValue(index, out FontGlyph glyph) ? glyph : unknownGlyph;
     }
@@ -98,28 +98,28 @@ public sealed class Font : IDisposable
     /// Retrieves a glyph by its Unicode codepoint.
     /// </summary>
     /// <param name="codepoint"></param>
-    public FontGlyph GetGlyphByCodepoint(uint codepoint)
+    public FontGlyph GetGlyphByCodepoint(int codepoint)
     {
-        return GetGlyphByIndex(FT_Get_Char_Index(ftFace, codepoint));
+        return GetGlyphByIndex(ftGetCharIndex(ftFace.face_ptr, codepoint));
     }
 
-    public Font(string name, nint face, int horizontalSize, int verticalSize)
+    internal Font(string name, FreeTypeFaceData face, int horizontalSize, int verticalSize)
     {
         this.name = name;
         this.verticalSize = verticalSize;
 
         ftFace = face;
-        ThrowIf(FT_Set_Char_Size(ftFace, horizontalSize * 64, verticalSize * 64, 72, 72) != FT_Error.Ok);
+        metrics = new Metrics(face.ascender, face.descender, face.height);
 
         hbBuffer = hb_buffer_create();
-        hbFont = hb_ft_font_create_referenced(ftFace);
-        hb_ft_font_set_load_flags(hbFont, FT_Load.LOAD_TARGET_LCD);
+        hbFont = hb_ft_font_create_referenced(ftFace.face_ptr);
+        //hb_ft_font_set_load_flags(hbFont, FT_Load.LOAD_TARGET_LCD);
         hb_ft_font_set_funcs(hbFont);
         hb_ft_font_changed(hbFont);
 
         atlas = BuildAtlas();
 
-        spaceGlyph = GetGlyphByIndex(FT_Get_Char_Index(ftFace, (uint)new System.Text.Rune(' ').Value));
+        spaceGlyph = GetGlyphByIndex(ftGetCharIndex(ftFace.face_ptr, new System.Text.Rune(' ').Value));
         if (glyphMap.ContainsKey(glyphMap.FirstOrDefault().Key))
         {
             unknownGlyph = glyphMap[glyphMap.FirstOrDefault().Key];
@@ -127,30 +127,6 @@ public sealed class Font : IDisposable
         if (glyphMap.ContainsKey(0))
         {
             unknownGlyph = glyphMap[0];
-        }
-
-        unsafe
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                FaceRec* faceData = (FaceRec*)ftFace;
-                SizeRec* sizeData = (SizeRec*)faceData->size;
-
-                metrics = new(
-                    Ascender: sizeData->metrics.ascender / 64,
-                    Descender: sizeData->metrics.descender / 64,
-                    Height: sizeData->metrics.height / 64);
-            }
-            else
-            {
-                FaceRec64* faceData = (FaceRec64*)ftFace;
-                SizeRec64* sizeData = faceData->size;
-
-                metrics = new(
-                    Ascender: (int)sizeData->metrics.ascender / 64,
-                    Descender: (int)sizeData->metrics.descender / 64,
-                    Height: (int)sizeData->metrics.height / 64);
-            }
         }
     }
 
@@ -170,7 +146,7 @@ public sealed class Font : IDisposable
             hb_buffer_destroy(hbBuffer);
             hb_font_destroy(hbFont);
 
-            FT_Done_Face(ftFace);
+            ftReleaseFace(ftFace.face_ptr);
         }
     }
 
@@ -231,7 +207,7 @@ public sealed class Font : IDisposable
             {
                 (hb_glyph_info_t glyphInfo, hb_glyph_position_t glyphPosition) = ReadShapedGlyph(_index);
 
-                FontGlyph glyph = font.GetGlyphByIndex(glyphInfo.CodepointOrIndex);
+                FontGlyph glyph = font.GetGlyphByIndex((int)glyphInfo.CodepointOrIndex);
 
                 return new ShapedGlyph(
                     XAdvance: glyphPosition.xAdvance / 64f,
@@ -380,11 +356,11 @@ public sealed class Font : IDisposable
                 for (int glyphX = 0; glyphX < glyphWidth; ++glyphX)
                 {
                     int atlasBitmapIndex = atlasBitmapRow + glyphXPosInBitmap * bitmapChannels + glyphX * bitmapChannels;
-                    ColorRgba8 pixel = ftGlyph.ReadPixel(glyphX, glyphY);
-                    bitmap[atlasBitmapIndex + 0] = pixel.R;
-                    bitmap[atlasBitmapIndex + 1] = pixel.G;
-                    bitmap[atlasBitmapIndex + 2] = pixel.B;
-                    bitmap[atlasBitmapIndex + 3] = pixel.A;
+                    ftGlyph.ReadPixel(glyphX, glyphY, out byte R, out byte G, out byte B, out byte A);
+                    bitmap[atlasBitmapIndex + 0] = R;
+                    bitmap[atlasBitmapIndex + 1] = G;
+                    bitmap[atlasBitmapIndex + 2] = B;
+                    bitmap[atlasBitmapIndex + 3] = A;
                 }
             }
 
@@ -413,26 +389,12 @@ public sealed class Font : IDisposable
         return new Atlas((uint)atlasSize, (uint)atlasSize, bitmap);
     }
 
-    static unsafe int ExtractGlyphCount(nint ftFace)
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            FaceRec* faceData = (FaceRec*)ftFace;
-            return faceData->num_glyphs;
-        }
-        else
-        {
-            FaceRec64* faceData = (FaceRec64*)ftFace;
-            return (int)faceData->num_glyphs;
-        }
-    }
-
     FreeTypeGlyphCollection LoadGlyphs()
     {
-        int glyphsInFace = ExtractGlyphCount(ftFace);
+        int glyphsInFace = ftFace.glyph_count;
         FreeTypeGlyph[] glyphs = new FreeTypeGlyph[glyphsInFace];
 
-        for (uint i = 0; i < glyphsInFace; i++)
+        for (int i = 0; i < glyphsInFace; i++)
         {
             glyphs[i] = new FreeTypeGlyph(ftFace, i);
         }
@@ -475,13 +437,9 @@ class FreeTypeGlyph : IDisposable
 {
     bool isDisposed;
 
-    readonly nint glyphPointer;
-    readonly nint bitmapPointer;
+    readonly FreeTypeGlyphData glyphPointer;
 
-    readonly PixelMode pixelMode;
-    readonly int pitch;
-
-    public uint Index { get; }
+    public int Index { get; }
 
     public int Width { get; }
 
@@ -491,97 +449,30 @@ class FreeTypeGlyph : IDisposable
 
     public int BearingY { get; }
 
-    public ColorRgba8 ReadPixel(int x, int y)
+    public void ReadPixel(int x, int y, out byte r, out byte g, out byte b, out byte a)
     {
-        int rOff = pixelMode == PixelMode.Bgra ? 2 : 0;
-        int gOff = pixelMode == PixelMode.Bgra || pixelMode == PixelMode.Lcd ? 1 : 0;
-        int bOff = pixelMode == PixelMode.Lcd ? 2 : 0;
-        int aOff = pixelMode == PixelMode.Bgra ? 3 : 0;
-        int channelCount = pixelMode switch
-        {
-            PixelMode.Gray => 1,
-            PixelMode.Lcd => 3,
-            PixelMode.Bgra => 4,
-            _ => 1,
-        };
+        const int channelCount = 1;
 
-        byte r = Marshal.ReadByte(bitmapPointer, y * pitch + x * channelCount + rOff);
-        byte g = channelCount > 1 ? Marshal.ReadByte(bitmapPointer, y * pitch + x * channelCount + gOff) : r;
-        byte b = channelCount > 2 ? Marshal.ReadByte(bitmapPointer, y * pitch + x * channelCount + bOff) : g;
-        byte a = channelCount > 3 ? Marshal.ReadByte(bitmapPointer, y * pitch + x * channelCount + aOff) : (byte)255;
+        nint data = glyphPointer.bitmap_ptr;
+        int pitch = glyphPointer.stride;
 
-        return new ColorRgba8(r, g, b, a);
+        r = channelCount > 0 ? Marshal.ReadByte(data, y * pitch + x * channelCount + 0) : (byte)0;
+        g = channelCount > 1 ? Marshal.ReadByte(data, y * pitch + x * channelCount + 1) : r;
+        b = channelCount > 2 ? Marshal.ReadByte(data, y * pitch + x * channelCount + 2) : g;
+        a = channelCount > 3 ? Marshal.ReadByte(data, y * pitch + x * channelCount + 3) : (byte)255;
     }
 
-    unsafe public FreeTypeGlyph(nint face, uint glyphIndex)
+    unsafe public FreeTypeGlyph(FreeTypeFaceData face, int glyphIndex)
     {
-        pixelMode = PixelMode.Lcd;
+        FreeTypeGlyphData glyphData;
+        ftCreateGlyph(face.face_ptr, glyphIndex, &glyphData);
+        glyphPointer = glyphData;
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            FaceRec* faceData = (FaceRec*)face;
-
-            ThrowIfFailed(FT_Load_Glyph(face, glyphIndex, pixelMode == PixelMode.Lcd ? FT_Load.LOAD_TARGET_LCD : FT_Load.DEFAULT));
-            ThrowIfFailed(FT_Render_Glyph((nint)faceData->glyph, pixelMode == PixelMode.Lcd ? FtRenderMode.LCD : FtRenderMode.Normal));
-            ThrowIfFailed(FT_Get_Glyph((nint)faceData->glyph, out nint glyphPtr));
-
-            GlyphSlotRec* glyphSlotData = faceData->glyph;
-            BitmapGlyphRec* glyphBitmapData = (BitmapGlyphRec*)glyphPtr;
-
-            glyphPointer = glyphPtr;
-            bitmapPointer = glyphBitmapData->bitmap.buffer;
-
-            Index = glyphSlotData->glyph_index;
-
-            BearingX = glyphSlotData->bitmap_left;
-            BearingY = glyphSlotData->bitmap_top;
-
-            if (BearingX > 10_000)
-            {
-                const uint V = uint.MaxValue / 64;
-                uint v = glyphSlotData->metrics.horiBearingX / 64;
-                BearingX = BearingX = (int)(V - v);
-            }
-
-            BitmapRec bitmapData = glyphSlotData->bitmap;
-            pixelMode = bitmapData.pixel_mode;
-            pitch = bitmapData.pitch;
-
-            Width = pixelMode == PixelMode.Lcd ? bitmapData.width / 3 : bitmapData.width;
-            Height = bitmapData.rows;
-        }
-        else
-        {
-            FaceRec64* faceData = (FaceRec64*)face;
-
-            ThrowIfFailed(FT_Load_Glyph(face, glyphIndex, pixelMode == PixelMode.Lcd ? FT_Load.LOAD_TARGET_LCD : FT_Load.DEFAULT));
-            ThrowIfFailed(FT_Render_Glyph((nint)faceData->glyph, pixelMode == PixelMode.Lcd ? FtRenderMode.LCD : FtRenderMode.Normal));
-            ThrowIfFailed(FT_Get_Glyph((nint)faceData->glyph, out nint glyphPtr));
-
-            glyphPointer = glyphPtr;
-
-            GlyphSlotRec64* glyphSlot = faceData->glyph;
-
-            Index = glyphSlot->glyph_index;
-
-            BearingX = glyphSlot->bitmap_left;
-            BearingY = glyphSlot->bitmap_top;
-
-            if (BearingX > 10_000)
-            {
-                const uint V = uint.MaxValue / 64;
-                uint v = (uint)glyphSlot->metrics.horiBearingX / 64;
-                BearingX = BearingX = (int)(V - v);
-            }
-
-            BitmapRec bitmapData = glyphSlot->bitmap;
-            bitmapPointer = bitmapData.buffer;
-            pixelMode = bitmapData.pixel_mode;
-            pitch = bitmapData.pitch;
-
-            Width = pixelMode == PixelMode.Lcd ? bitmapData.width / 3 : bitmapData.width;
-            Height = bitmapData.rows;
-        }
+        Index = glyphIndex;
+        BearingX = glyphData.bearing_x;
+        BearingY = glyphData.bearing_y;
+        Width = glyphData.width;
+        Height = glyphData.height;
     }
 
     ~FreeTypeGlyph()
@@ -597,7 +488,7 @@ class FreeTypeGlyph : IDisposable
         {
             isDisposed = true;
 
-            FT_Done_Glyph(glyphPointer);
+            ftReleaseGlyph(glyphPointer.glyph_ptr);
         }
     }
 }

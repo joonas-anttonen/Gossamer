@@ -46,6 +46,9 @@
     <None Update="External/libgossamer-freetype.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="External/Gossamer.FreeType.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <!-- HarfBuzz -->
     <None Update="External/libgossamer-harfbuzz.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

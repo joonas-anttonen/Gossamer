@@ -680,7 +680,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
         gfx.DestroySampler(nearestSampler);
         nearestSampler = default;
-        
+
         gfx.DestroySampler(linearSampler);
         linearSampler = default;
 
@@ -731,6 +731,12 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
         gfx.PixelBufferBarrier(
             commandBuffer,
+            pixelBuffer: presentationBuffer,
+            srcLayout: VkImageLayout.UNDEFINED,
+            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+
+        gfx.PixelBufferBarrier(
+            commandBuffer,
             pixelBuffer: backBuffer,
             srcLayout: VkImageLayout.UNDEFINED,
             dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
@@ -745,6 +751,9 @@ class Gfx2D(GfxCore gfx) : IDisposable
         };
         VkClearColorValue clearColor = VkClearColorValue.FromColor(Color.Transparent);
         vkCmdClearColorImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
+
+        clearColor = VkClearColorValue.FromColor(Color.Black);
+        vkCmdClearColorImage(commandBuffer, presentationBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
 
         gfx.PixelBufferBarrier(
             commandBuffer,
@@ -1058,19 +1067,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
             DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
             ColorBlendOp = VkBlendOp.ADD,
             SrcAlphaBlendFactor = VkBlendFactor.ONE,
-            DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-            AlphaBlendOp = VkBlendOp.ADD,
-            ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
-        };
-
-        VkPipelineColorBlendAttachmentState premultipliedAlphaBlend = new()
-        {
-            BlendEnable = 1,
-            SrcColorBlendFactor = VkBlendFactor.ONE,
-            DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
-            ColorBlendOp = VkBlendOp.ADD,
-            SrcAlphaBlendFactor = VkBlendFactor.ONE,
-            DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
+            DstAlphaBlendFactor = VkBlendFactor.ONE,
             AlphaBlendOp = VkBlendOp.ADD,
             ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
         };
@@ -1309,7 +1306,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
             foreach (var rune in word.EnumerateRunes())
             {
-                FontGlyph glyph = font.GetGlyphByCodepoint((uint)rune.Value);
+                FontGlyph glyph = font.GetGlyphByCodepoint(rune.Value);
 
                 width += glyph.Width + glyphHorizontalPadding;
             }

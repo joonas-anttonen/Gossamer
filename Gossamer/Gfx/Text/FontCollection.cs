@@ -1,8 +1,10 @@
+using Gossamer.External.FreeType;
+
 using static Gossamer.External.FreeType.Api;
 
 namespace Gossamer.Gfx.Text;
 
-public sealed class FontCollection : IDisposable
+public unsafe sealed class FontCollection : IDisposable
 {
     readonly record struct FontKey(string Name, int Size);
 
@@ -86,7 +88,7 @@ public sealed class FontCollection : IDisposable
                 font.Dispose();
             }
 
-            FT_Done_FreeType(freetypeReference);
+            ftDestroy(freetypeReference);
             freetypeReference = default;
         }
     }
@@ -124,11 +126,13 @@ public sealed class FontCollection : IDisposable
     {
         if (freetypeReference == default)
         {
-            ThrowIfFailed(FT_Init_FreeType(out nint ft));
+            nint ft;
+            ThrowIfFailed(ftCreate(&ft));
             freetypeReference = ft;
         }
 
-        ThrowIfFailed(FT_New_Memory_Face(freetypeReference, data, dataLength, 0, out nint ftFace));
+        FreeTypeFaceData ftFace = default;
+        ThrowIfFailed(ftCreateFace(freetypeReference, data, (ulong)dataLength, horizontalSize, verticalSize, &ftFace));
 
         Font font = new(name, ftFace, horizontalSize, verticalSize);
         FontKey key = new(name, verticalSize);
