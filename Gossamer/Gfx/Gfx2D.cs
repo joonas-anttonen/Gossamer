@@ -31,7 +31,7 @@ readonly struct PerCommandData(Vector2 scale, Vector2 translation)
     public readonly Vector2 Translation = translation;
 }
 
-record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, Font? Font, Vector3 Color);
+record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, Font? Font);
 
 record struct CommandBatch(int FirstCommandIndex, int CommandCount, PixelBuffer? Surface);
 

@@ -396,7 +396,7 @@ public class GuiCore : IDisposable
                     gfx2D.GetFont("ProggyClean", 32),
                     new Vector2(ww - sizeOfFrame.X - ControlButtonWidth - ControlsOffFromFrameSide - ControlsButtonSeparation * 2, sizeOfFrame.Y * 2),
                     wordWrap: false);
-                cmdBuffer.DrawText(titleTextLayout, new Vector2(ControlsOffFromFrameSide, 5), Color.White.WithAlpha(0.9f), parameters.ColorOfFrame);
+                cmdBuffer.DrawText(titleTextLayout, new Vector2(ControlsOffFromFrameSide, 5), Color.White.WithAlpha(0.9f));
 
                 textShaper.ReleaseTextLayout(titleTextLayout);
             }
@@ -420,7 +420,7 @@ public class GuiCore : IDisposable
                     windowRect.Size,
                     wordWrap: true);
 
-                cmdBuffer.DrawText(textLayout, Vector2.Round(windowRect.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.8f), parameters.ColorOfBackground);
+                cmdBuffer.DrawText(textLayout, Vector2.Round(windowRect.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.8f));
 
                 textShaper.ReleaseTextLayout(textLayout);
             }

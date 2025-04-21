@@ -451,15 +451,10 @@ class FreeTypeGlyph : IDisposable
 
     public void ReadPixel(int x, int y, out byte r, out byte g, out byte b, out byte a)
     {
-        const int channelCount = 1;
-
-        nint data = glyphPointer.bitmap_ptr;
-        int pitch = glyphPointer.stride;
-
-        r = channelCount > 0 ? Marshal.ReadByte(data, y * pitch + x * channelCount + 0) : (byte)0;
-        g = channelCount > 1 ? Marshal.ReadByte(data, y * pitch + x * channelCount + 1) : r;
-        b = channelCount > 2 ? Marshal.ReadByte(data, y * pitch + x * channelCount + 2) : g;
-        a = channelCount > 3 ? Marshal.ReadByte(data, y * pitch + x * channelCount + 3) : (byte)255;
+        a = Marshal.ReadByte(glyphPointer.bitmap_ptr, y * glyphPointer.stride + x);
+        r = 255;
+        g = 255;
+        b = 255;
     }
 
     unsafe public FreeTypeGlyph(FreeTypeFaceData face, int glyphIndex)

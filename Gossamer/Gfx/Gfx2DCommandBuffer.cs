@@ -89,7 +89,7 @@ public class Gfx2DCommandBuffer
     {
         ArrayUtilities.Reserve(ref commands, commandsCount + 1);
 
-        Command command = new((uint)frameVertexCount, (uint)frameIndexCount, 0, default, default, Color.Black.ToVector3());
+        Command command = new((uint)frameVertexCount, (uint)frameIndexCount, 0, default, default);
         commands[commandsCount++] = command;
 
         batchCommandCount++;
@@ -110,7 +110,6 @@ public class Gfx2DCommandBuffer
 
         ref Command newCommand = ref BeginCommand();
         newCommand.Texture = image;
-        newCommand.Color = Color.Black.ToVector3();
 
         Vector2 imageExtent = new(image.Width, image.Height);
         Vector2 uv0 = new(0, 0);
@@ -150,14 +149,12 @@ public class Gfx2DCommandBuffer
         PushQuadUV(finalImagePosition, finalImagePosition + finalImageExtent, uv0, uv1, Color.White);
     }
 
-    public void DrawText(TextLayout layout, Vector2 position, Color color, Color backgroundColor)
+    public void DrawText(TextLayout layout, Vector2 position, Color color)
     {
         ThrowInvalidOperationIfNot(batchInProgress);
 
         ref Command newCommand = ref BeginCommand();
         newCommand.Font = layout.Font;
-        newCommand.Color = backgroundColor.ToVector3();
-
         for (int i = 0; i < layout.GlyphCount; i++)
         {
             var glyph = layout.Glyphs[i];

@@ -39,9 +39,9 @@ float4 fragment(fragment_input input) : SV_TARGET
 	float4 geometryColor = input.Color;
 	float4 textureColor = commandTexture.Sample(commandSampler, input.UV);
 
-    float distanceFromOutline = textureColor.r - 0.5;
+    float distanceFromOutline = textureColor.a - 0.5;
     float distanceChangePerFragment = length(float2(ddx(distanceFromOutline), ddy(distanceFromOutline)));
-	float alpha = smoothstep(-distanceChangePerFragment, distanceChangePerFragment, distanceFromOutline);
+    float alpha = smoothstep(-distanceChangePerFragment, distanceChangePerFragment, distanceFromOutline);
 
-    return float4(geometryColor.rgb, alpha * geometryColor.a);
+    return float4(geometryColor.rgb * textureColor.rgb, alpha * geometryColor.a);
 }
