@@ -389,13 +389,16 @@ public class GuiCore : IDisposable
                 cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
                 cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
-                var titleTextLayout = gfx2D.CreateTextLayout(
+                var textShaper = gfx2D.GetTextShaper();
+
+                var titleTextLayout = textShaper.CreateTextLayout(
                     parameters.Name,
                     gfx2D.GetFont("ProggyClean", 32),
                     new Vector2(ww - sizeOfFrame.X - ControlButtonWidth - ControlsOffFromFrameSide - ControlsButtonSeparation * 2, sizeOfFrame.Y * 2),
                     wordWrap: false);
                 cmdBuffer.DrawText(titleTextLayout, new Vector2(ControlsOffFromFrameSide, 5), Color.White.WithAlpha(0.9f), parameters.ColorOfFrame);
-                gfx2D.ReleaseTextLayout(titleTextLayout);
+
+                textShaper.ReleaseTextLayout(titleTextLayout);
             }
 
             {
@@ -409,7 +412,9 @@ public class GuiCore : IDisposable
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
                     $"GFX2D: {gfx2DStats.DrawCalls}d {gfx2DStats.Vertices}v {gfx2DStats.Indices}i";
 
-                var textLayout = gfx2D.CreateTextLayout(
+                var textShaper = gfx2D.GetTextShaper();
+
+                var textLayout = textShaper.CreateTextLayout(
                     statsText,
                     gfx2D.GetFont("ProggyClean", 32),
                     windowRect.Size,
@@ -417,7 +422,7 @@ public class GuiCore : IDisposable
 
                 cmdBuffer.DrawText(textLayout, Vector2.Round(windowRect.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.8f), parameters.ColorOfBackground);
 
-                gfx2D.ReleaseTextLayout(textLayout);
+                textShaper.ReleaseTextLayout(textLayout);
             }
 
             cmdBuffer.EndBatch();
