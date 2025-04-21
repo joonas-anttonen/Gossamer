@@ -286,7 +286,24 @@ public unsafe class GfxCore : IDisposable
 
     uint VulkanDebugMessageCallback(VkDebugUtilsMessageSeverityExt severity, VkDebugUtilsMessageTypeExt type, VkDebugUtilsMessengerCallbackDataExt* pCallbackData, nint pUserData)
     {
-        logger.Debug($"{severity} {Utf8StringMarshaller.ConvertToManaged((byte*)pCallbackData->pMessage)}", "Vulkan", "Validation");
+        string msg = Utf8StringMarshaller.ConvertToManaged((byte*)pCallbackData->pMessage) ?? string.Empty;
+
+        if (severity == VkDebugUtilsMessageSeverityExt.ERROR)
+        {
+            logger.Error(msg, "Vulkan", "Validation");
+        }
+        else if (severity == VkDebugUtilsMessageSeverityExt.WARNING)
+        {
+            logger.Warning(msg, "Vulkan", "Validation");
+        }
+        else if (severity == VkDebugUtilsMessageSeverityExt.INFO)
+        {
+            logger.Information(msg, "Vulkan", "Validation");
+        }
+        else if (severity == VkDebugUtilsMessageSeverityExt.VERBOSE)
+        {
+            logger.Debug(msg, "Vulkan", "Validation");
+        }
         return 0;
     }
 
@@ -680,8 +697,6 @@ public unsafe class GfxCore : IDisposable
 
     internal PixelBuffer CreatePixelBufferFromFile(string path, GfxPixelBufferUsage usage)
     {
-        logger.Warning($"Loading image from file: {path}");
-
         byte[] encodedData = File.ReadAllBytes(path);
         int encodedDataLength = encodedData.Length;
         int decodedDataLength = 0;
@@ -756,8 +771,6 @@ public unsafe class GfxCore : IDisposable
         EndSingleCommand(stagingCommand);
 
         DestroyMemoryBuffer(stagingBuffer);
-
-        logger.Warning($"Loaded image from file: {path} ({width}x{height})");
 
         return pixelBuffer;
     }

@@ -389,7 +389,13 @@ public class GuiCore : IDisposable
                 cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
                 cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
-                cmdBuffer.DrawText(parameters.Name, new Vector2(10, 5), Color.White, colorOfFrame, gfx2D.GetFont("ProggyClean", 24));
+                var titleTextLayout = gfx2D.CreateTextLayout(
+                    parameters.Name,
+                    gfx2D.GetFont("ProggyClean", 32),
+                    new Vector2(ww - sizeOfFrame.X - ControlButtonWidth - ControlsOffFromFrameSide - ControlsButtonSeparation * 2, sizeOfFrame.Y * 2),
+                    wordWrap: false);
+                cmdBuffer.DrawText(titleTextLayout, new Vector2(ControlsOffFromFrameSide, 5), Color.White, parameters.ColorOfFrame);
+                gfx2D.ReleaseTextLayout(titleTextLayout);
             }
 
             {

@@ -37,6 +37,20 @@ record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, Pixe
 
 record struct CommandBatch(int FirstCommandIndex, int CommandCount, PixelBuffer? Surface);
 
+public enum ImageFilter
+{
+    Nearest,
+    Linear,
+}
+
+public enum ImageFit
+{
+    None,
+    Center,
+    Fill,
+    FillAspect,
+}
+
 public class Gfx2DCommandBuffer
 {
     const int InitialArraySize = 8192 * 4;
@@ -123,6 +137,52 @@ public class Gfx2DCommandBuffer
         return ref commands[commandsCount - 1];
     }
 
+    public void DrawImage(PixelBuffer image, Vector2 targetPosition, Vector2 targetExtent, ImageFit imageFit)
+    {
+        ThrowInvalidOperationIfNot(batchInProgress);
+
+        ref Command newCommand = ref BeginCommand();
+        newCommand.Texture = image;
+        newCommand.Color = Color.Black.ToVector3();
+
+        Vector2 imageExtent = new(image.Width, image.Height);
+        Vector2 uv0 = new(0, 0);
+        Vector2 uv1 = new(1, 1);
+
+        Vector2 finalImagePosition = targetPosition;
+        Vector2 finalImageExtent = targetExtent;
+
+        if (imageFit == ImageFit.None)
+        {
+            finalImagePosition = targetPosition;
+            finalImageExtent = imageExtent;
+        }
+        else if (imageFit == ImageFit.Fill)
+        {
+            finalImagePosition = targetPosition;
+            finalImageExtent = targetExtent;
+        }
+        else if (imageFit == ImageFit.FillAspect)
+        {
+            bool horizontal = imageExtent.X > imageExtent.Y;
+            float scale = horizontal
+                        ? targetExtent.X / imageExtent.X
+                        : targetExtent.Y / imageExtent.Y;
+            finalImageExtent = imageExtent * scale;
+
+            Vector2 offset = (targetExtent - finalImageExtent) * 0.5f;
+            finalImagePosition = targetPosition + offset;
+        }
+        else if (imageFit == ImageFit.Center)
+        {
+            Vector2 offset = (targetExtent - imageExtent) * 0.5f;
+            finalImagePosition = targetPosition + offset;
+            finalImageExtent = imageExtent;
+        }
+
+        PushQuadUV(finalImagePosition, finalImagePosition + finalImageExtent, uv0, uv1, Color.White);
+    }
+
     public void DrawText(TextLayout layout, Vector2 position, Color color, Color backgroundColor)
     {
         ThrowInvalidOperationIfNot(batchInProgress);
@@ -138,41 +198,6 @@ public class Gfx2DCommandBuffer
             Vector2 c = a + glyph.Size;
 
             PushQuadUV(a, c, glyph.UV0, glyph.UV1, color);
-        }
-    }
-
-    public void DrawText(ReadOnlySpan<char> text, Vector2 position, Color color, Color backgroundColor, Font font)
-    {
-        ref Command newCommand = ref BeginCommand();
-        newCommand.Font = font;
-        newCommand.Color = backgroundColor.ToVector3();
-
-        Font.Metrics fontMetrics = font.GetMetrics();
-        float cursorX = position.X;
-        float cursorY = position.Y + fontMetrics.Ascender;
-
-        foreach (var line in text.EnumerateLines())
-        {
-            foreach (ShapedGlyph shapedGlyph in font.ShapeText(line))
-            {
-                FontGlyph glyph = shapedGlyph.Glyph;
-
-                float x = cursorX + shapedGlyph.XOffset + glyph.BearingX;
-                float y = cursorY + shapedGlyph.YOffset - glyph.BearingY;
-
-                PushQuadUV(new(x, y), new(x + glyph.Width, y + glyph.Height), new(glyph.U0, glyph.V0), new(glyph.U1, glyph.V1), color);
-
-                cursorX += shapedGlyph.XAdvance;
-                cursorY += shapedGlyph.YAdvance;
-
-                if (shapedGlyph.XAdvance == 0)
-                {
-                    cursorX += glyph.Width;
-                }
-            }
-
-            cursorX = position.X;
-            cursorY += fontMetrics.Height;
         }
     }
 
@@ -499,7 +524,8 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
     DisplayParameters? parameters;
 
-    VkSampler drawSampler;
+    VkSampler nearestSampler;
+    VkSampler linearSampler;
 
     GfxPipeline? pipeline;
     GfxPipeline? compositionPipeline;
@@ -632,7 +658,17 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
             MaxAnisotropy = 1,
         };
-        drawSampler = gfx.CreateSampler(samplerCreateInfo);
+        nearestSampler = gfx.CreateSampler(samplerCreateInfo);
+
+        // Linear
+        samplerCreateInfo.MinFilter = VkFilter.LINEAR;
+        samplerCreateInfo.MagFilter = VkFilter.LINEAR;
+        samplerCreateInfo.MipmapMode = VkSamplerMipmapMode.LINEAR;
+        samplerCreateInfo.AddressModeU = VkSamplerAddressMode.CLAMP_TO_EDGE;
+        samplerCreateInfo.AddressModeV = VkSamplerAddressMode.CLAMP_TO_EDGE;
+        samplerCreateInfo.AddressModeW = VkSamplerAddressMode.CLAMP_TO_EDGE;
+        samplerCreateInfo.BorderColor = VkBorderColor.FLOAT_OPAQUE_BLACK;
+        linearSampler = gfx.CreateSampler(samplerCreateInfo);
 
         // Initialize the default font
         InitializeFont(fontCache.GetBuiltInFont());
@@ -642,8 +678,11 @@ class Gfx2D(GfxCore gfx) : IDisposable
     {
         DestroyRendering();
 
-        gfx.DestroySampler(drawSampler);
-        drawSampler = default;
+        gfx.DestroySampler(nearestSampler);
+        nearestSampler = default;
+        
+        gfx.DestroySampler(linearSampler);
+        linearSampler = default;
 
         foreach (PixelBuffer fontTexture in fontTextures)
             gfx.DestroyPixelBuffer(fontTexture);
@@ -853,7 +892,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
             VkDescriptorImageInfo descriptorImageInfo2 = new()
             {
-                Sampler = drawSampler,
+                Sampler = nearestSampler,
             };
             descriptorWrites[1] = new(default)
             {
@@ -940,8 +979,23 @@ class Gfx2D(GfxCore gfx) : IDisposable
             );
             vkCmdPushConstants(commandBuffer, activePipeline.Layout, VkShaderStage.VERTEX | VkShaderStage.FRAGMENT, 0, (uint)Unsafe.SizeOf<PerCommandData>(), &commandData);
 
-            // FIXME: Fallback to the first font texture if the command does not have a texture or a font.
-            PixelBuffer commandTexture = command.Texture ?? (command.Font != null ? fontTextures[fontTextureIndices[command.Font]] : fontTextures[0]);
+            PixelBuffer commandTexture;
+            VkSampler commandSampler;
+            if (command.Texture != null)
+            {
+                commandTexture = command.Texture;
+                commandSampler = linearSampler;
+            }
+            else if (command.Font != null)
+            {
+                commandTexture = fontTextures[fontTextureIndices[command.Font]];
+                commandSampler = nearestSampler;
+            }
+            else
+            {
+                commandTexture = fontTextures[0];
+                commandSampler = nearestSampler;
+            }
 
             VkDescriptorImageInfo descriptorImageInfo = new()
             {
@@ -958,7 +1012,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
             VkDescriptorImageInfo descriptorImageInfo2 = new()
             {
-                Sampler = drawSampler,
+                Sampler = commandSampler,
             };
             descriptorWrites[1] = new(default)
             {

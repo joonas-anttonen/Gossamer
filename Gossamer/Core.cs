@@ -107,43 +107,6 @@ public sealed class Core : SynchronizationContext, IDisposable
         var parameters = Parameters.FromArgs(args);
         using var gossamer = new Core(parameters);
 
-        /*unsafe
-        {
-            byte[] data = File.ReadAllBytes(@"D:\nsfw\2g4gv8cc8tjd1.webp");
-
-            fixed (byte* ptr = data)
-            {
-                int width = 0, height = 0, hasAlpha = 0;
-                External.Webp.WebPStatus status = External.Webp.Api.webpAnalyze(ptr, (ulong)data.Length, &width, &height, &hasAlpha);
-                Console.WriteLine($"webpAnalyze: {status} {width}x{height} {hasAlpha}");
-
-                int decoded_data_size = width * height * 4;
-                byte* decoded_data = (byte*)Marshal.AllocHGlobal(decoded_data_size);
-                status = External.Webp.Api.webpDecodeInto(ptr, (ulong)data.Length, External.Webp.WebPFormat.RGBA, decoded_data, (ulong)decoded_data_size, width * 4);
-                Console.WriteLine($"webpDecodeInto: {status} {StringUtilities.ByteSizeShortIEC((ulong)decoded_data_size)}");
-
-                // Encode the data back to WebP format
-                byte* encoded_data = null;
-                ulong encoded_data_size = 0;
-
-                status = External.Webp.Api.webpEncode(decoded_data, (ulong)decoded_data_size, External.Webp.WebPFormat.RGBA, width, height, &encoded_data, &encoded_data_size, width * 4);
-                Console.WriteLine($"webpEncode: {status} {StringUtilities.ByteSizeShortIEC(encoded_data_size)}");
-
-                byte[] encodedDataArray = new byte[encoded_data_size];
-                Marshal.Copy((IntPtr)encoded_data, encodedDataArray, 0, (int)encoded_data_size);
-
-                // Free the encoded data
-                External.Webp.Api.webpFree(encoded_data);
-
-                // Free the decoded data
-                //External.Webp.Api.webpFree(decoded_data);
-                Marshal.FreeHGlobal((nint)decoded_data);
-
-                // Save the encoded data to a file
-                File.WriteAllBytes(@"D:\output.webp", encodedDataArray);
-            }
-        }*/
-
         return gossamer.Run();
     }
 
@@ -264,8 +227,6 @@ public sealed class Core : SynchronizationContext, IDisposable
 
             // 5. Create graphics swap chain presenter (depends on user interface)
             gfx.CreatePresenter(new GfxSwapChainPresentation(gui, EnableVerticalSync: false));
-
-            //gfx.CreatePixelBufferFromFile(@"D:\nsfw\2g4gv8cc8tjd1.webp", GfxPixelBufferUsage.Sampled);
 
             RunGfx(gfx);
             RunGui(gui);
