@@ -8,9 +8,7 @@ public unsafe sealed class FontCollection : IDisposable
 {
     readonly record struct FontKey(string Name, int Size);
 
-    bool isDisposed;
-
-    readonly Dictionary<string, (nint, int)> fontData = [];
+    readonly Dictionary<string, (nint Pointer, int Length)> fontData = [];
     readonly Dictionary<FontKey, Font> fonts = [];
     readonly Font defaultFont;
 
@@ -45,9 +43,9 @@ public unsafe sealed class FontCollection : IDisposable
     {
         string pureName = Path.GetFileNameWithoutExtension(nameOrPath);
 
-        if (fontData.TryGetValue(pureName, out (nint ptr, int length) data))
+        if (fontData.TryGetValue(pureName, out var data))
         {
-            font = LoadFontFromHGlobal(pureName, data.ptr, data.length, verticalSize, verticalSize);
+            font = LoadFontFromHGlobal(pureName, data.Pointer, data.Length, verticalSize, verticalSize);
             return true;
         }
 
@@ -55,6 +53,31 @@ public unsafe sealed class FontCollection : IDisposable
         {
             font = LoadFontFromFile(pureName, nameOrPath, verticalSize, verticalSize);
             return true;
+        }
+        else
+        {
+            nameOrPath = Path.GetFileNameWithoutExtension(nameOrPath);
+            
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                string fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), nameOrPath + ".ttf");
+
+                if (File.Exists(fontPath))
+                {
+                    font = LoadFontFromFile(pureName, fontPath, verticalSize, verticalSize);
+                    return true;
+                }
+            }
+            else if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
+            {
+                string fontPath = Path.Combine("/usr/share/fonts", nameOrPath + ".ttf");
+
+                if (File.Exists(fontPath))
+                {
+                    font = LoadFontFromFile(pureName, fontPath, verticalSize, verticalSize);
+                    return true;
+                }
+            }
         }
 
         font = null;
@@ -79,18 +102,20 @@ public unsafe sealed class FontCollection : IDisposable
     {
         GC.SuppressFinalize(this);
 
-        if (!isDisposed)
+        foreach (var font in fonts.Values)
         {
-            isDisposed = true;
-
-            foreach (var font in fonts.Values)
-            {
-                font.Dispose();
-            }
-
-            ftDestroy(freetypeReference);
-            freetypeReference = default;
+            font.Dispose();
         }
+        fonts.Clear();
+
+        foreach ((nint Pointer, int Length) in fontData.Values)
+        {
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(Pointer);
+        }
+        fontData.Clear();
+
+        ftDestroy(freetypeReference);
+        freetypeReference = default;
     }
 
     /// <summary>
@@ -114,12 +139,12 @@ public unsafe sealed class FontCollection : IDisposable
     /// <param name="verticalSize"></param>
     public Font LoadFontFromBytes(string name, byte[] data, int horizontalSize, int verticalSize)
     {
-        nint ftData = System.Runtime.InteropServices.Marshal.AllocHGlobal(data.Length);
-        System.Runtime.InteropServices.Marshal.Copy(data, 0, ftData, data.Length);
+        nint nativeData = System.Runtime.InteropServices.Marshal.AllocHGlobal(data.Length);
+        System.Runtime.InteropServices.Marshal.Copy(data, 0, nativeData, data.Length);
 
-        fontData[name] = (ftData, data.Length);
+        fontData.Add(name, (nativeData, data.Length));
 
-        return LoadFontFromHGlobal(name, ftData, data.Length, horizontalSize, verticalSize);
+        return LoadFontFromHGlobal(name, nativeData, data.Length, horizontalSize, verticalSize);
     }
 
     Font LoadFontFromHGlobal(string name, nint data, int dataLength, int horizontalSize, int verticalSize)
@@ -134,10 +159,10 @@ public unsafe sealed class FontCollection : IDisposable
         FreeTypeFaceData ftFace = default;
         ThrowIfFailed(ftCreateFace(freetypeReference, data, (ulong)dataLength, horizontalSize, verticalSize, &ftFace));
 
-        Font font = new(name, ftFace, horizontalSize, verticalSize);
+        Font font = new(fonts.Count, name, verticalSize, ftFace);
         FontKey key = new(name, verticalSize);
 
-        fonts[key] = font;
+        fonts.Add(key, font);
 
         return font;
     }

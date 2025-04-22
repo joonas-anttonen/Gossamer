@@ -31,24 +31,6 @@ readonly struct PerCommandData(Vector2 scale, Vector2 translation)
     public readonly Vector2 Translation = translation;
 }
 
-record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, Font? Font);
-
-record struct CommandBatch(int FirstCommandIndex, int CommandCount, PixelBuffer? Surface);
-
-public enum ImageFilter
-{
-    Nearest,
-    Linear,
-}
-
-public enum ImageFit
-{
-    None,
-    Center,
-    Fill,
-    FillAspect,
-}
-
 class Gfx2D(GfxCore gfx) : IDisposable
 {
     public const int MaxVertices = 65536;
@@ -60,7 +42,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
     readonly GfxCore gfx = gfx;
 
     readonly FontCollection fontCache = new();
-    readonly TextShaper textShaper = new();
 
     DisplayParameters? parameters;
 
@@ -75,8 +56,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
     MemoryBuffer<Vertex2D>? vertexBuffer;
     MemoryBuffer<ushort>? indexBuffer;
 
-    // FIXME: Fonts should know their textures to avoid this mess. This is also giga unsafe in terms of threading.
-    readonly Dictionary<Font, int> fontTextureIndices = [];
+    readonly Lock fontTexturesLock = new();
     PixelBuffer[] fontTextures = [];
 
     readonly ConcurrentObjectPool<Gfx2DCommandBuffer> commandBufferPool = new(initialCapacity: 2);
@@ -84,14 +64,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
     Gfx2DCommandBuffer? currentCommandBuffer;
 
     Statistics frameStatistics;
-
-    /// <summary>
-    /// Returns the <see cref="TextShaper"/>.
-    /// </summary>
-    public TextShaper GetTextShaper()
-    {
-        return textShaper;
-    }
 
     /// <summary>
     /// Gets the built-in font that is always available.
@@ -151,19 +123,22 @@ class Gfx2D(GfxCore gfx) : IDisposable
         commandBufferQueue.Enqueue(commandBuffer);
     }
 
+    // FIXME: Fonts are being loaded in other threads, this is not thread safe at the moment. Simultanenous vkQueue use!
     void InitializeFont(Font font)
     {
         Font.Atlas fontAtlas = font.GetAtlas();
 
         PixelBuffer fontTexture = gfx.CreatePixelBuffer(
             fontAtlas.Pixels,
-            width: fontAtlas.Width,
-            height: fontAtlas.Height,
+            width: (uint)fontAtlas.Size,
+            height: (uint)fontAtlas.Size,
             format: GfxFormat.Rgba8,
             usage: GfxPixelBufferUsage.Sampled);
 
-        fontTextureIndices[font] = fontTextures.Length;
-        ArrayUtilities.Append(ref fontTextures, fontTexture);
+        using (fontTexturesLock.EnterScope())
+        {
+            ArrayUtilities.Append(ref fontTextures, fontTexture);
+        }
 
         // Log font details
         logger.Debug($"{font.Name} [{font.Size}]");
@@ -482,20 +457,24 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
             PixelBuffer commandTexture;
             VkSampler commandSampler;
-            if (command.Texture != null)
+
+            using (fontTexturesLock.EnterScope())
             {
-                commandTexture = command.Texture;
-                commandSampler = linearSampler;
-            }
-            else if (command.Font != null)
-            {
-                commandTexture = fontTextures[fontTextureIndices[command.Font]];
-                commandSampler = nearestSampler;
-            }
-            else
-            {
-                commandTexture = fontTextures[0];
-                commandSampler = nearestSampler;
+                if (command.Texture != null)
+                {
+                    commandTexture = command.Texture;
+                    commandSampler = linearSampler;
+                }
+                else if (command.Font >= 0)
+                {
+                    commandTexture = fontTextures[command.Font];
+                    commandSampler = nearestSampler;
+                }
+                else
+                {
+                    commandTexture = fontTextures[0];
+                    commandSampler = nearestSampler;
+                }
             }
 
             VkDescriptorImageInfo descriptorImageInfo = new()

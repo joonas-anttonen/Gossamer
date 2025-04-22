@@ -1,21 +1,14 @@
-using System.Runtime.InteropServices;
-
 using Gossamer.External.FreeType;
-using Gossamer.External.HarfBuzz;
 
 using static Gossamer.External.FreeType.Api;
-using static Gossamer.External.HarfBuzz.Api;
-using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Gfx.Text;
 
-public readonly record struct FontGlyph(int Index, float U0, float V0, float U1, float V1, int Width, int Height, int BearingX, int BearingY);
-
-public readonly record struct ShapedGlyph(float XAdvance, float YAdvance, float XOffset, float YOffset, FontGlyph Glyph);
+public readonly record struct Glyph(int Index, float U0, float V0, float U1, float V1, int Width, int Height, int BearingX, int BearingY);
 
 public sealed class Font : IDisposable
 {
-    public record Atlas(uint Width, uint Height, byte[] Pixels);
+    public record Atlas(int Size, byte[] Pixels);
 
     bool isDisposed;
 
@@ -23,19 +16,26 @@ public sealed class Font : IDisposable
 
     readonly FreeTypeFaceData ftFace;
 
-    readonly nint hbBuffer;
-    readonly nint hbFont;
+    readonly TextShaper shaper;
 
-    readonly Atlas atlas;
+    readonly Atlas glyphAtlas;
 
-    readonly Dictionary<int, FontGlyph> glyphMap = [];
-    readonly FontGlyph unknownGlyph;
-    readonly FontGlyph spaceGlyph;
+    readonly Glyph[] glyphMap;
+    readonly Glyph unknownGlyph;
 
     readonly Metrics metrics;
 
-    readonly int verticalSize;
+    readonly int index;
     readonly string name;
+    readonly int verticalSize;
+
+    /// <summary>
+    /// The index of the font in the global collection.
+    /// </summary>
+    public int Index
+    {
+        get => index;
+    }
 
     /// <summary>
     /// The name of the font.
@@ -58,7 +58,7 @@ public sealed class Font : IDisposable
     /// </summary>
     public Atlas GetAtlas()
     {
-        return atlas;
+        return glyphAtlas;
     }
 
     /// <summary>
@@ -72,62 +72,56 @@ public sealed class Font : IDisposable
     /// <summary>
     /// Retrieves the unknown glyph.
     /// </summary>
-    public FontGlyph GetUnknownGlyph()
+    public Glyph GetUnknownGlyph()
     {
         return unknownGlyph;
     }
 
     /// <summary>
-    /// Retrieves the space glyph.
+    /// Returns the <see cref="TextShaper"/>.
     /// </summary>
-    public FontGlyph GetSpaceGlyph()
+    public TextShaper GetShaper()
     {
-        return spaceGlyph;
+        return shaper;
     }
 
     /// <summary>
     /// Retrieves a glyph by its index.
     /// </summary>
     /// <param name="index"></param>
-    FontGlyph GetGlyphByIndex(int index)
+    Glyph GetGlyphByIndex(int index)
     {
-        return glyphMap.TryGetValue(index, out FontGlyph glyph) ? glyph : unknownGlyph;
+        if (index < 0 || index >= glyphMap.Length)
+        {
+            return unknownGlyph;
+        }
+
+        return glyphMap[index];
     }
 
     /// <summary>
     /// Retrieves a glyph by its Unicode codepoint.
     /// </summary>
     /// <param name="codepoint"></param>
-    public FontGlyph GetGlyphByCodepoint(int codepoint)
+    public Glyph GetGlyphByCodepoint(int codepoint)
     {
         return GetGlyphByIndex(ftGetCharIndex(ftFace.face_ptr, codepoint));
     }
 
-    internal Font(string name, FreeTypeFaceData face, int horizontalSize, int verticalSize)
+    internal Font(int index, string name, int verticalSize, FreeTypeFaceData ftFace)
     {
+        this.index = index;
         this.name = name;
         this.verticalSize = verticalSize;
+        this.ftFace = ftFace;
 
-        ftFace = face;
-        metrics = new Metrics(face.ascender, face.descender, face.height);
+        metrics = new Metrics(ftFace.ascender, ftFace.descender, ftFace.height);
 
-        hbBuffer = hb_buffer_create();
-        hbFont = hb_ft_font_create_referenced(ftFace.face_ptr);
-        //hb_ft_font_set_load_flags(hbFont, FT_Load.LOAD_TARGET_LCD);
-        hb_ft_font_set_funcs(hbFont);
-        hb_ft_font_changed(hbFont);
+        (glyphAtlas, glyphMap) = Build();
 
-        atlas = BuildAtlas();
+        unknownGlyph = glyphMap[0];
 
-        spaceGlyph = GetGlyphByIndex(ftGetCharIndex(ftFace.face_ptr, new System.Text.Rune(' ').Value));
-        if (glyphMap.ContainsKey(glyphMap.FirstOrDefault().Key))
-        {
-            unknownGlyph = glyphMap[glyphMap.FirstOrDefault().Key];
-        }
-        if (glyphMap.ContainsKey(0))
-        {
-            unknownGlyph = glyphMap[0];
-        }
+        shaper = new TextShaper(ftFace, glyphMap);
     }
 
     ~Font()
@@ -143,120 +137,10 @@ public sealed class Font : IDisposable
         {
             isDisposed = true;
 
-            hb_buffer_destroy(hbBuffer);
-            hb_font_destroy(hbFont);
+            shaper.Dispose();
 
             ftReleaseFace(ftFace.face_ptr);
         }
-    }
-
-    public ref struct ShapeEnumerator
-    {
-        readonly Font font;
-        readonly nint shapedGlyphInfos;
-        readonly nint shapedGlyphPositions;
-        readonly int shapedGlyphCount;
-
-        /// <summary>The next index to yield.</summary>
-        int _index;
-
-        /// <summary>
-        /// Returns this instance as an enumerator.
-        /// </summary>
-        public readonly ShapeEnumerator GetEnumerator() => this;
-
-        /// <summary>Initialize the enumerator.</summary>
-        /// <param name="span">The span to enumerate.</param>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        internal ShapeEnumerator(Font font, nint shapedGlyphInfos, nint shapedGlyphPositions, int shapedGlyphCount)
-        {
-            this.font = font;
-            this.shapedGlyphInfos = shapedGlyphInfos;
-            this.shapedGlyphPositions = shapedGlyphPositions;
-            this.shapedGlyphCount = shapedGlyphCount;
-            _index = -1;
-        }
-
-        /// <summary>Advances the enumerator to the next element of the span.</summary>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            int index = _index + 1;
-            if (index < shapedGlyphCount)
-            {
-                _index = index;
-                return true;
-            }
-
-            return false;
-        }
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        readonly unsafe (hb_glyph_info_t, hb_glyph_position_t) ReadShapedGlyph(int i)
-        {
-            hb_glyph_info_t* pGlyphInfo = (hb_glyph_info_t*)(shapedGlyphInfos + i * sizeof(hb_glyph_info_t));
-            hb_glyph_position_t* pGlyphPosition = (hb_glyph_position_t*)(shapedGlyphPositions + i * sizeof(hb_glyph_position_t));
-            return (*pGlyphInfo, *pGlyphPosition);
-        }
-
-        /// <summary>Gets the element at the current position of the enumerator.</summary>
-        public ShapedGlyph Current
-        {
-            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                (hb_glyph_info_t glyphInfo, hb_glyph_position_t glyphPosition) = ReadShapedGlyph(_index);
-
-                FontGlyph glyph = font.GetGlyphByIndex((int)glyphInfo.CodepointOrIndex);
-
-                return new ShapedGlyph(
-                    XAdvance: glyphPosition.xAdvance / 64f,
-                    YAdvance: glyphPosition.yAdvance / 64f,
-                    XOffset: glyphPosition.xOffset / 64f,
-                    YOffset: glyphPosition.yOffset / 64f,
-                    Glyph: glyph);
-            }
-        }
-    }
-
-    public unsafe ShapeEnumerator ShapeText(ReadOnlySpan<uint> codepoints)
-    {
-        hb_buffer_clear_contents(hbBuffer);
-
-        fixed (uint* pCodepoints = codepoints)
-        {
-            hb_buffer_add_codepoints(hbBuffer, pCodepoints, codepoints.Length, 0, codepoints.Length);
-            hb_buffer_guess_segment_properties(hbBuffer);
-        }
-
-        hb_feature_t enableKerning = hb_feature_t.EnableKerning;
-        hb_shape(hbFont, hbBuffer, (nint)(&enableKerning), 1);
-
-        var shapedGlyphInfos = hb_buffer_get_glyph_infos(hbBuffer, out int infosLength);
-        var shapedGlyphPositions = hb_buffer_get_glyph_positions(hbBuffer, out int positionsLength);
-        var shapedGlyphCount = infosLength;
-
-        return new ShapeEnumerator(this, shapedGlyphInfos, shapedGlyphPositions, shapedGlyphCount);
-    }
-
-    public unsafe ShapeEnumerator ShapeText(ReadOnlySpan<char> text)
-    {
-        hb_buffer_clear_contents(hbBuffer);
-
-        fixed (char* pText = text)
-        {
-            hb_buffer_add_utf16(hbBuffer, (ushort*)pText, text.Length, 0, text.Length);
-            hb_buffer_guess_segment_properties(hbBuffer);
-        }
-
-        hb_feature_t enableKerning = hb_feature_t.EnableKerning;
-        hb_shape(hbFont, hbBuffer, (nint)(&enableKerning), 1);
-
-        var shapedGlyphInfos = hb_buffer_get_glyph_infos(hbBuffer, out int infosLength);
-        var shapedGlyphPositions = hb_buffer_get_glyph_positions(hbBuffer, out int positionsLength);
-        var shapedGlyphCount = infosLength;
-
-        return new ShapeEnumerator(this, shapedGlyphInfos, shapedGlyphPositions, shapedGlyphCount);
     }
 
     static int CalculateAtlasSize(FreeTypeGlyphCollection glyphs, int glyphPadding)
@@ -273,10 +157,10 @@ public sealed class Font : IDisposable
 
             for (int i = 0; i < glyphs.Count; i++)
             {
-                FreeTypeGlyph glyph = glyphs[i];
+                FreeTypeGlyph ftGlyph = glyphs[i];
 
-                int glyphWidth = glyph.Width + glyphPadding * 2;
-                int glyphHeight = glyph.Height + glyphPadding * 2;
+                int glyphWidth = ftGlyph.Width + glyphPadding * 2;
+                int glyphHeight = ftGlyph.Height + glyphPadding * 2;
 
                 maxHeight = Math.Max(maxHeight, glyphHeight);
                 if (x + glyphWidth > atlasSize)
@@ -309,23 +193,24 @@ public sealed class Font : IDisposable
     /// <summary>
     /// Builds a font atlas from the full set of glyphs.
     /// </summary>
-    /// <returns></returns>
-    Atlas BuildAtlas()
+    (Atlas, Glyph[]) Build()
     {
         const int Channels = 4;
         const int Padding = 2;
 
-        using FreeTypeGlyphCollection glyphs = LoadGlyphs();
+        using FreeTypeGlyphCollection ftGlyphs = LoadGlyphs();
 
-        int atlasSize = CalculateAtlasSize(glyphs, Padding);
+        Glyph[] glyphs = new Glyph[ftFace.glyph_count];
+
+        int atlasSize = CalculateAtlasSize(ftGlyphs, Padding);
         var bitmap = new byte[atlasSize * atlasSize * Channels];
 
         int atlasX = 0;
         int atlasY = 0;
         int maxHeight = 0;
-        for (int i = 0; i < glyphs.Count; i++)
+        for (int i = 0; i < ftGlyphs.Count; i++)
         {
-            FreeTypeGlyph ftGlyph = glyphs[i];
+            FreeTypeGlyph ftGlyph = ftGlyphs[i];
 
             int glyphWidth = ftGlyph.Width;
             int glyphHeight = ftGlyph.Height;
@@ -371,7 +256,7 @@ public sealed class Font : IDisposable
             // HACK: Add 1 pixel to the height to prevent cutting off the bottom of some glyphs
             float v1 = (float)(glyphYPosInBitmap + glyphHeight + 1) / atlasSize;
 
-            FontGlyph glyph = new(
+            Glyph glyph = new(
                 Index: ftGlyph.Index,
                 U0: u0,
                 V0: v0,
@@ -381,19 +266,19 @@ public sealed class Font : IDisposable
                 Height: ftGlyph.Height,
                 BearingX: ftGlyph.BearingX,
                 BearingY: ftGlyph.BearingY);
-            glyphMap[glyph.Index] = glyph;
+            glyphs[glyph.Index] = glyph;
 
             atlasX += glyphWidthPadding * Channels;
         }
 
-        return new Atlas((uint)atlasSize, (uint)atlasSize, bitmap);
+        return (new Atlas(atlasSize, bitmap), glyphs);
     }
 
     FreeTypeGlyphCollection LoadGlyphs()
     {
         int glyphsInFace = ftFace.glyph_count;
-        FreeTypeGlyph[] glyphs = new FreeTypeGlyph[glyphsInFace];
 
+        FreeTypeGlyph[] glyphs = new FreeTypeGlyph[glyphsInFace];
         for (int i = 0; i < glyphsInFace; i++)
         {
             glyphs[i] = new FreeTypeGlyph(ftFace, i);
@@ -401,89 +286,70 @@ public sealed class Font : IDisposable
 
         return new FreeTypeGlyphCollection(glyphs);
     }
-}
 
-sealed class FreeTypeGlyphCollection(FreeTypeGlyph[] glyphs) : IDisposable
-{
-    bool isDisposed;
-
-    public int Count => glyphs.Length;
-
-    public FreeTypeGlyph this[int index] => glyphs[index];
-
-    ~FreeTypeGlyphCollection()
+    sealed class FreeTypeGlyphCollection(FreeTypeGlyph[] glyphs) : IDisposable
     {
-        Dispose();
-    }
+        public int Count => glyphs.Length;
 
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
+        public FreeTypeGlyph this[int index] => glyphs[index];
 
-        if (!isDisposed)
+        ~FreeTypeGlyphCollection()
         {
-            isDisposed = true;
+            Dispose();
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
 
             foreach (var glyph in glyphs)
             {
                 glyph.Dispose();
             }
+            glyphs = [];
         }
     }
-}
 
-
-class FreeTypeGlyph : IDisposable
-{
-    bool isDisposed;
-
-    readonly FreeTypeGlyphData glyphPointer;
-
-    public int Index { get; }
-
-    public int Width { get; }
-
-    public int Height { get; }
-
-    public int BearingX { get; }
-
-    public int BearingY { get; }
-
-    public void ReadPixel(int x, int y, out byte r, out byte g, out byte b, out byte a)
+    sealed class FreeTypeGlyph : IDisposable
     {
-        a = Marshal.ReadByte(glyphPointer.bitmap_ptr, y * glyphPointer.stride + x);
-        r = 255;
-        g = 255;
-        b = 255;
-    }
+        FreeTypeGlyphData ftGlyphData;
 
-    unsafe public FreeTypeGlyph(FreeTypeFaceData face, int glyphIndex)
-    {
-        FreeTypeGlyphData glyphData;
-        ftCreateGlyph(face.face_ptr, glyphIndex, &glyphData);
-        glyphPointer = glyphData;
+        public int Index { get; }
+        public int Width => ftGlyphData.width;
+        public int Height => ftGlyphData.height;
+        public int BearingX => ftGlyphData.bearing_x;
+        public int BearingY => ftGlyphData.bearing_y;
 
-        Index = glyphIndex;
-        BearingX = glyphData.bearing_x;
-        BearingY = glyphData.bearing_y;
-        Width = glyphData.width;
-        Height = glyphData.height;
-    }
-
-    ~FreeTypeGlyph()
-    {
-        Dispose();
-    }
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-
-        if (!isDisposed)
+        public unsafe void ReadPixel(int x, int y, out byte r, out byte g, out byte b, out byte a)
         {
-            isDisposed = true;
+            a = *((byte*)ftGlyphData.bitmap_ptr + y * ftGlyphData.stride + x);
+            r = 255;
+            g = 255;
+            b = 255;
+        }
 
-            ftReleaseGlyph(glyphPointer.glyph_ptr);
+        public unsafe FreeTypeGlyph(FreeTypeFaceData face, int glyphIndex)
+        {
+            FreeTypeGlyphData glyphData;
+            ThrowIfFailed(ftCreateGlyph(face.face_ptr, glyphIndex, &glyphData));
+            ftGlyphData = glyphData;
+
+            Index = glyphIndex;
+        }
+
+        ~FreeTypeGlyph()
+        {
+            Dispose();
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+            if (ftGlyphData.glyph_ptr != 0)
+            {
+                ftReleaseGlyph(ftGlyphData.glyph_ptr);
+                ftGlyphData = default;
+            }
         }
     }
 }

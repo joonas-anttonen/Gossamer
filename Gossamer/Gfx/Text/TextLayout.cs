@@ -40,7 +40,7 @@ public class TextLayout
     /// Appends a glyph to the text layout.
     /// </summary>
     /// <param name="glyph"></param>
-    public void Append(Vector2 position, FontGlyph glyph)
+    public void Append(Vector2 position, Glyph glyph)
     {
         ArrayUtilities.Reserve(ref glyphs, glyphCount + 1);
         glyphs[glyphCount++] = new TextLayoutGlyph(

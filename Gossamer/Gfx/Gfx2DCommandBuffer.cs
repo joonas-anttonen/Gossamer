@@ -5,6 +5,23 @@ using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Gfx;
 
+record struct Command(uint VertexOffset, uint IndexOffset, uint IndexCount, PixelBuffer? Texture, int Font);
+record struct CommandBatch(int FirstCommandIndex, int CommandCount, PixelBuffer? Surface);
+
+public enum ImageFilter
+{
+    Nearest,
+    Linear,
+}
+
+public enum ImageFit
+{
+    None,
+    Center,
+    Fill,
+    FillAspect,
+}
+
 public class Gfx2DCommandBuffer
 {
     const int InitialArraySize = 8192 * 4;
@@ -152,9 +169,10 @@ public class Gfx2DCommandBuffer
     public void DrawText(TextLayout layout, Vector2 position, Color color)
     {
         ThrowInvalidOperationIfNot(batchInProgress);
+        ThrowInvalidOperationIfNull(layout.Font);
 
         ref Command newCommand = ref BeginCommand();
-        newCommand.Font = layout.Font;
+        newCommand.Font = layout.Font.Index;
         for (int i = 0; i < layout.GlyphCount; i++)
         {
             var glyph = layout.Glyphs[i];

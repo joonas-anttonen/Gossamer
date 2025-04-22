@@ -389,20 +389,21 @@ public class GuiCore : IDisposable
                 cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
                 cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
-                var textShaper = gfx2D.GetTextShaper();
+                var font = gfx2D.GetFont("ProggyClean", 32);
+                var shaper = font.GetShaper();
 
-                var titleTextLayout = textShaper.CreateTextLayout(
+                var titleTextLayout = shaper.CreateTextLayout(
                     parameters.Name,
-                    gfx2D.GetFont("ProggyClean", 32),
+                    font,
                     new Vector2(ww - sizeOfFrame.X - ControlButtonWidth - ControlsOffFromFrameSide - ControlsButtonSeparation * 2, sizeOfFrame.Y * 2),
                     wordWrap: false);
-                cmdBuffer.DrawText(titleTextLayout, new Vector2(ControlsOffFromFrameSide, 5), Color.White.WithAlpha(0.9f));
+                cmdBuffer.DrawText(titleTextLayout, new Vector2(3, 0), Color.White.WithAlpha(0.9f));
 
-                textShaper.ReleaseTextLayout(titleTextLayout);
+                shaper.ReleaseTextLayout(titleTextLayout);
             }
 
             {
-                Rectangle windowRect = new(sizeOfFrame.X, sizeOfFrame.Y, ww - sizeOfFrame.X, wh - sizeOfFrame.Y);
+                Rectangle windowRect = Rectangle.FromXYWH(sizeOfFrame.X, sizeOfFrame.Y, ww - sizeOfFrame.X - sizeOfFrame.Z, wh - sizeOfFrame.Y - sizeOfFrame.W);
 
                 var statsText =
                     $"UPTIME: {Core.GetTime()}\n" +
@@ -412,17 +413,18 @@ public class GuiCore : IDisposable
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
                     $"GFX2D Commands: {gfx2DStats.Commands} Triangles: {gfx2DStats.Triangles}";
 
-                var textShaper = gfx2D.GetTextShaper();
+                var font = gfx2D.GetFont("ProggyClean", 32);
+                var shaper = font.GetShaper();
 
-                var textLayout = textShaper.CreateTextLayout(
+                var textLayout = shaper.CreateTextLayout(
                     statsText,
-                    gfx2D.GetFont("ProggyClean", 32),
+                    font,
                     windowRect.Size,
                     wordWrap: true);
 
                 cmdBuffer.DrawText(textLayout, Vector2.Round(windowRect.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.8f));
 
-                textShaper.ReleaseTextLayout(textLayout);
+                shaper.ReleaseTextLayout(textLayout);
             }
 
             cmdBuffer.EndBatch();
