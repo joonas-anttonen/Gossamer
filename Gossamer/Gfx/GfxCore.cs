@@ -44,8 +44,11 @@ public unsafe class GfxCore : IDisposable
 
     VkFormat deviceDepthFormat;
     VkSampleCount deviceSampleCount;
+
     VkQueue deviceQueue;
+    readonly Lock deviceQueueLock = new();
     uint deviceQueueIndex;
+    
     float deviceTimestampPeriodInNanoseconds;
 
     VkCommandPool deviceCommandPool;
@@ -190,6 +193,7 @@ public unsafe class GfxCore : IDisposable
                         device,
                         deviceQueue,
                         deviceQueueIndex,
+                        deviceQueueLock,
                         swapChainSurface.Surface,
                         swapChainSurface.Extent);
                     presenter = swapChainPresenter;
@@ -384,7 +388,11 @@ public unsafe class GfxCore : IDisposable
             CommandBuffers = &commandBuffer,
         };
 
-        ThrowVulkanIfFailed(vkQueueSubmit(deviceQueue, 1, &submitInfo, fence));
+        // We are required to synchronize access to the device queue
+        using (deviceQueueLock.EnterScope())
+        {
+            ThrowVulkanIfFailed(vkQueueSubmit(deviceQueue, 1, &submitInfo, fence));
+        }
     }
 
     internal void EndSingleCommand(GfxSingleCommand singleCommand)

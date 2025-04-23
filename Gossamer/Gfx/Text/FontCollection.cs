@@ -28,11 +28,10 @@ public unsafe sealed class FontCollection : IDisposable
     /// <param name="name"></param>
     /// <param name="verticalSize"></param>
     /// <param name="font"></param>
-    public bool TryGetFontOrDefault(string name, int verticalSize, out Font? font)
+    public bool TryGetFont(string name, int verticalSize, out Font? font)
     {
         if (!fonts.TryGetValue(new FontKey(name, verticalSize), out font))
         {
-            font = GetBuiltInFont();
             return false;
         }
 

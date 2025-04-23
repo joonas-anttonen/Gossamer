@@ -27,6 +27,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
     readonly VkDevice device;
     readonly VkQueue deviceQueue;
     readonly uint deviceQueueIndex;
+    readonly Lock deviceQueueLock;
 
     bool surfaceInvalidated = true;
     VkExtent2D surfaceExtent = new(1280, 720);
@@ -50,6 +51,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         VkDevice device,
         VkQueue deviceQueue,
         uint deviceQueueIndex,
+        Lock deviceQueueLock,
         VkSurfaceKhr surface,
         VkExtent2D surfaceExtent)
     {
@@ -58,9 +60,9 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         this.device = device;
         this.deviceQueue = deviceQueue;
         this.deviceQueueIndex = deviceQueueIndex;
+        this.deviceQueueLock = deviceQueueLock;
         this.surfaceExtent = surfaceExtent;
         this.surface = surface;
-
         VkFenceCreateInfo fenceCreateInfo = new(default);
         VkFence pAcquireFence = default;
         ThrowVulkanIfFailed(vkCreateFence(device, &fenceCreateInfo, default, &pAcquireFence));
@@ -249,34 +251,38 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
         ThrowVulkanIfFailed(vkEndCommandBuffer(localCommandBuffer));
 
-        VkPipelineStage pipelineStages = VkPipelineStage.TOP_OF_PIPE;
-        VkSubmitInfo submitInfo = new(default)
+        // We are required to synchronize access to the device queue
+        using (deviceQueueLock.EnterScope())
         {
-            WaitDstStageMask = &pipelineStages,
-            CommandBufferCount = 1,
-            CommandBuffers = &localCommandBuffer,
-            SignalSemaphoreCount = 1,
-            SignalSemaphores = &localSubmitSemaphore
-        };
-        ThrowVulkanIfFailed(vkQueueSubmit(deviceQueue, 1, &submitInfo, frame.SubmitFence));
+            VkPipelineStage pipelineStages = VkPipelineStage.TOP_OF_PIPE;
+            VkSubmitInfo submitInfo = new(default)
+            {
+                WaitDstStageMask = &pipelineStages,
+                CommandBufferCount = 1,
+                CommandBuffers = &localCommandBuffer,
+                SignalSemaphoreCount = 1,
+                SignalSemaphores = &localSubmitSemaphore
+            };
+            ThrowVulkanIfFailed(vkQueueSubmit(deviceQueue, 1, &submitInfo, frame.SubmitFence));
 
-        VkPresentInfoKhr presentInfo = new(default)
-        {
-            WaitSemaphoreCount = 1,
-            WaitSemaphores = &localSubmitSemaphore,
-            SwapchainCount = 1,
-            Swapchains = &localSwapChain,
-            ImageIndices = &localCurrentFrameIndex
-        };
+            VkPresentInfoKhr presentInfo = new(default)
+            {
+                WaitSemaphoreCount = 1,
+                WaitSemaphores = &localSubmitSemaphore,
+                SwapchainCount = 1,
+                Swapchains = &localSwapChain,
+                ImageIndices = &localCurrentFrameIndex
+            };
 
-        VkResult result = vkQueuePresentKhr(deviceQueue, &presentInfo);
-        if (result == VkResult.OUT_OF_DATE_KHR || result == VkResult.SUBOPTIMAL_KHR)
-        {
-            Refresh(false);
-        }
-        else if (result != VkResult.SUCCESS)
-        {
-            ThrowVulkanIfFailed(result, "Failed to end frame.");
+            VkResult result = vkQueuePresentKhr(deviceQueue, &presentInfo);
+            if (result == VkResult.OUT_OF_DATE_KHR || result == VkResult.SUBOPTIMAL_KHR)
+            {
+                Refresh(false);
+            }
+            else if (result != VkResult.SUCCESS)
+            {
+                ThrowVulkanIfFailed(result, "Failed to end frame.");
+            }
         }
     }
 

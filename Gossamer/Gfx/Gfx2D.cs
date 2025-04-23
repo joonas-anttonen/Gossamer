@@ -82,7 +82,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
     /// <param name="size"></param>
     public Font GetFont(string name, int size)
     {
-        if (!fontCache.TryGetFontOrDefault(name, size, out Font? font))
+        if (!fontCache.TryGetFont(name, size, out Font? font))
         {
             if (fontCache.TryCreateFont(name, size, out font))
             {
@@ -91,7 +91,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
             else
             {
                 logger.Warning($"{name} not found and could not be created");
-                font = GetBuiltInFont();
             }
         }
 
@@ -123,7 +122,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
         commandBufferQueue.Enqueue(commandBuffer);
     }
 
-    // FIXME: Fonts are being loaded in other threads, this is not thread safe at the moment. Simultanenous vkQueue use!
     void InitializeFont(Font font)
     {
         Font.Atlas fontAtlas = font.GetAtlas();
