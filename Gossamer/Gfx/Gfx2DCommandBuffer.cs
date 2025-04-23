@@ -37,9 +37,8 @@ public class Gfx2DCommandBuffer
     int frameIndexCount;
 
     int commandsCount;
-    int batchCount;
     Command[] commands = new Command[32];
-
+    int batchCount;
     CommandBatch[] batches = new CommandBatch[8];
 
     bool batchInProgress = false;
@@ -57,7 +56,7 @@ public class Gfx2DCommandBuffer
 
     internal Gfx2D.Statistics GetStatistics()
     {
-        return new Gfx2D.Statistics(commandsCount, frameIndexCount / 3);
+        return new Gfx2D.Statistics(batchCount, commandsCount, frameIndexCount / 3);
     }
 
     internal ReadOnlySpan<Gfx2DVertex> GetVertices()

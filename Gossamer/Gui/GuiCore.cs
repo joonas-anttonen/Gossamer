@@ -412,7 +412,7 @@ public class GuiCore : IDisposable
                     $"GFX PAUSE: {StringUtilities.TimeShort(gfxStats.CpuPauseDuration)}\n" +
                     $"CPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\n" +
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
-                    $"GFX2D Commands: {gfx2DStats.Commands} Triangles: {gfx2DStats.Triangles}";
+                    $"GFX2D Batches: {gfx2DStats.Batches} Commands: {gfx2DStats.Commands} Triangles: {gfx2DStats.Triangles}";
 
                 var font = gfx2D.GetFont("ProggyClean", 32);
                 var shaper = font.GetShaper();

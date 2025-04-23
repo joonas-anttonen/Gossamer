@@ -35,7 +35,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
 {
     public const int MaxVertices = 65536;
 
-    public readonly record struct Statistics(int Commands, int Triangles);
+    public readonly record struct Statistics(int Batches, int Commands, int Triangles);
 
     readonly Logger logger = Core.GetLogger(nameof(Gfx2D));
 
