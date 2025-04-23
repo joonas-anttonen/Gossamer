@@ -24,7 +24,7 @@ public unsafe class GfxCore : IDisposable
         ulong Frame,
         TimeSpan CpuFrameTime,
         TimeSpan GpuFrameTime,
-        TimeSpan TotalPauseDuration);
+        TimeSpan CpuPauseDuration);
 
     readonly Logger logger = Core.GetLogger(nameof(GfxCore));
 
@@ -56,6 +56,11 @@ public unsafe class GfxCore : IDisposable
 
     readonly GfxApiParameters apiParameters;
     GfxParameters? parameters;
+    DisplayParameters currentDisplayParameters = DisplayParameters.Empty with
+    {
+        RenderWidth = 1270,
+        RenderHeight = 720,
+    };
 
     GfxCapabilities capabilities = new(
         Debugging: false,
@@ -75,6 +80,11 @@ public unsafe class GfxCore : IDisposable
     public Statistics GetStatistics()
     {
         return statistics;
+    }
+
+    public DisplayParameters GetDisplayParameters()
+    {
+        return currentDisplayParameters;
     }
 
     internal GfxSamples GetMaxSampleCount()
@@ -121,20 +131,33 @@ public unsafe class GfxCore : IDisposable
 
     public void Render()
     {
+        ThrowInvalidOperationIfNull(gfx2D);
+        ThrowInvalidOperationIfNull(gfx3D);
+        
         if (presenter == null)
         {
             logger.Warning("No presenter available.");
             return;
         }
 
-        ThrowInvalidOperationIfNull(gfx2D);
-        ThrowInvalidOperationIfNull(gfx3D);
-
         bool canRender = presenter.BeginFrame();
         if (!canRender)
         {
-            //logger.Warning("Failed to render frame.");
+            logger.Warning("Failed to begin frame.");
             return;
+        }
+
+        VkFormat displayFormat = presenter.GetFormat();
+        VkExtent2D displayExtent = presenter.GetExtent();
+        if (currentDisplayParameters.DisplaySizeChanged(displayExtent) ||
+            currentDisplayParameters.DisplayFormatChanged(displayFormat))
+        {
+            InitializeRendering(currentDisplayParameters with
+            {
+                DisplayWidth = displayExtent.Width,
+                DisplayHeight = displayExtent.Height,
+                DisplayFormat = (GfxFormat)displayFormat,
+            });
         }
 
         TimeSpan cpuFrameTime = TimeSpan.Zero;
@@ -161,8 +184,11 @@ public unsafe class GfxCore : IDisposable
 
         presenter.EndFrame();
 
-        statistics = new(frameCounter, cpuFrameTime, gpuFrameTime, presenter.GetTotalPauseDuration());
-        frameCounter++;
+        statistics = new(
+            frameCounter++,
+            cpuFrameTime,
+            gpuFrameTime,
+            presenter.GetPauseDuration());
     }
 
     public void Create(GfxParameters parameters)
@@ -170,18 +196,16 @@ public unsafe class GfxCore : IDisposable
         this.parameters = parameters;
 
         CreateDevice();
-        CreateMemoryAllocator();
         CreateDeviceCommandPool();
+        CreateMemoryAllocator();
 
         LoadShaders(ReflectionUtilities.LoadEmbeddedResourceAsStream("Gossamer.Gfx.Shaders.built-in.shaders"));
 
-        gfx2D = new Gfx2D(this);
-        gfx2D.Create();
-        gfx2D.InitializeRendering(DisplayParameters.Empty);
-
         gfx3D = new Gfx3D(this);
         gfx3D.Create();
-        gfx3D.InitializeRendering(DisplayParameters.Empty);
+
+        gfx2D = new Gfx2D(this);
+        gfx2D.Create();
     }
 
     public void CreatePresenter(GfxPresentation presentation)
@@ -207,6 +231,20 @@ public unsafe class GfxCore : IDisposable
             default:
                 throw new NotImplementedException();
         }
+    }
+
+    public void InitializeRendering(DisplayParameters displayParameters)
+    {
+        ThrowInvalidOperationIfNull(gfx2D);
+        ThrowInvalidOperationIfNull(gfx3D);
+
+        currentDisplayParameters = displayParameters;
+
+        // Log new display parameters.
+        logger.Debug($"{displayParameters.DisplayWidth}x{displayParameters.DisplayHeight} [{displayParameters.DisplayFormat}]");
+
+        gfx3D.InitializeRendering(displayParameters);
+        gfx2D.InitializeRendering(displayParameters);
     }
 
     public void Dispose()
@@ -289,6 +327,12 @@ public unsafe class GfxCore : IDisposable
         VulkanDebugSetObjectName(device, &debugUtilsObjectNameInfoEXT);
 
         Marshal.FreeHGlobal(objectNamePtr);
+    }
+
+    [Conditional("DEBUG")]
+    internal void AssingName(PixelBuffer pixelBuffer, string name)
+    {
+        VulkanSetObjectName(VkObjectType.IMAGE, pixelBuffer.Image.Value, name);
     }
 
     uint VulkanDebugMessageCallback(VkDebugUtilsMessageSeverityExt severity, VkDebugUtilsMessageTypeExt type, VkDebugUtilsMessengerCallbackDataExt* pCallbackData, nint pUserData)
@@ -605,7 +649,7 @@ public unsafe class GfxCore : IDisposable
         VkMemoryProperty memoryProperties;
         vmaGetMemoryTypeProperties(allocator, allocationInfo.MemoryType, &memoryProperties);
 
-        logger.Debug($"{usage}, [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
+        logger.Debug($"{usage} [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
 
         return new MemoryBuffer<T>(length: (uint)length, buffer, allocation);
     }
@@ -628,12 +672,6 @@ public unsafe class GfxCore : IDisposable
         VkSampler sampler;
         ThrowVulkanIfFailed(vkCreateSampler(device, &samplerCreateInfo, default, &sampler));
         return sampler;
-    }
-
-    [Conditional("DEBUG")]
-    internal void AssingName(PixelBuffer pixelBuffer, string name)
-    {
-        VulkanSetObjectName(VkObjectType.IMAGE, pixelBuffer.Image.Value, name);
     }
 
     /// <summary>
@@ -692,7 +730,7 @@ public unsafe class GfxCore : IDisposable
         VkMemoryProperty memoryProperties;
         vmaGetMemoryTypeProperties(allocator, allocationInfo.MemoryType, &memoryProperties);
 
-        logger.Debug($"{format} {width}x{height} [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
+        logger.Debug($"{width}x{height} {format} [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
 
         VkImageViewCreateInfo imageViewCreateInfo = new(default)
         {
@@ -1296,8 +1334,6 @@ public unsafe class GfxCore : IDisposable
 
         VkPhysicalDevice physicalDevice = GetVulkanPhysicalDevice(parameters.PhysicalDevice);
         this.physicalDevice = physicalDevice;
-
-        logger.Debug($"{parameters.PhysicalDevice}");
 
         VkPhysicalDeviceProperties physicalDeviceProperties;
         vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);

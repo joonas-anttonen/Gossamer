@@ -77,7 +77,7 @@ public sealed class Core : SynchronizationContext, IDisposable
 
     readonly Stopwatch stopwatch = Stopwatch.StartNew();
 
-    readonly Parameters parameters;
+    readonly Parameters coreParameters;
     readonly ApplicationInfo appInfo;
 
     static Core? instance;
@@ -117,7 +117,7 @@ public sealed class Core : SynchronizationContext, IDisposable
         ThrowInvalidOperationIf(instance != null, $"{nameof(Core)} has already been initialized.");
         instance = this;
 
-        this.parameters = parameters;
+        this.coreParameters = parameters;
         this.appInfo = appInfo ?? ApplicationInfo.FromCallingAssembly();
 
         guiThreadId = Environment.CurrentManagedThreadId;
@@ -199,33 +199,38 @@ public sealed class Core : SynchronizationContext, IDisposable
 
         try
         {
-            if (parameters.EnableDebugging)
+            if (coreParameters.EnableDebugging)
             {
                 logger.Debug($"OS: {RuntimeInformation.OSDescription} ({RuntimeInformation.ProcessArchitecture})");
                 logger.Debug($"Runtime: {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.RuntimeIdentifier})");
                 logger.Debug($"Directory: {Directory.GetCurrentDirectory()}");
-                logger.Debug($"Gui: {guiThreadId} Gfx: {gfxThreadId}");
             }
 
             // 1. Create graphics
             gfx = new(new GfxApiParameters(
                appInfo,
-               EnableDebugging: parameters.EnableDebugging,
+               EnableDebugging: coreParameters.EnableDebugging,
                PresentationMode: GfxPresentationMode.SwapChain
            ));
 
             // 2. Initialize graphics
-            gfx.Create(new GfxParameters(
+            GfxParameters gfxParameters = new(
                 PhysicalDevice: gfx.SelectOptimalDevice(gfx.EnumeratePhysicalDevices())
-            ));
+            );
+            if (coreParameters.EnableDebugging)
+            {
+                logger.Debug($"GPU: {gfxParameters.PhysicalDevice}");
+            }
+            gfx.Create(gfxParameters);
 
             // 3. Create user interface
-            gui = new(parameters, gfx, gfxMessageQueue);
+            gui = new(coreParameters, gfx, gfxMessageQueue);
 
             // 4. Initialize user interface
-            gui.Create(new GuiParameters(
+            GuiParameters guiParameters = new(
                 name: appInfo.Name
-            ));
+            );
+            gui.Create(guiParameters);
 
             // 5. Create graphics swap chain presenter (depends on user interface)
             gfx.CreatePresenter(new GfxSwapChainPresentation(gui, EnableVerticalSync: false));

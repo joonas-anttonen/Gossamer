@@ -254,12 +254,9 @@ public class GuiCore : IDisposable
         ThrowInvalidOperationIf(isCreated);
         this.parameters = parameters;
 
-        // Disable OpenGL
-        glfwWindowHint(Constants.GLFW_CLIENT_API, 0);
-        // Disable default window frame
-        glfwWindowHint(Constants.GLFW_DECORATED, 0);
-        // Disable automatic iconification when focus gets lost in fullscreen mode
-        glfwWindowHint(Constants.GLFW_AUTO_ICONIFY, 0);
+        glfwWindowHint(Constants.GLFW_CLIENT_API, 0); // Disable OpenGL
+        glfwWindowHint(Constants.GLFW_DECORATED, 0); // Disable default window frame
+        glfwWindowHint(Constants.GLFW_AUTO_ICONIFY, 0); // Disable automatic iconification when focus gets lost in fullscreen mode
 
         // Retrieve monitor info for the monitor we are going to be starting in
         GlfwMonitor monitor = glfwGetMonitor(MathUtilities.Clamp(parameters.StartupMonitor, 0, glfwGetMonitorCount() - 1));
@@ -268,8 +265,10 @@ public class GuiCore : IDisposable
         glfwGetMonitorPhysicalSize(monitor, out int mpw, out int mph);
         GlfwVideoMode monitorVideoMode = glfwGetVideoMode(monitor);
 
-        Vector2 windowSize = parameters.Size ?? new Vector2(Math.Min(1920, (int)(monitorVideoMode.Width * 0.75f)), Math.Min(1080, (int)(monitorVideoMode.Height * 0.75f)));
-        Vector2 windowPosition = parameters.Position ?? new Vector2(mx + (int)((mw - windowSize.X) / 2.0f), my + (int)((mh - windowSize.Y) / 2.0f));
+        Vector2 windowSize = parameters.Size ?? new Vector2(Math.Min(1920, (int)(monitorVideoMode.Width * 0.75f)),
+                                                            Math.Min(1080, (int)(monitorVideoMode.Height * 0.75f)));
+        Vector2 windowPosition = parameters.Position ?? new Vector2(mx + (int)((mw - windowSize.X) / 2.0f),
+                                                                    my + (int)((mh - windowSize.Y) / 2.0f));
 
         glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, parameters.Name);
         ThrowInvalidOperationIf(!glfwWindow.HasValue, "Failed to create GLFW window.");
@@ -346,6 +345,11 @@ public class GuiCore : IDisposable
             isDamaged = true;
         }
 
+        if (isIconified)
+        {
+            return;
+        }
+
         if (!isDamaged)
         {
             //return;
@@ -404,7 +408,8 @@ public class GuiCore : IDisposable
                 var statsText =
                     $"UPTIME: {Core.GetTime()}\n" +
                     $"GC PAUSE: {GC.GetTotalPauseDuration()}\n" +
-                    $"GFX PAUSE: {StringUtilities.TimeShort(gfxStats.TotalPauseDuration)}\n" +
+                    $"GFX FRAME: {StringUtilities.Count(gfxStats.Frame)}\n" +
+                    $"GFX PAUSE: {StringUtilities.TimeShort(gfxStats.CpuPauseDuration)}\n" +
                     $"CPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\n" +
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
                     $"GFX2D Commands: {gfx2DStats.Commands} Triangles: {gfx2DStats.Triangles}";
@@ -605,7 +610,11 @@ public class GuiCore : IDisposable
         // Route to element that captured mouse
         if (elementThatCapturedMouse != null)
         {
-            elementThatCapturedMouse.OnMouseButton(elementThatCapturedMouse.WindowToElement(lastMousePosition), iButton, iAction, iMods);
+            elementThatCapturedMouse.OnMouseButton(
+                elementThatCapturedMouse.WindowToElement(lastMousePosition),
+                iButton,
+                iAction,
+                iMods);
 
             // End capture when mouse is released
             if (iAction == InputAction.Release)
@@ -616,10 +625,15 @@ public class GuiCore : IDisposable
         // Route to element that contains mouse
         else if (elementThatHasMouse != null)
         {
-            elementThatHasMouse.OnMouseButton(elementThatHasMouse.WindowToElement(lastMousePosition), iButton, iAction, iMods);
+            elementThatHasMouse.OnMouseButton(
+                elementThatHasMouse.WindowToElement(lastMousePosition),
+                iButton,
+                iAction,
+                iMods);
 
             // Begin capture when mouse is pressed - if the element can capture
-            if (iAction == InputAction.Press && elementThatHasMouse.Enabled && elementThatHasMouse.Focusable)
+            bool elementCanCaptureMouse = elementThatHasMouse.Enabled && elementThatHasMouse.Focusable;
+            if (iAction == InputAction.Press && elementCanCaptureMouse)
             {
                 elementThatCapturedMouse = elementThatHasMouse;
 

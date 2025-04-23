@@ -13,6 +13,16 @@ public sealed class GfxDirectXPresenter : GfxPresenter
     {
     }
 
+    internal override VkFormat GetFormat()
+    {
+        return VkFormat.UNDEFINED;
+    }
+
+    internal override VkExtent2D GetExtent()
+    {
+        throw new NotImplementedException();
+    }
+
     public override PixelBuffer GetPresentationBuffer()
     {
         throw new NotImplementedException();

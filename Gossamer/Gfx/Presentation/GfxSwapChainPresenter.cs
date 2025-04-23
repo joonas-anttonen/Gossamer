@@ -33,6 +33,8 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
     VkExtent2D surfaceExtent = new(1280, 720);
     VkSurfaceKhr surface;
     VkSwapChainKhr swapChain;
+    VkExtent2D swapChainExtent = new(0, 0);
+    VkFormat swapChainFormat = VkFormat.UNDEFINED;
 
     PerFrame[] perFrame = [];
     int currentFrameIndex;
@@ -63,13 +65,24 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         this.deviceQueueLock = deviceQueueLock;
         this.surfaceExtent = surfaceExtent;
         this.surface = surface;
+
         VkFenceCreateInfo fenceCreateInfo = new(default);
         VkFence pAcquireFence = default;
         ThrowVulkanIfFailed(vkCreateFence(device, &fenceCreateInfo, default, &pAcquireFence));
         acquireFence = pAcquireFence;
     }
 
-    public override TimeSpan GetTotalPauseDuration()
+    internal override VkFormat GetFormat()
+    {
+        return swapChainFormat;
+    }
+
+    internal override VkExtent2D GetExtent()
+    {
+        return swapChainExtent;
+    }
+
+    public override TimeSpan GetPauseDuration()
     {
         return waitingForPreviousFrame + waitingForNextFrame;
     }
@@ -190,7 +203,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
     {
         if (surfaceInvalidated)
         {
-            if (!Refresh(false))
+            if (!InitializeSwapChain(false))
             {
                 return false;
             }
@@ -199,7 +212,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         VkResult result = AcquireNextImage();
         if (result == VkResult.OUT_OF_DATE_KHR || result == VkResult.SUBOPTIMAL_KHR)
         {
-            bool refreshOK = Refresh(false);
+            bool refreshOK = InitializeSwapChain(false);
             if (!refreshOK)
             {
                 return false;
@@ -277,7 +290,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
             VkResult result = vkQueuePresentKhr(deviceQueue, &presentInfo);
             if (result == VkResult.OUT_OF_DATE_KHR || result == VkResult.SUBOPTIMAL_KHR)
             {
-                Refresh(false);
+                InitializeSwapChain(false);
             }
             else if (result != VkResult.SUCCESS)
             {
@@ -297,7 +310,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         }
     }
 
-    bool Refresh(bool enableVerticalSync)
+    bool InitializeSwapChain(bool enableVerticalSync)
     {
         surfaceInvalidated = false;
 
@@ -307,12 +320,14 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         VkSurfaceCapabilitiesKhr surfaceCapabilities;
         ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfaceCapabilitiesKhr(physicalDevice, surface, &surfaceCapabilities));
 
-        VkExtent2D swapChainExtent = new();
+        swapChainExtent = new();
         if (surfaceCapabilities.CurrentExtent.Width == uint.MaxValue)
         {
             // If the surface size is undefined, the size is set to the size of the images requested.
-            swapChainExtent.Width = Math.Max(surfaceCapabilities.MinImageExtent.Width, Math.Min(surfaceCapabilities.MaxImageExtent.Width, surfaceExtent.Width));
-            swapChainExtent.Height = Math.Max(surfaceCapabilities.MinImageExtent.Height, Math.Min(surfaceCapabilities.MaxImageExtent.Height, surfaceExtent.Height));
+            swapChainExtent.Width = Math.Max(surfaceCapabilities.MinImageExtent.Width,
+                                        Math.Min(surfaceCapabilities.MaxImageExtent.Width, surfaceExtent.Width));
+            swapChainExtent.Height = Math.Max(surfaceCapabilities.MinImageExtent.Height,
+                                        Math.Min(surfaceCapabilities.MaxImageExtent.Height, surfaceExtent.Height));
         }
         else if (surfaceCapabilities.CurrentExtent.Width > 0 && surfaceCapabilities.CurrentExtent.Height > 0)
         {
@@ -368,8 +383,10 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
             }
         }
 
+        swapChainFormat = outputSurfaceFormat.Format;
+
         // Select a present mode for the swap chain, the VK_PRESENT_MODE_FIFO_KHR mode must always be present as per spec, this mode waits for the vertical blank ("v-sync")
-        VkPresentModeKhr swapChainPresentMode = VkPresentModeKhr.FIFO_KHR;
+        VkPresentModeKhr swapChainPresentMode = VkPresentModeKhr.FIFO;
 
         uint presentModesCount = 0;
         ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfacePresentModesKhr(physicalDevice, surface, &presentModesCount));
@@ -382,15 +399,15 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
             // If v-sync is not requested, try to find a mailbox mode, it's the lowest latency non-tearing present mode available
             for (int i = 0; i < presentModesCount; i++)
             {
-                if (presentModes[i] == VkPresentModeKhr.MAILBOX_KHR)
+                if (presentModes[i] == VkPresentModeKhr.MAILBOX)
                 {
-                    swapChainPresentMode = VkPresentModeKhr.MAILBOX_KHR;
+                    swapChainPresentMode = VkPresentModeKhr.MAILBOX;
                     break;
                 }
 
-                if (presentModes[i] == VkPresentModeKhr.IMMEDIATE_KHR)
+                if (presentModes[i] == VkPresentModeKhr.IMMEDIATE)
                 {
-                    swapChainPresentMode = VkPresentModeKhr.IMMEDIATE_KHR;
+                    swapChainPresentMode = VkPresentModeKhr.IMMEDIATE;
                 }
             }
         }
@@ -501,9 +518,9 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
         // Log the swap chain details
         logger.Debug(
-            $"{swapChainExtent.Width}x{swapChainExtent.Height} ({swapChainImageCount}) " +
-            $"{outputSurfaceFormat.Format} {outputSurfaceFormat.ColorSpace} " +
-            $"{swapChainPresentMode}");
+            $"{swapChainExtent.Width}x{swapChainExtent.Height}x{swapChainImageCount} " +
+            $"[{outputSurfaceFormat.Format}, {outputSurfaceFormat.ColorSpace}] " +
+            $"[{swapChainPresentMode}]");
 
         return true;
     }

@@ -15,7 +15,7 @@ using static Gossamer.Utilities.ExceptionUtilities;
 namespace Gossamer.Gfx;
 
 [StructLayout(LayoutKind.Sequential)]
-readonly struct Vertex2D(Vector2 position, Vector2 uv, Color color)
+readonly struct Gfx2DVertex(Vector2 position, Vector2 uv, Color color)
 {
     public static readonly Vector2 DefaultUV = new(-1, -1);
 
@@ -25,7 +25,7 @@ readonly struct Vertex2D(Vector2 position, Vector2 uv, Color color)
 }
 
 [StructLayout(LayoutKind.Sequential)]
-readonly struct PerCommandData(Vector2 scale, Vector2 translation)
+readonly struct Gfx2DPushConstants(Vector2 scale, Vector2 translation)
 {
     public readonly Vector2 Scale = scale;
     public readonly Vector2 Translation = translation;
@@ -53,7 +53,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
     PixelBuffer? backBuffer;
 
-    MemoryBuffer<Vertex2D>? vertexBuffer;
+    MemoryBuffer<Gfx2DVertex>? vertexBuffer;
     MemoryBuffer<ushort>? indexBuffer;
 
     readonly Lock fontTexturesLock = new();
@@ -139,7 +139,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
         }
 
         // Log font details
-        logger.Debug($"{font.Name} [{font.Size}]");
+        logger.Debug($"{font.Name} [{font.Size}px]");
     }
 
     public void Create()
@@ -147,7 +147,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
         ThrowInvalidOperationIf(vertexBuffer != null);
         ThrowInvalidOperationIf(indexBuffer != null);
 
-        vertexBuffer = gfx.CreateDynamicMemoryBuffer<Vertex2D>(length: MaxVertices, GfxMemoryBufferUsage.Vertex);
+        vertexBuffer = gfx.CreateDynamicMemoryBuffer<Gfx2DVertex>(length: MaxVertices, GfxMemoryBufferUsage.Vertex);
         indexBuffer = gfx.CreateDynamicMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryBufferUsage.Index);
 
         VkSamplerCreateInfo samplerCreateInfo = new(default)
@@ -203,23 +203,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
     unsafe void PrepareFrame(GfxPresenter presenter)
     {
-        PixelBuffer presentationBuffer = presenter.GetPresentationBuffer();
-
-        bool needsCreate = backBuffer == null || backBuffer.Width != presentationBuffer.Width || backBuffer.Height != presentationBuffer.Height;
-        if (needsCreate)
-        {
-            gfx.DestroyPixelBuffer(backBuffer);
-            backBuffer = gfx.CreatePixelBuffer(
-                width: presentationBuffer.Width * 1,
-                height: presentationBuffer.Height * 1,
-                format: presentationBuffer.Format,
-                usage: GfxPixelBufferUsage.ColorAttachment | GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferSrc | GfxPixelBufferUsage.TransferDst,
-                aspect: GfxAspect.Color,
-                samples: GfxSamples.X1
-            );
-            gfx.AssingName(backBuffer, StringUtilities.DebugName<Gfx2D>(nameof(backBuffer)));
-        }
-
         VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
 
         ThrowInvalidOperationIfNull(backBuffer);
@@ -340,6 +323,8 @@ class Gfx2D(GfxCore gfx) : IDisposable
     /// <param name="presenter"></param>
     public unsafe void Render(GfxPresenter presenter)
     {
+        bool commandBufferChanged = false;
+
         // Check if we have a pending command buffer to process
         if (commandBufferQueue.TryDequeue(out Gfx2DCommandBuffer? pendingCommandBuffer))
         {
@@ -351,6 +336,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
             }
 
             currentCommandBuffer = pendingCommandBuffer;
+            commandBufferChanged = true;
 
             if (!commandBufferQueue.IsEmpty && commandBufferQueue.Count > 1)
             {
@@ -367,20 +353,21 @@ class Gfx2D(GfxCore gfx) : IDisposable
             ThrowInvalidOperationIfNull(vertexBuffer);
             ThrowInvalidOperationIfNull(indexBuffer);
 
-            VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
-
-            gfx.UpdateDynamicBuffer(vertexBuffer, currentCommandBuffer.GetVertices());
-            gfx.UpdateDynamicBuffer(indexBuffer, currentCommandBuffer.GetIndices());
+            if (commandBufferChanged)
+            {
+                gfx.UpdateDynamicBuffer(vertexBuffer, currentCommandBuffer.GetVertices());
+                gfx.UpdateDynamicBuffer(indexBuffer, currentCommandBuffer.GetIndices());
+            }
 
             frameStatistics = currentCommandBuffer.GetStatistics();
 
             ReadOnlySpan<CommandBatch> commandBatches = currentCommandBuffer.GetBatches();
             for (int i = 0; i < commandBatches.Length; i++)
             {
-                CommandBatch batch = commandBatches[i];
-                currentCommandBuffer.GetBatchData(batch, out ReadOnlySpan<Command> commands);
-
-                RecordBatch(commandBuffer, commands, backBuffer);
+                RecordBatch(
+                    presenter.GetCommandBuffer(),
+                    currentCommandBuffer.GetBatchCommands(commandBatches[i]),
+                    backBuffer);
             }
         }
 
@@ -418,9 +405,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
         VkRect2D scissor = new(new(0, 0), new(renderBuffer.Width, renderBuffer.Height));
 
         vkCmdBeginRendering(commandBuffer, &renderingInfo);
-
         vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.Pipeline);
-
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
@@ -430,19 +415,23 @@ class Gfx2D(GfxCore gfx) : IDisposable
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, &localVertexBuffer, &vertexBufferOffset);
         vkCmdBindIndexBuffer(commandBuffer, localIndexBuffer, 0, VkIndexType.UINT16);
 
-        PerCommandData commandData;
-
         VkWriteDescriptorSet* descriptorWrites = stackalloc VkWriteDescriptorSet[2];
 
         for (int i = 0; i < commands.Length; i++)
         {
             ref readonly Command command = ref commands[i];
 
-            commandData = new(
+            Gfx2DPushConstants pushConstants = new(
                 scale: new(2.0f / renderBuffer.Width, 2.0f / renderBuffer.Height),
                 translation: new(-1.0f, -1.0f)
             );
-            vkCmdPushConstants(commandBuffer, activePipeline.Layout, VkShaderStage.VERTEX | VkShaderStage.FRAGMENT, 0, (uint)Unsafe.SizeOf<PerCommandData>(), &commandData);
+            vkCmdPushConstants(
+                commandBuffer,
+                activePipeline.Layout,
+                VkShaderStage.VERTEX | VkShaderStage.FRAGMENT,
+                0,
+                (uint)Unsafe.SizeOf<Gfx2DPushConstants>(),
+                &pushConstants);
 
             PixelBuffer commandTexture;
             VkSampler commandSampler;
@@ -518,15 +507,29 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
         DestroyRendering();
 
+        bool needsCreate = backBuffer == null || backBuffer.Width != displayParameters.DisplayWidth || backBuffer.Height != displayParameters.DisplayHeight;
+        if (needsCreate)
+        {
+            backBuffer = gfx.CreatePixelBuffer(
+                width: displayParameters.DisplayWidth,
+                height: displayParameters.DisplayHeight,
+                format: displayParameters.DisplayFormat,
+                usage: GfxPixelBufferUsage.ColorAttachment | GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferSrc | GfxPixelBufferUsage.TransferDst,
+                aspect: GfxAspect.Color,
+                samples: GfxSamples.X1
+            );
+            gfx.AssingName(backBuffer, StringUtilities.DebugName<Gfx2D>(nameof(backBuffer)));
+        }
+
         VkPipelineColorBlendAttachmentState straightAlphaBlend = new()
         {
             BlendEnable = 1,
             SrcColorBlendFactor = VkBlendFactor.SRC_ALPHA,
-            DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
             ColorBlendOp = VkBlendOp.ADD,
+            DstColorBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
             SrcAlphaBlendFactor = VkBlendFactor.ONE,
-            DstAlphaBlendFactor = VkBlendFactor.ONE,
             AlphaBlendOp = VkBlendOp.ADD,
+            DstAlphaBlendFactor = VkBlendFactor.ONE_MINUS_SRC_ALPHA,
             ColorWriteMask = VkColorComponent.R | VkColorComponent.G | VkColorComponent.B | VkColorComponent.A
         };
 
@@ -536,7 +539,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
                 new()
                 {
                     StageFlags = VkShaderStage.VERTEX | VkShaderStage.FRAGMENT,
-                    Size = (uint)Marshal.SizeOf<PerCommandData>()
+                    Size = (uint)Marshal.SizeOf<Gfx2DPushConstants>()
                 }
             ],
             Layout: [
@@ -565,7 +568,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
             InputBindings: [
                 new()
                 {
-                    Stride = (uint)Marshal.SizeOf<Vertex2D>(),
+                    Stride = (uint)Marshal.SizeOf<Gfx2DVertex>(),
                     InputRate = VkVertexInputRate.VERTEX
                 },
             ],
@@ -574,19 +577,19 @@ class Gfx2D(GfxCore gfx) : IDisposable
                 {
                     Location = 0,
                     Format = VkFormat.R32G32_SFLOAT,
-                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.Position))
+                    Offset = (uint)Marshal.OffsetOf<Gfx2DVertex>(nameof(Gfx2DVertex.Position))
                 },
                 new()
                 {
                     Location = 1,
                     Format = VkFormat.R32G32_SFLOAT,
-                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.UV))
+                    Offset = (uint)Marshal.OffsetOf<Gfx2DVertex>(nameof(Gfx2DVertex.UV))
                 },
                 new()
                 {
                     Location = 2,
                     Format = VkFormat.R32G32B32A32_SFLOAT,
-                    Offset = (uint)Marshal.OffsetOf<Vertex2D>(nameof(Vertex2D.Color))
+                    Offset = (uint)Marshal.OffsetOf<Gfx2DVertex>(nameof(Gfx2DVertex.Color))
                 },
             ],
             Attachments: [

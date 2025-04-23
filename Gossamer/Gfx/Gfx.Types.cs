@@ -80,12 +80,13 @@ public record DisplayParameters(
     uint DisplayWidth,
     uint DisplayHeight,
     uint DisplayRefreshRate,
+    GfxFormat DisplayFormat,
     uint ViewportWidth,
     uint ViewportHeight,
     AntialiasingMode AntialiasingMode,
     Color ClearColor)
 {
-    public static readonly DisplayParameters Empty = new(0, 0, 0, 0, 0, 0, 0, AntialiasingMode.None, Color.ParseUInt(0x232731));
+    public static readonly DisplayParameters Empty = new(0, 0, 0, 0, 0, GfxFormat.Undefined, 0, 0, AntialiasingMode.None, Color.ParseUInt(0x232731));
 
     public static float GetRenderScaleFactor(AntialiasingMode antialiasingMode, UpscalingMode upscaleQuality)
     {
@@ -101,6 +102,36 @@ public record DisplayParameters(
             },
             _ => 1.0f,
         };
+    }
+
+    public bool RenderSizeChanged(DisplayParameters other)
+    {
+        return RenderWidth != other.RenderWidth || RenderHeight != other.RenderHeight;
+    }
+
+    public bool DisplaySizeChanged(DisplayParameters other)
+    {
+        return DisplayWidth != other.DisplayWidth || DisplayHeight != other.DisplayHeight;
+    }
+
+    public bool DisplaySizeChanged(uint width, uint height)
+    {
+        return DisplayWidth != width || DisplayHeight != height;
+    }
+
+    internal bool DisplaySizeChanged(VkExtent2D extent)
+    {
+        return DisplayWidth != extent.Width || DisplayHeight != extent.Height;
+    }
+
+    internal bool DisplayFormatChanged(GfxFormat format)
+    {
+        return DisplayFormat != format;
+    }
+
+    internal bool DisplayFormatChanged(VkFormat format)
+    {
+        return DisplayFormat != (GfxFormat)format;
     }
 }
 

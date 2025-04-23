@@ -876,7 +876,7 @@ public enum VkSwapchainCreateFlagsKhr : uint
 
 public enum VkColorSpaceKhr : uint
 {
-    SRGB_NONLINEAR_KHR = 0,
+    SRGB_NONLINEAR = 0,
     DISPLAY_P3_NONLINEAR_EXT = 1000104001,
     EXTENDED_SRGB_LINEAR_EXT = 1000104002,
     DISPLAY_P3_LINEAR_EXT = 1000104003,
@@ -901,10 +901,10 @@ public enum VkSharingMode : uint
 
 public enum VkPresentModeKhr : uint
 {
-    IMMEDIATE_KHR = 0,
-    MAILBOX_KHR = 1,
-    FIFO_KHR = 2,
-    FIFO_RELAXED_KHR = 3,
+    IMMEDIATE = 0,
+    MAILBOX = 1,
+    FIFO = 2,
+    FIFO_RELAXED = 3,
     SHARED_DEMAND_REFRESH_KHR = 1000111000,
     SHARED_CONTINUOUS_REFRESH_KHR = 1000111001,
 }

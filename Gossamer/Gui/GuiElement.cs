@@ -888,6 +888,10 @@ public class GuiElement : IGridControllable
     {
     }
 
+    /// <summary>
+    /// Converts a window position to an element position.
+    /// </summary>
+    /// <param name="windowPosition"></param>
     internal Vector2 WindowToElement(Vector2 windowPosition)
     {
         return windowPosition - outerLayoutRectangle.Position;

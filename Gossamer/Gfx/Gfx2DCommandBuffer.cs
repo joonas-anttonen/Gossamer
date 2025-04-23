@@ -31,7 +31,7 @@ public class Gfx2DCommandBuffer
     readonly Vector2[] scratchVertices = new Vector2[InitialArraySize];
     int scratchVertexCount;
 
-    Vertex2D[] vertices = new Vertex2D[InitialArraySize];
+    Gfx2DVertex[] vertices = new Gfx2DVertex[InitialArraySize];
     int frameVertexCount;
     ushort[] indices = new ushort[InitialArraySize];
     int frameIndexCount;
@@ -60,7 +60,7 @@ public class Gfx2DCommandBuffer
         return new Gfx2D.Statistics(commandsCount, frameIndexCount / 3);
     }
 
-    internal ReadOnlySpan<Vertex2D> GetVertices()
+    internal ReadOnlySpan<Gfx2DVertex> GetVertices()
     {
         return vertices.AsSpan(0, frameVertexCount);
     }
@@ -75,9 +75,9 @@ public class Gfx2DCommandBuffer
         return batches.AsSpan(0, batchCount);
     }
 
-    internal void GetBatchData(CommandBatch batch, out ReadOnlySpan<Command> commands)
+    internal ReadOnlySpan<Command> GetBatchCommands(CommandBatch batch)
     {
-        commands = this.commands.AsSpan(batch.FirstCommandIndex, batch.CommandCount);
+        return commands.AsSpan(batch.FirstCommandIndex, batch.CommandCount);
     }
 
     public void BeginBatch()
@@ -224,20 +224,20 @@ public class Gfx2DCommandBuffer
     {
         float half_thickness = thickness * 0.5f;
 
-        PushQuadUV(new(a.X - half_thickness, a.Y - half_thickness), new(c.X + half_thickness, a.Y + half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-        PushQuadUV(new(a.X - half_thickness, c.Y - half_thickness), new(c.X + half_thickness, c.Y + half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-        PushQuadUV(new(a.X - half_thickness, a.Y + half_thickness), new(a.X + half_thickness, c.Y - half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
-        PushQuadUV(new(c.X - half_thickness, a.Y + half_thickness), new(c.X + half_thickness, c.Y - half_thickness), Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
+        PushQuadUV(new(a.X - half_thickness, a.Y - half_thickness), new(c.X + half_thickness, a.Y + half_thickness), Gfx2DVertex.DefaultUV, Gfx2DVertex.DefaultUV, color);
+        PushQuadUV(new(a.X - half_thickness, c.Y - half_thickness), new(c.X + half_thickness, c.Y + half_thickness), Gfx2DVertex.DefaultUV, Gfx2DVertex.DefaultUV, color);
+        PushQuadUV(new(a.X - half_thickness, a.Y + half_thickness), new(a.X + half_thickness, c.Y - half_thickness), Gfx2DVertex.DefaultUV, Gfx2DVertex.DefaultUV, color);
+        PushQuadUV(new(c.X - half_thickness, a.Y + half_thickness), new(c.X + half_thickness, c.Y - half_thickness), Gfx2DVertex.DefaultUV, Gfx2DVertex.DefaultUV, color);
     }
 
     public void FillRectangle(Rectangle rectangle, Color color)
     {
-        PushQuadUV(rectangle.Position, rectangle.Position + rectangle.Size, Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
+        PushQuadUV(rectangle.Position, rectangle.Position + rectangle.Size, Gfx2DVertex.DefaultUV, Gfx2DVertex.DefaultUV, color);
     }
 
     public void FillRectangle(Vector2 a, Vector2 c, Color color)
     {
-        PushQuadUV(a, c, Vertex2D.DefaultUV, Vertex2D.DefaultUV, color);
+        PushQuadUV(a, c, Gfx2DVertex.DefaultUV, Gfx2DVertex.DefaultUV, color);
     }
 
     void PushQuadUV(Vector2 a, Vector2 c, Vector2 a_uv, Vector2 c_uv, Color color)
@@ -258,10 +258,10 @@ public class Gfx2DCommandBuffer
         indices[frameIndexCount + 5] = (ushort)(frameVertexCount + 3);
         frameIndexCount += 6;
 
-        vertices[frameVertexCount + 0] = new Vertex2D(a, a_uv, color);
-        vertices[frameVertexCount + 1] = new Vertex2D(b, b_uv, color);
-        vertices[frameVertexCount + 2] = new Vertex2D(c, c_uv, color);
-        vertices[frameVertexCount + 3] = new Vertex2D(d, d_uv, color);
+        vertices[frameVertexCount + 0] = new Gfx2DVertex(a, a_uv, color);
+        vertices[frameVertexCount + 1] = new Gfx2DVertex(b, b_uv, color);
+        vertices[frameVertexCount + 2] = new Gfx2DVertex(c, c_uv, color);
+        vertices[frameVertexCount + 3] = new Gfx2DVertex(d, d_uv, color);
         frameVertexCount += 4;
 
         ref Command currentCommand = ref GetCurrentCommand();
@@ -373,9 +373,9 @@ public class Gfx2DCommandBuffer
 
                 for (int i = 0; i < points_count; i++)
                 {
-                    vertices[frameVertexCount + 0] = new Vertex2D(points[i], Vertex2D.DefaultUV, color);
-                    vertices[frameVertexCount + 1] = new Vertex2D(temp_points[i * 2 + 0], Vertex2D.DefaultUV, Color.Transparent);
-                    vertices[frameVertexCount + 2] = new Vertex2D(temp_points[i * 2 + 1], Vertex2D.DefaultUV, Color.Transparent);
+                    vertices[frameVertexCount + 0] = new Gfx2DVertex(points[i], Gfx2DVertex.DefaultUV, color);
+                    vertices[frameVertexCount + 1] = new Gfx2DVertex(temp_points[i * 2 + 0], Gfx2DVertex.DefaultUV, Color.Transparent);
+                    vertices[frameVertexCount + 2] = new Gfx2DVertex(temp_points[i * 2 + 1], Gfx2DVertex.DefaultUV, Color.Transparent);
                     frameVertexCount += 3;
                 }
             }
@@ -444,10 +444,10 @@ public class Gfx2DCommandBuffer
 
                 for (int i = 0; i < points_count; i++)
                 {
-                    vertices[frameVertexCount + 0] = new Vertex2D(temp_points[i * 4 + 0], Vertex2D.DefaultUV, Color.Transparent);
-                    vertices[frameVertexCount + 1] = new Vertex2D(temp_points[i * 4 + 1], Vertex2D.DefaultUV, color);
-                    vertices[frameVertexCount + 2] = new Vertex2D(temp_points[i * 4 + 2], Vertex2D.DefaultUV, color);
-                    vertices[frameVertexCount + 3] = new Vertex2D(temp_points[i * 4 + 3], Vertex2D.DefaultUV, Color.Transparent);
+                    vertices[frameVertexCount + 0] = new Gfx2DVertex(temp_points[i * 4 + 0], Gfx2DVertex.DefaultUV, Color.Transparent);
+                    vertices[frameVertexCount + 1] = new Gfx2DVertex(temp_points[i * 4 + 1], Gfx2DVertex.DefaultUV, color);
+                    vertices[frameVertexCount + 2] = new Gfx2DVertex(temp_points[i * 4 + 2], Gfx2DVertex.DefaultUV, color);
+                    vertices[frameVertexCount + 3] = new Gfx2DVertex(temp_points[i * 4 + 3], Gfx2DVertex.DefaultUV, Color.Transparent);
                     frameVertexCount += 4;
                 }
             }
@@ -477,10 +477,10 @@ public class Gfx2DCommandBuffer
                 indices[frameIndexCount + 5] = (ushort)(frameVertexCount + 3);
                 frameIndexCount += 6;
 
-                vertices[frameVertexCount + 0] = new Vertex2D(new(p1.X + dy, p1.Y - dx), Vertex2D.DefaultUV, color);
-                vertices[frameVertexCount + 1] = new Vertex2D(new(p2.X + dy, p2.Y - dx), Vertex2D.DefaultUV, color);
-                vertices[frameVertexCount + 2] = new Vertex2D(new(p2.X - dy, p2.Y + dx), Vertex2D.DefaultUV, color);
-                vertices[frameVertexCount + 3] = new Vertex2D(new(p1.X - dy, p1.Y + dx), Vertex2D.DefaultUV, color);
+                vertices[frameVertexCount + 0] = new Gfx2DVertex(new(p1.X + dy, p1.Y - dx), Gfx2DVertex.DefaultUV, color);
+                vertices[frameVertexCount + 1] = new Gfx2DVertex(new(p2.X + dy, p2.Y - dx), Gfx2DVertex.DefaultUV, color);
+                vertices[frameVertexCount + 2] = new Gfx2DVertex(new(p2.X - dy, p2.Y + dx), Gfx2DVertex.DefaultUV, color);
+                vertices[frameVertexCount + 3] = new Gfx2DVertex(new(p1.X - dy, p1.Y + dx), Gfx2DVertex.DefaultUV, color);
                 frameVertexCount += 4;
             }
         }

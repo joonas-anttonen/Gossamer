@@ -14,10 +14,13 @@ public abstract class GfxPresenter : IDisposable
     internal abstract VkCommandBuffer GetCommandBuffer();
     public abstract PixelBuffer GetPresentationBuffer();
 
-    public virtual TimeSpan GetTotalPauseDuration()
+    public virtual TimeSpan GetPauseDuration()
     {
         return TimeSpan.Zero;
     }
+
+    internal abstract VkFormat GetFormat();
+    internal abstract VkExtent2D GetExtent();
 
     /// <summary>
     /// Invalidates the presentation surface.
