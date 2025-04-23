@@ -43,7 +43,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
     readonly FontCollection fontCache = new();
 
-    DisplayParameters? parameters;
+    DisplayParameters? displayParameters;
 
     VkSampler nearestSampler;
     VkSampler linearSampler;
@@ -226,12 +226,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
         gfx.PixelBufferBarrier(
             commandBuffer,
-            pixelBuffer: presentationBuffer,
-            srcLayout: VkImageLayout.UNDEFINED,
-            dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
-
-        gfx.PixelBufferBarrier(
-            commandBuffer,
             pixelBuffer: backBuffer,
             srcLayout: VkImageLayout.UNDEFINED,
             dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
@@ -246,9 +240,6 @@ class Gfx2D(GfxCore gfx) : IDisposable
         };
         VkClearColorValue clearColor = VkClearColorValue.FromColor(Color.Transparent);
         vkCmdClearColorImage(commandBuffer, backBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
-
-        clearColor = VkClearColorValue.FromColor(Color.Black);
-        vkCmdClearColorImage(commandBuffer, presentationBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
 
         gfx.PixelBufferBarrier(
             commandBuffer,
@@ -521,9 +512,9 @@ class Gfx2D(GfxCore gfx) : IDisposable
         compositionPipeline = null;
     }
 
-    public void InitializeRendering(DisplayParameters parameters)
+    public void InitializeRendering(DisplayParameters displayParameters)
     {
-        this.parameters = parameters;
+        this.displayParameters = displayParameters;
 
         DestroyRendering();
 

@@ -85,7 +85,7 @@ public record DisplayParameters(
     AntialiasingMode AntialiasingMode,
     Color ClearColor)
 {
-    public static readonly DisplayParameters Empty = new(0, 0, 0, 0, 0, 0, 0, AntialiasingMode.None, Color.Palettes.Nord.Nord0_Darkest);
+    public static readonly DisplayParameters Empty = new(0, 0, 0, 0, 0, 0, 0, AntialiasingMode.None, Color.ParseUInt(0x232731));
 
     public static float GetRenderScaleFactor(AntialiasingMode antialiasingMode, UpscalingMode upscaleQuality)
     {

@@ -186,7 +186,6 @@ public class GuiCore : IDisposable
             gridPlacement = new(0, 0, 1, 2),
             Style = new Style()
             {
-                Background = Color.ParseUInt(0x232731),
                 Border = new Border(
                     Visibility: BorderVisibility.All,
                     Color: Color.ParseUInt(0x282c34),
@@ -204,7 +203,6 @@ public class GuiCore : IDisposable
             gridPlacement = new(0, 0, 1, 1),
             Style = new Style()
             {
-                Background = Color.ParseUInt(0xbbbbFF).WithAlpha(0.3f),
                 Margin = Spacing.Create(Measure.Px(0)),
                 Padding = Spacing.Create(Measure.Px(0)),
                 Outline = new Outline(
@@ -373,8 +371,6 @@ public class GuiCore : IDisposable
             controlsMinimizeRect = new Rectangle(controlsMaximizeRect.Left - ControlsButtonSeparation - ControlButtonWidth, 0.0f, controlsMaximizeRect.Left - ControlsButtonSeparation, sizeOfFrame.Y);
             controlsMinimizeIconRect = new Rectangle(0, 0, 8, 8).CenterOn(controlsMinimizeRect.Center);
 
-            cmdBuffer.FillRectangle(new(0, 0), new(ww, wh), parameters.ColorOfBackground);
-
             Color colorOfFrame = parameters.ColorOfFrame;
 
             rootElement.RenderCore(cmdBuffer);
@@ -397,7 +393,7 @@ public class GuiCore : IDisposable
                     font,
                     new Vector2(ww - sizeOfFrame.X - ControlButtonWidth - ControlsOffFromFrameSide - ControlsButtonSeparation * 2, sizeOfFrame.Y * 2),
                     wordWrap: false);
-                cmdBuffer.DrawText(titleTextLayout, new Vector2(3, 0), Color.White.WithAlpha(0.9f));
+                cmdBuffer.DrawText(titleTextLayout, new Vector2(3, 0), Color.White);
 
                 shaper.ReleaseTextLayout(titleTextLayout);
             }
@@ -422,7 +418,7 @@ public class GuiCore : IDisposable
                     windowRect.Size,
                     wordWrap: true);
 
-                cmdBuffer.DrawText(textLayout, Vector2.Round(windowRect.Position), Color.ParseUInt(0xbde5fb).WithAlpha(0.8f));
+                cmdBuffer.DrawText(textLayout, Vector2.Round(windowRect.Position), Color.White);
 
                 shaper.ReleaseTextLayout(textLayout);
             }

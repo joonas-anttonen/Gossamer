@@ -48,7 +48,7 @@ public unsafe class GfxCore : IDisposable
     VkQueue deviceQueue;
     readonly Lock deviceQueueLock = new();
     uint deviceQueueIndex;
-    
+
     float deviceTimestampPeriodInNanoseconds;
 
     VkCommandPool deviceCommandPool;
@@ -77,7 +77,7 @@ public unsafe class GfxCore : IDisposable
         return statistics;
     }
 
-    internal GfxSamples GetDeviceMaxSampleCount()
+    internal GfxSamples GetMaxSampleCount()
     {
         return (GfxSamples)deviceSampleCount;
     }
@@ -128,6 +128,7 @@ public unsafe class GfxCore : IDisposable
         }
 
         ThrowInvalidOperationIfNull(gfx2D);
+        ThrowInvalidOperationIfNull(gfx3D);
 
         bool canRender = presenter.BeginFrame();
         if (!canRender)
@@ -149,6 +150,7 @@ public unsafe class GfxCore : IDisposable
             timestampPool.BeginGpuTimestamp(presenter.GetCommandBuffer());
         }
 
+        gfx3D.Render(presenter);
         gfx2D.Render(presenter);
 
         if (timestampPool != null)
@@ -178,6 +180,8 @@ public unsafe class GfxCore : IDisposable
         gfx2D.InitializeRendering(DisplayParameters.Empty);
 
         gfx3D = new Gfx3D(this);
+        gfx3D.Create();
+        gfx3D.InitializeRendering(DisplayParameters.Empty);
     }
 
     public void CreatePresenter(GfxPresentation presentation)
