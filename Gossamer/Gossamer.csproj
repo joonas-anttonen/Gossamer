@@ -23,6 +23,7 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Run'">
     <DefineConstants>RUN</DefineConstants>
     <OutputType>Exe</OutputType>
+    <Optimize>True</Optimize>
   </PropertyGroup>
 
   <!-- References -->
