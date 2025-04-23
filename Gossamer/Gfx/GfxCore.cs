@@ -75,6 +75,8 @@ public unsafe class GfxCore : IDisposable
     ulong frameCounter;
     Statistics statistics;
 
+    bool pendingScreenshot = false;
+
     readonly Dictionary<string, GfxPipelineShader> cachedPipelineShaders = [];
 
     public Statistics GetStatistics()
@@ -133,7 +135,7 @@ public unsafe class GfxCore : IDisposable
     {
         ThrowInvalidOperationIfNull(gfx2D);
         ThrowInvalidOperationIfNull(gfx3D);
-        
+
         if (presenter == null)
         {
             logger.Warning("No presenter available.");
@@ -154,8 +156,8 @@ public unsafe class GfxCore : IDisposable
         {
             InitializeRendering(currentDisplayParameters with
             {
-                DisplayWidth = displayExtent.Width,
-                DisplayHeight = displayExtent.Height,
+                DisplayWidth = (int)displayExtent.Width,
+                DisplayHeight = (int)displayExtent.Height,
                 DisplayFormat = (GfxFormat)displayFormat,
             });
         }
@@ -182,7 +184,83 @@ public unsafe class GfxCore : IDisposable
             timestampPool.EndCpuTimestamp();
         }
 
-        presenter.EndFrame();
+        if (!pendingScreenshot)
+        {
+            presenter.EndFrame();
+        }
+        else
+        {
+            pendingScreenshot = false;
+
+            int screenshotDataLength = currentDisplayParameters.DisplayWidth * currentDisplayParameters.DisplayHeight * 4;
+            MemoryBuffer<byte> screenshotBuffer = CreateMemoryBuffer<byte>(
+                screenshotDataLength,
+                GfxMemoryUsage.TransferDst,
+                GfxMemoryAccess.Read);
+
+            VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
+            PixelBuffer presentBuffer = presenter.GetPresentationBuffer();
+
+            FullBarrier(commandBuffer);
+
+            PixelBufferBarrier(
+                commandBuffer,
+                presentBuffer,
+                srcLayout: VkImageLayout.TRANSFER_DST_OPTIMAL,
+                dstLayout: VkImageLayout.TRANSFER_SRC_OPTIMAL);
+
+            VkBufferImageCopy bufferImageCopy = new()
+            {
+                BufferOffset = 0,
+                BufferRowLength = 0,
+                BufferImageHeight = 0,
+                ImageSubresource = new()
+                {
+                    Aspect = VkImageAspect.COLOR,
+                    MipLevel = 0,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1,
+                },
+                ImageOffset = new(0, 0, 0),
+                ImageExtent = new((uint)currentDisplayParameters.DisplayWidth, (uint)currentDisplayParameters.DisplayHeight, 1),
+            };
+            vkCmdCopyImageToBuffer(commandBuffer, presentBuffer.Image, VkImageLayout.TRANSFER_SRC_OPTIMAL, screenshotBuffer.Buffer, 1, &bufferImageCopy);
+
+            PixelBufferBarrier(
+                commandBuffer,
+                presentBuffer,
+                srcLayout: VkImageLayout.TRANSFER_SRC_OPTIMAL,
+                dstLayout: VkImageLayout.TRANSFER_DST_OPTIMAL);
+
+            FullBarrier(commandBuffer);
+
+            presenter.EndFrame();
+            vkQueueWaitIdle(deviceQueue);
+
+            byte[] screenshotData = ReadMemoryBuffer(screenshotBuffer, screenshotDataLength);
+            DestroyMemoryBuffer(screenshotBuffer);
+
+            fixed (byte* p_screenshotData = screenshotData)
+            {
+                byte* webpData = null;
+                int webpDataLength = 0;
+                WebPStatus webpStatus = webpEncode(
+                    p_screenshotData,
+                    screenshotDataLength,
+                    webpConvertFormat(currentDisplayParameters.DisplayFormat),
+                    currentDisplayParameters.DisplayWidth,
+                    currentDisplayParameters.DisplayHeight,
+                    currentDisplayParameters.DisplayWidth * 4,
+                    &webpData,
+                    &webpDataLength);
+                ThrowInvalidDataIf(webpStatus != WebPStatus.OK, $"{nameof(webpEncode)}: {webpStatus}");
+
+                File.WriteAllBytes("c:/users/jant/desktop/screenshot.webp", new ReadOnlySpan<byte>(webpData, webpDataLength));
+
+                webpStatus = webpFree(webpData);
+                ThrowInvalidDataIf(webpStatus != WebPStatus.OK, $"{nameof(webpFree)}: {webpStatus}");
+            }
+        }
 
         statistics = new(
             frameCounter++,
@@ -571,6 +649,22 @@ public unsafe class GfxCore : IDisposable
         vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
     }
 
+    byte[] ReadMemoryBuffer(MemoryBuffer<byte> memoryBuffer, int size)
+    {
+        byte[] data = new byte[size];
+
+        void* pDst = null;
+        ThrowVulkanIfFailed(vmaMapMemory(allocator, memoryBuffer.Allocation, &pDst));
+
+        fixed (byte* pData = data)
+        {
+            Unsafe.CopyBlock(pData, pDst, (uint)size);
+        }
+
+        vmaUnmapMemory(allocator, memoryBuffer.Allocation);
+        return data;
+    }
+
     void UpdateDynamicBuffer<T>(MemoryBuffer<T> memoryBuffer, void* pSrc, int srcSize) where T : unmanaged
     {
         int dstSize = (int)memoryBuffer.Length * sizeof(T);
@@ -627,7 +721,7 @@ public unsafe class GfxCore : IDisposable
         vmaDestroyBuffer(allocator, memoryBuffer.Buffer, memoryBuffer.Allocation);
     }
 
-    internal MemoryBuffer<T> CreateDynamicMemoryBuffer<T>(int length, GfxMemoryBufferUsage usage)
+    internal MemoryBuffer<T> CreateMemoryBuffer<T>(int length, GfxMemoryUsage usage, GfxMemoryAccess access)
     {
         VkBufferCreateInfo bufferCreateInfo = new(default)
         {
@@ -638,8 +732,17 @@ public unsafe class GfxCore : IDisposable
         VmaAllocationCreateInfo allocationCreateInfo = new()
         {
             Usage = VmaMemoryUsage.AUTO,
-            Flags = VmaAllocationCreateFlags.HOST_ACCESS_SEQUENTIAL_WRITE,
         };
+
+        if (access.HasFlag(GfxMemoryAccess.Write))
+        {
+            allocationCreateInfo.Flags |= VmaAllocationCreateFlags.HOST_ACCESS_SEQUENTIAL_WRITE;
+        }
+
+        if (access.HasFlag(GfxMemoryAccess.Read))
+        {
+            allocationCreateInfo.Flags |= VmaAllocationCreateFlags.HOST_ACCESS_RANDOM;
+        }
 
         VkBuffer buffer;
         VmaAllocation allocation;
@@ -693,8 +796,8 @@ public unsafe class GfxCore : IDisposable
     }
 
     internal PixelBuffer CreatePixelBuffer(
-        uint width,
-        uint height,
+        int width,
+        int height,
         GfxFormat format,
         GfxPixelBufferUsage usage,
         GfxAspect aspect,
@@ -706,8 +809,8 @@ public unsafe class GfxCore : IDisposable
             Format = (VkFormat)format,
             Extent = new VkExtent3D
             {
-                Width = width,
-                Height = height,
+                Width = (uint)width,
+                Height = (uint)height,
                 Depth = 1
             },
             MipLevels = 1,
@@ -764,20 +867,20 @@ public unsafe class GfxCore : IDisposable
         int hasAlpha = 0;
         fixed (byte* p_encodedData = encodedData)
         {
-            WebPStatus webpStatus = webpAnalyze(p_encodedData, (ulong)encodedDataLength, &width, &height, &hasAlpha);
-            ThrowInvalidDataIf(webpStatus != WebPStatus.OK, $"{nameof(webpAnalyze)}: {webpStatus}");
+            WebPStatus webpStatus = webpVerify(p_encodedData, encodedDataLength, &width, &height, &hasAlpha);
+            ThrowInvalidDataIf(webpStatus != WebPStatus.OK, $"{nameof(webpVerify)}: {webpStatus}");
 
             decodedDataLength = width * height * 4;
         }
 
-        MemoryBuffer<byte> stagingBuffer = CreateDynamicMemoryBuffer<byte>(length: decodedDataLength, GfxMemoryBufferUsage.TransferSrc);
+        MemoryBuffer<byte> stagingBuffer = CreateMemoryBuffer<byte>(length: decodedDataLength, GfxMemoryUsage.TransferSrc, GfxMemoryAccess.Write);
 
         fixed (byte* p_encodedData = encodedData)
         {
             void* p_decodedData = null;
             ThrowVulkanIfFailed(vmaMapMemory(allocator, stagingBuffer.Allocation, &p_decodedData));
 
-            WebPStatus webpStatus = webpDecodeInto(p_encodedData, (ulong)encodedDataLength, WebPFormat.RGBA, (byte*)p_decodedData, (ulong)decodedDataLength, width * 4);
+            WebPStatus webpStatus = webpDecodeInto(p_encodedData, encodedDataLength, WebPFormat.RGBA, width * 4, (byte*)p_decodedData, decodedDataLength);
 
             vmaUnmapMemory(allocator, stagingBuffer.Allocation);
             ThrowVulkanIfFailed(vmaFlushAllocation(allocator, stagingBuffer.Allocation, 0, (ulong)decodedDataLength));
@@ -786,8 +889,8 @@ public unsafe class GfxCore : IDisposable
         }
 
         PixelBuffer pixelBuffer = CreatePixelBuffer(
-            width: (uint)width,
-            height: (uint)height,
+            width: width,
+            height: height,
             format: GfxFormat.Rgba8,
             usage: usage | GfxPixelBufferUsage.TransferDst,
             aspect: GfxAspect.Color,
@@ -833,7 +936,7 @@ public unsafe class GfxCore : IDisposable
         return pixelBuffer;
     }
 
-    internal PixelBuffer CreatePixelBuffer(byte[] data, uint width, uint height, GfxFormat format, GfxPixelBufferUsage usage)
+    internal PixelBuffer CreatePixelBuffer(byte[] data, int width, int height, GfxFormat format, GfxPixelBufferUsage usage)
     {
         PixelBuffer pixelBuffer = CreatePixelBuffer(
             width: width,
@@ -843,7 +946,7 @@ public unsafe class GfxCore : IDisposable
             aspect: GfxAspect.Color,
             samples: GfxSamples.X1);
 
-        MemoryBuffer<byte> stagingBuffer = CreateDynamicMemoryBuffer<byte>(length: data.Length, GfxMemoryBufferUsage.TransferSrc);
+        MemoryBuffer<byte> stagingBuffer = CreateMemoryBuffer<byte>(length: data.Length, GfxMemoryUsage.TransferSrc, GfxMemoryAccess.Write);
         UpdateDynamicBuffer(stagingBuffer, data);
 
         GfxSingleCommand stagingCommand = BeginSingleCommand();
@@ -867,7 +970,7 @@ public unsafe class GfxCore : IDisposable
                 LayerCount = 1,
             },
             ImageOffset = new(0, 0, 0),
-            ImageExtent = new(width, height, 1),
+            ImageExtent = new((uint)width, (uint)height, 1),
         };
 
         vkCmdCopyBufferToImage(stagingCommand.CommandBuffer, stagingBuffer.Buffer, pixelBuffer.Image, VkImageLayout.TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);

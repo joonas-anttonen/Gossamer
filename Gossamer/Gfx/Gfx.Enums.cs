@@ -17,7 +17,7 @@ public enum GfxFormat
 }
 
 [Flags]
-public enum GfxMemoryBufferUsage
+public enum GfxMemoryUsage
 {
     None = 0,
     TransferSrc = (int)External.Vulkan.VkBufferUsage.TRANSFER_SRC_BIT,
@@ -29,6 +29,15 @@ public enum GfxMemoryBufferUsage
     Index = (int)External.Vulkan.VkBufferUsage.INDEX_BUFFER_BIT,
     Vertex = (int)External.Vulkan.VkBufferUsage.VERTEX_BUFFER_BIT,
     Indirect = (int)External.Vulkan.VkBufferUsage.INDIRECT_BUFFER_BIT,
+}
+
+[Flags]
+public enum GfxMemoryAccess
+{
+    None = 0,
+    Write = 1,
+    Read = 2,
+    ReadWrite = Write | Read,
 }
 
 [Flags]

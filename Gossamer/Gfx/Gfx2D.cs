@@ -128,8 +128,8 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
         PixelBuffer fontTexture = gfx.CreatePixelBuffer(
             fontAtlas.Pixels,
-            width: (uint)fontAtlas.Size,
-            height: (uint)fontAtlas.Size,
+            width: fontAtlas.Size,
+            height: fontAtlas.Size,
             format: GfxFormat.Rgba8,
             usage: GfxPixelBufferUsage.Sampled);
 
@@ -147,8 +147,8 @@ class Gfx2D(GfxCore gfx) : IDisposable
         ThrowInvalidOperationIf(vertexBuffer != null);
         ThrowInvalidOperationIf(indexBuffer != null);
 
-        vertexBuffer = gfx.CreateDynamicMemoryBuffer<Gfx2DVertex>(length: MaxVertices, GfxMemoryBufferUsage.Vertex);
-        indexBuffer = gfx.CreateDynamicMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryBufferUsage.Index);
+        vertexBuffer = gfx.CreateMemoryBuffer<Gfx2DVertex>(length: MaxVertices, GfxMemoryUsage.Vertex, GfxMemoryAccess.Write);
+        indexBuffer = gfx.CreateMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryUsage.Index, GfxMemoryAccess.Write);
 
         VkSamplerCreateInfo samplerCreateInfo = new(default)
         {
@@ -259,14 +259,14 @@ class Gfx2D(GfxCore gfx) : IDisposable
         VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
         VkRenderingInfo renderingInfo = new(default)
         {
-            RenderArea = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height)),
+            RenderArea = new(new(0, 0), new((uint)presentBuffer.Width, (uint)presentBuffer.Height)),
             ColorAttachmentCount = 1,
             ColorAttachments = colorAttachments,
             LayerCount = 1,
         };
 
         VkViewport viewport = new(0, 0, presentBuffer.Width, presentBuffer.Height, 0, 1);
-        VkRect2D scissor = new(new(0, 0), new(presentBuffer.Width, presentBuffer.Height));
+        VkRect2D scissor = new(new(0, 0), new((uint)presentBuffer.Width, (uint)presentBuffer.Height));
 
         vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
@@ -395,14 +395,14 @@ class Gfx2D(GfxCore gfx) : IDisposable
         VkRenderingAttachmentInfo* colorAttachments = stackalloc VkRenderingAttachmentInfo[1] { colorAttachment };
         VkRenderingInfo renderingInfo = new(default)
         {
-            RenderArea = new(new(0, 0), new(renderBuffer.Width, renderBuffer.Height)),
+            RenderArea = new(new(0, 0), new((uint)renderBuffer.Width, (uint)renderBuffer.Height)),
             ColorAttachmentCount = 1,
             ColorAttachments = colorAttachments,
             LayerCount = 1,
         };
 
         VkViewport viewport = new(0, 0, renderBuffer.Width, renderBuffer.Height, 0, 1);
-        VkRect2D scissor = new(new(0, 0), new(renderBuffer.Width, renderBuffer.Height));
+        VkRect2D scissor = new(new(0, 0), new((uint)renderBuffer.Width, (uint)renderBuffer.Height));
 
         vkCmdBeginRendering(commandBuffer, &renderingInfo);
         vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.Pipeline);

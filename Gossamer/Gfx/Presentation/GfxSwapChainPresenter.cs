@@ -490,8 +490,8 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
                 format: (GfxFormat)outputSurfaceFormat.Format,
                 aspect: GfxAspect.Color,
                 samples: GfxSamples.X1,
-                width: swapChainExtent.Width,
-                height: swapChainExtent.Height,
+                width: (int)swapChainExtent.Width,
+                height: (int)swapChainExtent.Height,
                 image: swapChainImage,
                 view: swapChainImageView,
                 allocation: default

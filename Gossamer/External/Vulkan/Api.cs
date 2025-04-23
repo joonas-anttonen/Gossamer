@@ -423,7 +423,7 @@ unsafe static class Api
     public static extern void vkCmdCopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkImage dstImage, VkImageLayout dstImageLayout, uint regionCount, VkBufferImageCopy* pRegions);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern void vkCmdCopyImageToBuffer(VkCommandBuffer commandBuffer, ulong srcImage, VkImageLayout srcImageLayout, ulong dstBuffer, uint regionCount, VkBufferImageCopy* pRegions);
+    public static extern void vkCmdCopyImageToBuffer(VkCommandBuffer commandBuffer, VkImage srcImage, VkImageLayout srcImageLayout, VkBuffer dstBuffer, uint regionCount, VkBufferImageCopy* pRegions);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern VkResult vkCreateQueryPool(VkDevice device, VkQueryPoolCreateInfo* pCreateInfo, VkAllocationCallbacks* pAllocator, VkQueryPool* pQueryPool);

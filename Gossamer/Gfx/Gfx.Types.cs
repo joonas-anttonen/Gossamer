@@ -75,14 +75,14 @@ public enum UpscalingMode
 }
 
 public record DisplayParameters(
-    uint RenderWidth,
-    uint RenderHeight,
-    uint DisplayWidth,
-    uint DisplayHeight,
-    uint DisplayRefreshRate,
+    int RenderWidth,
+    int RenderHeight,
+    int DisplayWidth,
+    int DisplayHeight,
+    int DisplayRefreshRate,
     GfxFormat DisplayFormat,
-    uint ViewportWidth,
-    uint ViewportHeight,
+    int ViewportWidth,
+    int ViewportHeight,
     AntialiasingMode AntialiasingMode,
     Color ClearColor)
 {
@@ -114,7 +114,7 @@ public record DisplayParameters(
         return DisplayWidth != other.DisplayWidth || DisplayHeight != other.DisplayHeight;
     }
 
-    public bool DisplaySizeChanged(uint width, uint height)
+    public bool DisplaySizeChanged(int width, int height)
     {
         return DisplayWidth != width || DisplayHeight != height;
     }
@@ -188,8 +188,8 @@ public class PixelBuffer
     public GfxFormat Format { get; }
     public GfxAspect Aspect { get; }
     public GfxSamples Samples { get; }
-    public uint Width { get; }
-    public uint Height { get; }
+    public int Width { get; }
+    public int Height { get; }
 
     internal VkImage Image { get; }
     internal VkImageView View { get; }
@@ -199,8 +199,8 @@ public class PixelBuffer
         GfxFormat format,
         GfxAspect aspect,
         GfxSamples samples,
-        uint width,
-        uint height,
+        int width,
+        int height,
         VkImage image,
         VkImageView view,
         VmaAllocation allocation)
