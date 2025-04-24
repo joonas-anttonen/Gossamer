@@ -25,10 +25,12 @@ readonly struct Gfx2DVertex(Vector2 position, Vector2 uv, Color color)
 }
 
 [StructLayout(LayoutKind.Sequential)]
-readonly struct Gfx2DPushConstants(Vector2 scale, Vector2 translation)
+readonly struct Gfx2DPushConstants(Vector2 scale, Vector2 translation, bool smoothing)
 {
     public readonly Vector2 Scale = scale;
     public readonly Vector2 Translation = translation;
+    public readonly bool Smoothing = smoothing;
+    readonly Vector3 padding = new(0, 0, 0);
 }
 
 class Gfx2D(GfxCore gfx) : IDisposable
@@ -158,9 +160,9 @@ class Gfx2D(GfxCore gfx) : IDisposable
             AddressModeV = VkSamplerAddressMode.CLAMP_TO_BORDER,
             AddressModeW = VkSamplerAddressMode.CLAMP_TO_BORDER,
 
-            MinFilter = VkFilter.NEAREST,
-            MagFilter = VkFilter.NEAREST,
-            MipmapMode = VkSamplerMipmapMode.NEAREST,
+            MinFilter = VkFilter.LINEAR,
+            MagFilter = VkFilter.LINEAR,
+            MipmapMode = VkSamplerMipmapMode.LINEAR,
 
             BorderColor = VkBorderColor.FLOAT_OPAQUE_WHITE,
 
@@ -423,20 +425,9 @@ class Gfx2D(GfxCore gfx) : IDisposable
         {
             ref readonly Command command = ref commands[i];
 
-            Gfx2DPushConstants pushConstants = new(
-                scale: new(2.0f / renderBuffer.Width, 2.0f / renderBuffer.Height),
-                translation: new(-1.0f, -1.0f)
-            );
-            vkCmdPushConstants(
-                commandBuffer,
-                activePipeline.Layout,
-                VkShaderStage.VERTEX | VkShaderStage.FRAGMENT,
-                0,
-                (uint)Unsafe.SizeOf<Gfx2DPushConstants>(),
-                &pushConstants);
-
             PixelBuffer commandTexture;
             VkSampler commandSampler;
+            bool useFontSmoothing = true;
 
             using (fontTexturesLock.EnterScope())
             {
@@ -445,17 +436,24 @@ class Gfx2D(GfxCore gfx) : IDisposable
                     commandTexture = command.Texture;
                     commandSampler = linearSampler;
                 }
-                else if (command.Font >= 0)
+                else if (command.Font > 0)
                 {
                     commandTexture = fontTextures[command.Font];
                     commandSampler = nearestSampler;
                 }
                 else
                 {
+                    useFontSmoothing = false;
                     commandTexture = fontTextures[0];
                     commandSampler = nearestSampler;
                 }
             }
+
+            Gfx2DPushConstants pushConstants = new(
+                scale: new(2.0f / renderBuffer.Width, 2.0f / renderBuffer.Height),
+                translation: new(-1.0f, -1.0f),
+                smoothing: useFontSmoothing
+            );
 
             VkDescriptorImageInfo descriptorImageInfo = new()
             {
@@ -482,7 +480,20 @@ class Gfx2D(GfxCore gfx) : IDisposable
                 ImageInfo = &descriptorImageInfo2,
             };
 
-            vkCmdPushDescriptorSet(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.Layout, 0, 2, descriptorWrites);
+            vkCmdPushDescriptorSet(
+                commandBuffer,
+                VkPipelineBindPoint.GRAPHICS,
+                activePipeline.Layout,
+                0,
+                2,
+                descriptorWrites);
+            vkCmdPushConstants(
+                commandBuffer,
+                activePipeline.Layout,
+                VkShaderStage.VERTEX | VkShaderStage.FRAGMENT,
+                0,
+                (uint)Unsafe.SizeOf<Gfx2DPushConstants>(),
+                &pushConstants);
             vkCmdDrawIndexed(commandBuffer, command.IndexCount, 1, command.IndexOffset, 0, 0);
         }
 
@@ -506,7 +517,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
     public void InitializeRendering(DisplayParameters displayParameters)
     {
         logger.Debug();
-        
+
         this.displayParameters = displayParameters;
 
         DestroyRendering();
