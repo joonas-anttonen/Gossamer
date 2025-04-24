@@ -8,7 +8,6 @@ enum GfxMessageType
 {
     Quit,
     SurfaceDamaged,
-    SurfaceLost,
     MouseXY,
     MouseButton,
     MouseWheel,
@@ -63,13 +62,6 @@ class GfxMessage
         mods = (InputMods)field1;
     }
 
-    public void GetSurfaceLost(out int x, out int y)
-    {
-        ThrowInvalidOperationIfNot(Type == GfxMessageType.SurfaceLost);
-        x = field0;
-        y = field1;
-    }
-
     public void SetQuit()
     {
         Type = GfxMessageType.Quit;
@@ -78,13 +70,6 @@ class GfxMessage
     public void SetSurfaceDamaged()
     {
         Type = GfxMessageType.SurfaceDamaged;
-    }
-
-    public void SetSurfaceLost(int x, int y)
-    {
-        Type = GfxMessageType.SurfaceLost;
-        field0 = x;
-        field1 = y;
     }
 
     public void SetMouseXY(int x, int y)

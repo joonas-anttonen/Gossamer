@@ -229,7 +229,7 @@ public record Logger(Log log, string name)
     /// <param name="message"></param>
     /// <param name="typeName"></param>
     /// <param name="callerName"></param>
-    public void Debug(string message, string typeName = "", [CallerMemberName] string callerName = "")
+    public void Debug(string message = "", string typeName = "", [CallerMemberName] string callerName = "")
     {
         log.Append(Log.Severity.Debug, message, ResolveTypeName(typeName), callerName);
     }

@@ -56,11 +56,13 @@ public unsafe class GfxCore : IDisposable
 
     readonly GfxApiParameters apiParameters;
     GfxParameters? parameters;
-    DisplayParameters currentDisplayParameters = DisplayParameters.Empty with
+    DisplayParameters displayParameters = DisplayParameters.Empty with
     {
         RenderWidth = 1270,
         RenderHeight = 720,
     };
+    DisplayParameters? wantedDisplayParameters;
+    readonly Lock displayParametersLock = new();
 
     GfxCapabilities capabilities = new(
         Debugging: false,
@@ -86,7 +88,15 @@ public unsafe class GfxCore : IDisposable
 
     public DisplayParameters GetDisplayParameters()
     {
-        return currentDisplayParameters;
+        return displayParameters;
+    }
+
+    public void SetDisplayParameters(DisplayParameters displayParameters)
+    {
+        using (displayParametersLock.EnterScope())
+        {
+            wantedDisplayParameters = displayParameters;
+        }
     }
 
     internal GfxSamples GetMaxSampleCount()
@@ -124,6 +134,27 @@ public unsafe class GfxCore : IDisposable
         return presenter;
     }
 
+    /// <summary>
+    /// Converts <see cref="VkFormat"/> to <see cref="GfxFormat"/>.
+    /// <para>Throws <see cref="NotImplementedException"/> if the format is not supported.</para>
+    /// </summary>
+    /// <param name="format"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    internal static GfxFormat ConvertFormat(VkFormat format)
+    {
+        return format switch
+        {
+            VkFormat.R32_SFLOAT => GfxFormat.R32,
+            VkFormat.R32G32_SFLOAT => GfxFormat.Rg32,
+            VkFormat.R32G32B32_SFLOAT => GfxFormat.Rgb32,
+            VkFormat.R32G32B32A32_SFLOAT => GfxFormat.Rgba32,
+            VkFormat.R8G8B8A8_UNORM => GfxFormat.Rgba8,
+            VkFormat.B8G8R8A8_UNORM => GfxFormat.Bgra8,
+            VkFormat.D32_SFLOAT => GfxFormat.D32,
+            _ => throw new NotImplementedException($"Unsupported format: {format}"),
+        };
+    }
+
     public GfxCore(GfxApiParameters apiParameters)
     {
         this.apiParameters = apiParameters;
@@ -142,24 +173,24 @@ public unsafe class GfxCore : IDisposable
             return;
         }
 
+        if (wantedDisplayParameters != null)
+        {
+            using (displayParametersLock.EnterScope())
+            {
+                DisplayParameters currentDisplayParameters = displayParameters;
+                displayParameters = wantedDisplayParameters;
+
+                InitializeRendering(displayParameters);
+
+                wantedDisplayParameters = null;
+            }
+        }
+
         bool canRender = presenter.BeginFrame();
         if (!canRender)
         {
             logger.Warning("Failed to begin frame.");
             return;
-        }
-
-        VkFormat displayFormat = presenter.GetFormat();
-        VkExtent2D displayExtent = presenter.GetExtent();
-        if (currentDisplayParameters.DisplaySizeChanged(displayExtent) ||
-            currentDisplayParameters.DisplayFormatChanged(displayFormat))
-        {
-            InitializeRendering(currentDisplayParameters with
-            {
-                DisplayWidth = (int)displayExtent.Width,
-                DisplayHeight = (int)displayExtent.Height,
-                DisplayFormat = (GfxFormat)displayFormat,
-            });
         }
 
         TimeSpan cpuFrameTime = TimeSpan.Zero;
@@ -192,7 +223,7 @@ public unsafe class GfxCore : IDisposable
         {
             pendingScreenshot = false;
 
-            int screenshotDataLength = currentDisplayParameters.DisplayWidth * currentDisplayParameters.DisplayHeight * 4;
+            int screenshotDataLength = displayParameters.DisplayWidth * displayParameters.DisplayHeight * 4;
             MemoryBuffer<byte> screenshotBuffer = CreateMemoryBuffer<byte>(
                 screenshotDataLength,
                 GfxMemoryUsage.TransferDst,
@@ -222,7 +253,7 @@ public unsafe class GfxCore : IDisposable
                     LayerCount = 1,
                 },
                 ImageOffset = new(0, 0, 0),
-                ImageExtent = new((uint)currentDisplayParameters.DisplayWidth, (uint)currentDisplayParameters.DisplayHeight, 1),
+                ImageExtent = new((uint)displayParameters.DisplayWidth, (uint)displayParameters.DisplayHeight, 1),
             };
             vkCmdCopyImageToBuffer(commandBuffer, presentBuffer.Image, VkImageLayout.TRANSFER_SRC_OPTIMAL, screenshotBuffer.Buffer, 1, &bufferImageCopy);
 
@@ -244,21 +275,19 @@ public unsafe class GfxCore : IDisposable
             {
                 byte* webpData = null;
                 int webpDataLength = 0;
-                WebPStatus webpStatus = webpEncode(
-                    p_screenshotData,
-                    screenshotDataLength,
-                    webpConvertFormat(currentDisplayParameters.DisplayFormat),
-                    currentDisplayParameters.DisplayWidth,
-                    currentDisplayParameters.DisplayHeight,
-                    currentDisplayParameters.DisplayWidth * 4,
-                    &webpData,
-                    &webpDataLength);
-                ThrowInvalidDataIf(webpStatus != WebPStatus.OK, $"{nameof(webpEncode)}: {webpStatus}");
+                ThrowIfFailed(webpEncode(
+                    in_data: p_screenshotData,
+                    in_data_size: screenshotDataLength,
+                    format: webpConvertFormat(displayParameters.DisplayFormat),
+                    width: displayParameters.DisplayWidth,
+                    height: displayParameters.DisplayHeight,
+                    stride: displayParameters.DisplayWidth * 4,
+                    out_data: &webpData,
+                    out_data_size: &webpDataLength), nameof(webpEncode));
 
                 File.WriteAllBytes("c:/users/jant/desktop/screenshot.webp", new ReadOnlySpan<byte>(webpData, webpDataLength));
 
-                webpStatus = webpFree(webpData);
-                ThrowInvalidDataIf(webpStatus != WebPStatus.OK, $"{nameof(webpFree)}: {webpStatus}");
+                ThrowIfFailed(webpFree(webpData), nameof(webpFree));
             }
         }
 
@@ -300,9 +329,16 @@ public unsafe class GfxCore : IDisposable
                         deviceQueue,
                         deviceQueueIndex,
                         deviceQueueLock,
-                        swapChainSurface.Surface,
-                        swapChainSurface.Extent);
+                        swapChainSurface.Surface);
                     presenter = swapChainPresenter;
+
+                    DisplayParameters wantedDisplayParameters = displayParameters with
+                    {
+                        DisplayWidth = (int)swapChainSurface.Extent.Width,
+                        DisplayHeight = (int)swapChainSurface.Extent.Height,
+                        DisplayFormat = GfxFormat.Bgra8,
+                    };
+                    SetDisplayParameters(wantedDisplayParameters);
                     break;
                 }
 
@@ -313,14 +349,16 @@ public unsafe class GfxCore : IDisposable
 
     public void InitializeRendering(DisplayParameters displayParameters)
     {
+        ThrowInvalidOperationIfNull(presenter);
         ThrowInvalidOperationIfNull(gfx2D);
         ThrowInvalidOperationIfNull(gfx3D);
 
-        currentDisplayParameters = displayParameters;
+        this.displayParameters = displayParameters;
 
         // Log new display parameters.
         logger.Debug($"{displayParameters.DisplayWidth}x{displayParameters.DisplayHeight} [{displayParameters.DisplayFormat}]");
 
+        presenter.InitializeRendering(displayParameters);
         gfx3D.InitializeRendering(displayParameters);
         gfx2D.InitializeRendering(displayParameters);
     }

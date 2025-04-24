@@ -9,7 +9,7 @@ using Gossamer.Utilities;
 namespace Gossamer.Gfx;
 
 public record GfxPresentation();
-public record GfxSwapChainPresentation(Gui.GuiCore Gui, bool EnableVerticalSync) : GfxPresentation();
+public record GfxSwapChainPresentation(Gui.GuiCore Gui) : GfxPresentation();
 public record GfxDirectXPresentation(nint Handle, GfxFormat Format, uint Width, uint Height) : GfxPresentation();
 
 internal record GfxSwapChainSurface(VkSurfaceKhr Surface, VkExtent2D Extent);
@@ -36,6 +36,8 @@ public record GfxCapabilities(
     bool SwapChain,
     bool Timestamps
 );
+
+public record struct GfxExtent(int Width, int Height);
 
 /// <summary>
 /// Represents a physical device.
@@ -81,12 +83,13 @@ public record DisplayParameters(
     int DisplayHeight,
     int DisplayRefreshRate,
     GfxFormat DisplayFormat,
+    bool VerticalSync,
     int ViewportWidth,
     int ViewportHeight,
     AntialiasingMode AntialiasingMode,
     Color ClearColor)
 {
-    public static readonly DisplayParameters Empty = new(0, 0, 0, 0, 0, GfxFormat.Undefined, 0, 0, AntialiasingMode.None, Color.ParseUInt(0x232731));
+    public static readonly DisplayParameters Empty = new(0, 0, 0, 0, 0, GfxFormat.Undefined, false, 0, 0, AntialiasingMode.None, Color.ParseUInt(0x232731));
 
     public static float GetRenderScaleFactor(AntialiasingMode antialiasingMode, UpscalingMode upscaleQuality)
     {
@@ -114,12 +117,22 @@ public record DisplayParameters(
         return DisplayWidth != other.DisplayWidth || DisplayHeight != other.DisplayHeight;
     }
 
+    public bool DisplayFormatChanged(DisplayParameters other)
+    {
+        return DisplayFormat != other.DisplayFormat;
+    }
+
+    public bool DisplayVerticalSyncChanged(DisplayParameters other)
+    {
+        return VerticalSync != other.VerticalSync;
+    }
+
     public bool DisplaySizeChanged(int width, int height)
     {
         return DisplayWidth != width || DisplayHeight != height;
     }
 
-    internal bool DisplaySizeChanged(VkExtent2D extent)
+    internal bool DisplaySizeChanged(GfxExtent extent)
     {
         return DisplayWidth != extent.Width || DisplayHeight != extent.Height;
     }
@@ -127,11 +140,6 @@ public record DisplayParameters(
     internal bool DisplayFormatChanged(GfxFormat format)
     {
         return DisplayFormat != format;
-    }
-
-    internal bool DisplayFormatChanged(VkFormat format)
-    {
-        return DisplayFormat != (GfxFormat)format;
     }
 }
 

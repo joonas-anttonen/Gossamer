@@ -14,20 +14,23 @@ public abstract class GfxPresenter : IDisposable
     internal abstract VkCommandBuffer GetCommandBuffer();
     public abstract PixelBuffer GetPresentationBuffer();
 
-    public virtual TimeSpan GetPauseDuration()
-    {
-        return TimeSpan.Zero;
-    }
-
-    internal abstract VkFormat GetFormat();
-    internal abstract VkExtent2D GetExtent();
+    /// <summary>
+    /// Gets the duration of the pause between the end of the last frame and the start of the next frame.
+    /// <para>Combined time to wait for the previous frame to finish submission and the next image to become available.</para>
+    /// </summary>
+    public abstract TimeSpan GetPauseDuration();
 
     /// <summary>
-    /// Invalidates the presentation surface.
+    /// Gets the format of the presentation surface.
     /// </summary>
-    /// <param name="width"> The new width of the surface. </param>
-    /// <param name="height"> The new height of the surface. </param>
-    public abstract void Invalidate(uint width, uint height);
+    internal abstract GfxFormat GetFormat();
+
+    /// <summary>
+    /// Gets the extent of the presentation surface.
+    /// </summary>
+    internal abstract GfxExtent GetExtent();
+
+    public abstract void InitializeRendering(DisplayParameters displayParameters);
 
     ~GfxPresenter()
     {

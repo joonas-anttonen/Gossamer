@@ -26,6 +26,21 @@ unsafe static class Api
     public const string BinaryName = "External/Gossamer.WebP";
     public const CallingConvention CallConvention = CallingConvention.Cdecl;
 
+    public static void ThrowIfFailed(WebPStatus status, string functionName)
+    {
+        switch (status)
+        {
+            case WebPStatus.OK:
+                return;
+            case WebPStatus.InvalidArgument:
+                throw new ArgumentException($"{functionName}: Invalid argument");
+            case WebPStatus.InvalidData:
+                throw new InvalidDataException($"{functionName}: Invalid data");
+            default:
+                throw new ExternalException($"{functionName}: {status}");
+        }
+    }
+
     public static WebPFormat webpConvertFormat(GfxFormat format)
     {
         return format switch
@@ -46,7 +61,7 @@ unsafe static class Api
     public static extern WebPStatus webpDecodeInto(byte* in_data, int in_data_size, WebPFormat out_format, int out_stride, byte* out_data, int out_data_size);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern WebPStatus webpEncode(byte* in_data, int in_data_size, WebPFormat in_format, int width, int height, int out_stride, byte** out_data, int* out_data_size);
+    public static extern WebPStatus webpEncode(byte* in_data, int in_data_size, WebPFormat format, int width, int height, int stride, byte** out_data, int* out_data_size);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern WebPStatus webpFree(byte* data);

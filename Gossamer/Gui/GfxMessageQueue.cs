@@ -52,13 +52,6 @@ class GfxMessageQueue(int initialCapacity = 4)
         Enqueue(message);
     }
 
-    public void PostSurfaceLost(int x, int y)
-    {
-        var message = messagePool.Rent();
-        message.SetSurfaceLost(x, y);
-        Enqueue(message);
-    }
-
     public void PostMouseXY(int x, int y)
     {
         var message = messagePool.Rent();

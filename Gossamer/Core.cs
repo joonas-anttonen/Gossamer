@@ -233,7 +233,7 @@ public sealed class Core : SynchronizationContext, IDisposable
             gui.Create(guiParameters);
 
             // 5. Create graphics swap chain presenter (depends on user interface)
-            gfx.CreatePresenter(new GfxSwapChainPresentation(gui, EnableVerticalSync: false));
+            gfx.CreatePresenter(new GfxSwapChainPresentation(gui));
 
             RunGfx(gfx);
             RunGui(gui);
@@ -341,14 +341,6 @@ public sealed class Core : SynchronizationContext, IDisposable
                         {
                             keepDequeueing = false;
                             keepRunning = false;
-                            break;
-                        }
-                    case GfxMessageType.SurfaceLost:
-                        {
-                            message.GetSurfaceLost(out int w, out int h);
-
-                            GfxPresenter? presenter = localGfx.GetPresenter();
-                            presenter?.Invalidate((uint)w, (uint)h);
                             break;
                         }
                 }

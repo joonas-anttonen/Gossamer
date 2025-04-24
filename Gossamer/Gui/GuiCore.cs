@@ -470,7 +470,12 @@ public class GuiCore : IDisposable
 
     void Callback_WindowSize(GlfwWindow window, int w, int h)
     {
-        messageQueue.PostSurfaceLost(w, h);
+        var displayParameters = gfx.GetDisplayParameters();
+        gfx.SetDisplayParameters(displayParameters with
+        {
+            DisplayWidth = w,
+            DisplayHeight = h,
+        });
 
         ScheduleLayout();
     }

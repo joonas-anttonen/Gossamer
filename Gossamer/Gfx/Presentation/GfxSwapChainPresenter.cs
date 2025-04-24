@@ -29,8 +29,6 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
     readonly uint deviceQueueIndex;
     readonly Lock deviceQueueLock;
 
-    bool surfaceInvalidated = true;
-    VkExtent2D surfaceExtent = new(1280, 720);
     VkSurfaceKhr surface;
     VkSwapChainKhr swapChain;
     VkExtent2D swapChainExtent = new(0, 0);
@@ -41,9 +39,10 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
     VkFence acquireFence;
 
-    ulong frameCount = 0;
     TimeSpan waitingForPreviousFrame = TimeSpan.Zero;
     TimeSpan waitingForNextFrame = TimeSpan.Zero;
+
+    DisplayParameters displayParameters = DisplayParameters.Empty;
 
     readonly Stopwatch stopwatch = Stopwatch.StartNew();
 
@@ -54,8 +53,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         VkQueue deviceQueue,
         uint deviceQueueIndex,
         Lock deviceQueueLock,
-        VkSurfaceKhr surface,
-        VkExtent2D surfaceExtent)
+        VkSurfaceKhr surface)
     {
         this.instance = instance;
         this.physicalDevice = physicalDevice;
@@ -63,7 +61,6 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         this.deviceQueue = deviceQueue;
         this.deviceQueueIndex = deviceQueueIndex;
         this.deviceQueueLock = deviceQueueLock;
-        this.surfaceExtent = surfaceExtent;
         this.surface = surface;
 
         VkFenceCreateInfo fenceCreateInfo = new(default);
@@ -72,14 +69,14 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         acquireFence = pAcquireFence;
     }
 
-    internal override VkFormat GetFormat()
+    internal override GfxFormat GetFormat()
     {
-        return swapChainFormat;
+        return GfxCore.ConvertFormat(swapChainFormat);
     }
 
-    internal override VkExtent2D GetExtent()
+    internal override GfxExtent GetExtent()
     {
-        return swapChainExtent;
+        return new GfxExtent((int)swapChainExtent.Width, (int)swapChainExtent.Height);
     }
 
     public override TimeSpan GetPauseDuration()
@@ -87,10 +84,17 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         return waitingForPreviousFrame + waitingForNextFrame;
     }
 
-    public override void Invalidate(uint width, uint height)
+    public override void InitializeRendering(DisplayParameters wantedDisplayParameters)
     {
-        surfaceInvalidated = true;
-        surfaceExtent = new VkExtent2D(width, height);
+        DisplayParameters currentDisplayParameters = displayParameters;
+        displayParameters = wantedDisplayParameters;
+
+        if (currentDisplayParameters.DisplaySizeChanged(wantedDisplayParameters) ||
+            currentDisplayParameters.DisplayFormatChanged(wantedDisplayParameters) ||
+            currentDisplayParameters.DisplayVerticalSyncChanged(wantedDisplayParameters))
+        {
+            InitializeSwapChain();
+        }
     }
 
     internal override VkCommandBuffer GetCommandBuffer()
@@ -110,7 +114,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
     {
         if (!swapChain.HasValue)
         {
-            return VkResult.OUT_OF_DATE_KHR;
+            return VkResult.OUT_OF_DATE;
         }
 
         PerFrame previousFrame = perFrame[currentFrameIndex];
@@ -137,7 +141,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
             uint nextFrameIndex = 0;
             VkResult acquireResult = vkAcquireNextImageKhr(device, swapChain, nanoSecondsToWait, default, acquireFence, &nextFrameIndex);
-            if (acquireResult == VkResult.SUCCESS || acquireResult == VkResult.SUBOPTIMAL_KHR)
+            if (acquireResult == VkResult.SUCCESS || acquireResult == VkResult.SUBOPTIMAL)
             {
                 VkFence localAcquireFence = acquireFence;
                 ThrowVulkanIfFailed(vkWaitForFences(device, 1, &localAcquireFence, 1, ulong.MaxValue));
@@ -145,30 +149,14 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
                 currentFrameIndex = (int)nextFrameIndex;
 
-                frameCount++;
-
                 TimeSpan afterAcquire = stopwatch.Elapsed;
                 TimeSpan acquireTime = afterAcquire - beforeAcquire;
                 waitingForNextFrame = acquireTime;
-
-                /*if (frameCount % 100 == 0)
-                {
-                    logger.Warning(
-                        $"previous: {waitingForPreviousFrame} " +
-                        $"(avg: {StringUtilities.TimeShort(waitingForPreviousFrame.TotalSeconds / frameCount)}) " +
-                        $"next: {waitingForNextFrame} " +
-                        $"(avg: {StringUtilities.TimeShort(waitingForNextFrame.TotalSeconds / frameCount)})");
-
-                    frameCount = 0;
-                    waitingForPreviousFrame = TimeSpan.Zero;
-                    waitingForNextFrame = TimeSpan.Zero;
-                }*/
-
                 break;
             }
             else if (acquireResult == VkResult.TIMEOUT)
             {
-                logger.Warning("AcquireNextImageKhr timed out.");
+                logger.Warning($"{acquireResult}");
                 continue;
             }
             else
@@ -201,18 +189,10 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
     public override bool BeginFrame()
     {
-        if (surfaceInvalidated)
-        {
-            if (!InitializeSwapChain(false))
-            {
-                return false;
-            }
-        }
-
         VkResult result = AcquireNextImage();
-        if (result == VkResult.OUT_OF_DATE_KHR || result == VkResult.SUBOPTIMAL_KHR)
+        if (result == VkResult.OUT_OF_DATE || result == VkResult.SUBOPTIMAL)
         {
-            bool refreshOK = InitializeSwapChain(false);
+            bool refreshOK = InitializeSwapChain();
             if (!refreshOK)
             {
                 return false;
@@ -288,13 +268,13 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
             };
 
             VkResult result = vkQueuePresentKhr(deviceQueue, &presentInfo);
-            if (result == VkResult.OUT_OF_DATE_KHR || result == VkResult.SUBOPTIMAL_KHR)
+            if (result == VkResult.OUT_OF_DATE || result == VkResult.SUBOPTIMAL)
             {
-                InitializeSwapChain(false);
+                InitializeSwapChain();
             }
             else if (result != VkResult.SUCCESS)
             {
-                ThrowVulkanIfFailed(result, "Failed to end frame.");
+                ThrowVulkanIfFailed(result, nameof(vkQueuePresentKhr));
             }
         }
     }
@@ -310,10 +290,8 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         }
     }
 
-    bool InitializeSwapChain(bool enableVerticalSync)
+    bool InitializeSwapChain()
     {
-        surfaceInvalidated = false;
-
         ThrowVulkanIfFailed(vkDeviceWaitIdle(device),
             "Failed to wait for device idle.");
 
@@ -325,9 +303,9 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         {
             // If the surface size is undefined, the size is set to the size of the images requested.
             swapChainExtent.Width = Math.Max(surfaceCapabilities.MinImageExtent.Width,
-                                        Math.Min(surfaceCapabilities.MaxImageExtent.Width, surfaceExtent.Width));
+                                        Math.Min(surfaceCapabilities.MaxImageExtent.Width, (uint)displayParameters.DisplayWidth));
             swapChainExtent.Height = Math.Max(surfaceCapabilities.MinImageExtent.Height,
-                                        Math.Min(surfaceCapabilities.MaxImageExtent.Height, surfaceExtent.Height));
+                                        Math.Min(surfaceCapabilities.MaxImageExtent.Height, (uint)displayParameters.DisplayHeight));
         }
         else if (surfaceCapabilities.CurrentExtent.Width > 0 && surfaceCapabilities.CurrentExtent.Height > 0)
         {
@@ -385,16 +363,19 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
         swapChainFormat = outputSurfaceFormat.Format;
 
-        // Select a present mode for the swap chain, the VK_PRESENT_MODE_FIFO_KHR mode must always be present as per spec, this mode waits for the vertical blank ("v-sync")
-        VkPresentModeKhr swapChainPresentMode = VkPresentModeKhr.FIFO;
-
         uint presentModesCount = 0;
         ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfacePresentModesKhr(physicalDevice, surface, &presentModesCount));
 
         VkPresentModeKhr* presentModes = stackalloc VkPresentModeKhr[(int)presentModesCount];
         ThrowVulkanIfFailed(vkGetPhysicalDeviceSurfacePresentModesKhr(physicalDevice, surface, &presentModesCount, presentModes));
 
-        if (!enableVerticalSync)
+        VkPresentModeKhr swapChainPresentMode = VkPresentModeKhr.FIFO;
+        if (displayParameters.VerticalSync)
+        {
+            // VK_PRESENT_MODE_FIFO_KHR mode must always be present as per spec, this mode waits for the vertical blank ("v-sync")
+            swapChainPresentMode = VkPresentModeKhr.FIFO;
+        }
+        else
         {
             // If v-sync is not requested, try to find a mailbox mode, it's the lowest latency non-tearing present mode available
             for (int i = 0; i < presentModesCount; i++)
@@ -405,6 +386,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
                     break;
                 }
 
+                // We'll take IMMEDIATE mode if that's all that's available but keep looking
                 if (presentModes[i] == VkPresentModeKhr.IMMEDIATE)
                 {
                     swapChainPresentMode = VkPresentModeKhr.IMMEDIATE;
@@ -557,7 +539,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         }
     }
 
-    protected unsafe override void Dispose(bool disposing)
+    protected override void Dispose(bool disposing)
     {
         ReleasePerFrame();
 

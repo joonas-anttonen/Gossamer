@@ -54,6 +54,8 @@ class Gfx3D(GfxCore gfx) : IDisposable
 
     public void InitializeRendering(DisplayParameters displayParameters)
     {
+        logger.Debug();
+        
         this.displayParameters = displayParameters;
 
         DestroyRendering();
