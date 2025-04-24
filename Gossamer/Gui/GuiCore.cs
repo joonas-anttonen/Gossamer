@@ -470,6 +470,11 @@ public class GuiCore : IDisposable
 
     void Callback_WindowSize(GlfwWindow window, int w, int h)
     {
+        if (w == 0 || h == 0)
+        {
+            return;
+        }
+
         var displayParameters = gfx.GetDisplayParameters();
         gfx.SetDisplayParameters(displayParameters with
         {
