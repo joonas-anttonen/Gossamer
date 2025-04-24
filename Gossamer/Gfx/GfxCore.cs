@@ -267,7 +267,12 @@ public unsafe class GfxCore : IDisposable
             FullBarrier(commandBuffer);
 
             presenter.EndFrame();
-            vkQueueWaitIdle(deviceQueue);
+
+            // We are required to synchronize access to the device queue
+            using (deviceQueueLock.EnterScope())
+            {
+                vkQueueWaitIdle(deviceQueue);
+            }
 
             byte[] screenshotData = ReadMemoryBuffer(screenshotBuffer, screenshotDataLength);
             DestroyMemoryBuffer(screenshotBuffer);
@@ -511,7 +516,11 @@ public unsafe class GfxCore : IDisposable
         }
 
         // FIXME: Implement proper resource management so we don't have to wait for idle.
-        vkDeviceWaitIdle(device);
+        // We are required to synchronize access to the device queue
+        using (deviceQueueLock.EnterScope())
+        {
+            vkDeviceWaitIdle(device);
+        }
 
         vkDestroyQueryPool(device, timestampPool.queryPool, default);
     }
@@ -759,7 +768,11 @@ public unsafe class GfxCore : IDisposable
         logger.Debug($"{memoryBuffer.Buffer}");
 
         // FIXME: Implement proper resource management so we don't have to wait for idle.
-        vkDeviceWaitIdle(device);
+        // We are required to synchronize access to the device queue
+        using (deviceQueueLock.EnterScope())
+        {
+            vkDeviceWaitIdle(device);
+        }
 
         vmaDestroyBuffer(allocator, memoryBuffer.Buffer, memoryBuffer.Allocation);
     }
@@ -808,7 +821,11 @@ public unsafe class GfxCore : IDisposable
         }
 
         // FIXME: Implement proper resource management so we don't have to wait for idle.
-        vkDeviceWaitIdle(device);
+        // We are required to synchronize access to the device queue
+        using (deviceQueueLock.EnterScope())
+        {
+            vkDeviceWaitIdle(device);
+        }
 
         vkDestroySampler(device, sampler, default);
     }
@@ -832,7 +849,11 @@ public unsafe class GfxCore : IDisposable
         }
 
         // FIXME: Implement proper resource management so we don't have to wait for idle.
-        vkDeviceWaitIdle(device);
+        // We are required to synchronize access to the device queue
+        using (deviceQueueLock.EnterScope())
+        {
+            vkDeviceWaitIdle(device);
+        }
 
         vkDestroyImageView(device, pixelBuffer.View, default);
         vmaDestroyImage(allocator, pixelBuffer.Image, pixelBuffer.Allocation);

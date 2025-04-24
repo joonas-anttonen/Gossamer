@@ -202,7 +202,11 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
         }
         if (result != VkResult.SUCCESS)
         {
-            vkQueueWaitIdle(deviceQueue);
+            // We are required to synchronize access to the device queue
+            using (deviceQueueLock.EnterScope())
+            {
+                vkQueueWaitIdle(deviceQueue);
+            }
             return false;
         }
 
