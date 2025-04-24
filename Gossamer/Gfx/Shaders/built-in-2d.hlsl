@@ -41,7 +41,7 @@ float4 fragment(fragment_input input) : SV_TARGET
 	float4 textureColor = commandTexture.Sample(commandSampler, input.UV);
 
     float distanceFromOutline = textureColor.a - 0.5;
-    float distanceChangePerFragment = fwidth(distanceFromOutline);
+    float distanceChangePerFragment = 0.5 * fwidth(distanceFromOutline);
     float alpha = command.Smoothing 
 				  ? smoothstep(-distanceChangePerFragment, +distanceChangePerFragment, distanceFromOutline)
 				  : distanceFromOutline >= 0.0 ? 1.0 : 0.0;

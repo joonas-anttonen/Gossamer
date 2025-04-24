@@ -56,10 +56,18 @@ public unsafe sealed class FontCollection : IDisposable
         else
         {
             nameOrPath = Path.GetFileNameWithoutExtension(nameOrPath);
-            
+
             if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
             {
                 string fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), nameOrPath + ".ttf");
+
+                if (File.Exists(fontPath))
+                {
+                    font = LoadFontFromFile(pureName, fontPath, verticalSize, verticalSize);
+                    return true;
+                }
+
+                fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "microsoft/windows/fonts", nameOrPath + ".ttf");
 
                 if (File.Exists(fontPath))
                 {
