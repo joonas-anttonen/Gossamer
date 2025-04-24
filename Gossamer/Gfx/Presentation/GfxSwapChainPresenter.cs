@@ -500,7 +500,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
         // Log the swap chain details
         logger.Debug(
-            $"{swapChainExtent.Width}x{swapChainExtent.Height}x{swapChainImageCount} " +
+            $"[{swapChainExtent.Width}x{swapChainExtent.Height}x{swapChainImageCount}] " +
             $"[{outputSurfaceFormat.Format}, {outputSurfaceFormat.ColorSpace}] " +
             $"[{swapChainPresentMode}]");
 

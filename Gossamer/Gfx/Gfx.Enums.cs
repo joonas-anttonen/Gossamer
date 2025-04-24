@@ -6,28 +6,28 @@ namespace Gossamer.Gfx;
 
 public enum GfxFormat
 {
-    Undefined = (int)External.Vulkan.VkFormat.UNDEFINED,
+    UNDEFINED = (int)External.Vulkan.VkFormat.UNDEFINED,
     R32 = (int)External.Vulkan.VkFormat.R32_SFLOAT,
-    Rg32 = (int)External.Vulkan.VkFormat.R32G32_SFLOAT,
-    Rgb32 = (int)External.Vulkan.VkFormat.R32G32B32_SFLOAT,
-    Rgba32 = (int)External.Vulkan.VkFormat.R32G32B32A32_SFLOAT,
-    Rgba8 = (int)External.Vulkan.VkFormat.R8G8B8A8_UNORM,
-    Bgra8 = (int)External.Vulkan.VkFormat.B8G8R8A8_UNORM,
+    RG32 = (int)External.Vulkan.VkFormat.R32G32_SFLOAT,
+    RGB32 = (int)External.Vulkan.VkFormat.R32G32B32_SFLOAT,
+    RGBA32 = (int)External.Vulkan.VkFormat.R32G32B32A32_SFLOAT,
+    RGBA8 = (int)External.Vulkan.VkFormat.R8G8B8A8_UNORM,
+    BGRA8 = (int)External.Vulkan.VkFormat.B8G8R8A8_UNORM,
     D32 = (int)External.Vulkan.VkFormat.D32_SFLOAT,
 }
 
 [Flags]
 public enum GfxMemoryUsage
 {
-    None = 0,
-    TransferSrc = (int)External.Vulkan.VkBufferUsage.TRANSFER_SRC_BIT,
-    TransferDst = (int)External.Vulkan.VkBufferUsage.TRANSFER_DST_BIT,
+    NONE = 0,
+    TRANSFER_SRC = (int)External.Vulkan.VkBufferUsage.TRANSFER_SRC_BIT,
+    TRANSFER_DST = (int)External.Vulkan.VkBufferUsage.TRANSFER_DST_BIT,
     UniformTexel = (int)External.Vulkan.VkBufferUsage.UNIFORM_TEXEL_BUFFER_BIT,
     StorageTexel = (int)External.Vulkan.VkBufferUsage.STORAGE_TEXEL_BUFFER_BIT,
-    Uniform = (int)External.Vulkan.VkBufferUsage.UNIFORM_BUFFER_BIT,
-    Storage = (int)External.Vulkan.VkBufferUsage.STORAGE_BUFFER_BIT,
-    Index = (int)External.Vulkan.VkBufferUsage.INDEX_BUFFER_BIT,
-    Vertex = (int)External.Vulkan.VkBufferUsage.VERTEX_BUFFER_BIT,
+    UNIFORM = (int)External.Vulkan.VkBufferUsage.UNIFORM_BUFFER_BIT,
+    STORAGE = (int)External.Vulkan.VkBufferUsage.STORAGE_BUFFER_BIT,
+    INDEX = (int)External.Vulkan.VkBufferUsage.INDEX_BUFFER_BIT,
+    VERTEX = (int)External.Vulkan.VkBufferUsage.VERTEX_BUFFER_BIT,
     Indirect = (int)External.Vulkan.VkBufferUsage.INDIRECT_BUFFER_BIT,
 }
 
@@ -43,14 +43,14 @@ public enum GfxMemoryAccess
 [Flags]
 public enum GfxPixelBufferUsage
 {
-    None = 0,
-    TransferSrc = (int)External.Vulkan.VkImageUsage.TRANSFER_SRC_BIT,
-    TransferDst = (int)External.Vulkan.VkImageUsage.TRANSFER_DST_BIT,
-    Sampled = (int)External.Vulkan.VkImageUsage.SAMPLED_BIT,
-    Storage = (int)External.Vulkan.VkImageUsage.STORAGE_BIT,
-    ColorAttachment = (int)External.Vulkan.VkImageUsage.COLOR_ATTACHMENT_BIT,
-    DepthStencilAttachment = (int)External.Vulkan.VkImageUsage.DEPTH_STENCIL_ATTACHMENT_BIT,
-    InputAttachment = (int)External.Vulkan.VkImageUsage.INPUT_ATTACHMENT_BIT,
+    NONE = 0,
+    TRANSFER_SRC = (int)External.Vulkan.VkImageUsage.TRANSFER_SRC_BIT,
+    TRANSFER_DST = (int)External.Vulkan.VkImageUsage.TRANSFER_DST_BIT,
+    SAMPLED = (int)External.Vulkan.VkImageUsage.SAMPLED_BIT,
+    STORAGE = (int)External.Vulkan.VkImageUsage.STORAGE_BIT,
+    COLOR_ATTACHMENT = (int)External.Vulkan.VkImageUsage.COLOR_ATTACHMENT_BIT,
+    DEPTH_ATTACHMENT = (int)External.Vulkan.VkImageUsage.DEPTH_STENCIL_ATTACHMENT_BIT,
+    INPUT_ATTACHMENT = (int)External.Vulkan.VkImageUsage.INPUT_ATTACHMENT_BIT,
 }
 
 [Flags]

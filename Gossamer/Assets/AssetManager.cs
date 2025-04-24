@@ -34,7 +34,7 @@ public class AssetManager
                 Marshal.Copy((IntPtr)decoded_data, data, 0, (int)decoded_data_size);
                 webpFree(decoded_data);
 
-                return new ImageAsset(data, Gfx.GfxFormat.Rgba8, (uint)width, (uint)height);
+                return new ImageAsset(data, Gfx.GfxFormat.RGBA8, (uint)width, (uint)height);
             }
         }
     }

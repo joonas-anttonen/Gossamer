@@ -22,7 +22,7 @@ class Gfx3D(GfxCore gfx) : IDisposable
 
     public void Create()
     {
-
+        logger.Debug();
     }
 
     public unsafe void Render(GfxPresenter presenter)

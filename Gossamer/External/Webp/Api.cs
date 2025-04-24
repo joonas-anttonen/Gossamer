@@ -45,8 +45,8 @@ unsafe static class Api
     {
         return format switch
         {
-            GfxFormat.Rgba8 => WebPFormat.RGBA,
-            GfxFormat.Bgra8 => WebPFormat.BGRA,
+            GfxFormat.RGBA8 => WebPFormat.RGBA,
+            GfxFormat.BGRA8 => WebPFormat.BGRA,
             _ => throw new ArgumentOutOfRangeException(nameof(format), format, null),
         };
     }

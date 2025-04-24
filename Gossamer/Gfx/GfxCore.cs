@@ -22,6 +22,7 @@ public unsafe class GfxCore : IDisposable
 {
     public readonly record struct Statistics(
         ulong Frame,
+        ulong AllocatedMemory,
         TimeSpan CpuFrameTime,
         TimeSpan GpuFrameTime,
         TimeSpan CpuPauseDuration);
@@ -37,6 +38,7 @@ public unsafe class GfxCore : IDisposable
     VkDebugUtilsMessengerExt debugUtilsMessenger;
 
     VmaAllocator allocator;
+    long allocatorAllocated;
 
     VkInstance instance;
     VkPhysicalDevice physicalDevice;
@@ -145,11 +147,11 @@ public unsafe class GfxCore : IDisposable
         return format switch
         {
             VkFormat.R32_SFLOAT => GfxFormat.R32,
-            VkFormat.R32G32_SFLOAT => GfxFormat.Rg32,
-            VkFormat.R32G32B32_SFLOAT => GfxFormat.Rgb32,
-            VkFormat.R32G32B32A32_SFLOAT => GfxFormat.Rgba32,
-            VkFormat.R8G8B8A8_UNORM => GfxFormat.Rgba8,
-            VkFormat.B8G8R8A8_UNORM => GfxFormat.Bgra8,
+            VkFormat.R32G32_SFLOAT => GfxFormat.RG32,
+            VkFormat.R32G32B32_SFLOAT => GfxFormat.RGB32,
+            VkFormat.R32G32B32A32_SFLOAT => GfxFormat.RGBA32,
+            VkFormat.R8G8B8A8_UNORM => GfxFormat.RGBA8,
+            VkFormat.B8G8R8A8_UNORM => GfxFormat.BGRA8,
             VkFormat.D32_SFLOAT => GfxFormat.D32,
             _ => throw new NotImplementedException($"Unsupported format: {format}"),
         };
@@ -169,7 +171,7 @@ public unsafe class GfxCore : IDisposable
 
         if (presenter == null)
         {
-            logger.Warning("No presenter available.");
+            logger.Warning("No presenter available");
             return;
         }
 
@@ -189,7 +191,6 @@ public unsafe class GfxCore : IDisposable
         bool canRender = presenter.BeginFrame();
         if (!canRender)
         {
-            logger.Warning("Failed to begin frame.");
             return;
         }
 
@@ -226,7 +227,7 @@ public unsafe class GfxCore : IDisposable
             int screenshotDataLength = displayParameters.DisplayWidth * displayParameters.DisplayHeight * 4;
             MemoryBuffer<byte> screenshotBuffer = CreateMemoryBuffer<byte>(
                 screenshotDataLength,
-                GfxMemoryUsage.TransferDst,
+                GfxMemoryUsage.TRANSFER_DST,
                 GfxMemoryAccess.Read);
 
             VkCommandBuffer commandBuffer = presenter.GetCommandBuffer();
@@ -293,6 +294,7 @@ public unsafe class GfxCore : IDisposable
 
         statistics = new(
             frameCounter++,
+            (ulong)allocatorAllocated,
             cpuFrameTime,
             gpuFrameTime,
             presenter.GetPauseDuration());
@@ -300,6 +302,8 @@ public unsafe class GfxCore : IDisposable
 
     public void Create(GfxParameters parameters)
     {
+        logger.Debug();
+
         this.parameters = parameters;
 
         CreateDevice();
@@ -336,7 +340,7 @@ public unsafe class GfxCore : IDisposable
                     {
                         DisplayWidth = (int)swapChainSurface.Extent.Width,
                         DisplayHeight = (int)swapChainSurface.Extent.Height,
-                        DisplayFormat = GfxFormat.Bgra8,
+                        DisplayFormat = GfxFormat.BGRA8,
                     };
                     SetDisplayParameters(wantedDisplayParameters);
                     break;
@@ -355,8 +359,7 @@ public unsafe class GfxCore : IDisposable
 
         this.displayParameters = displayParameters;
 
-        // Log new display parameters.
-        logger.Debug($"{displayParameters.DisplayWidth}x{displayParameters.DisplayHeight} [{displayParameters.DisplayFormat}]");
+        logger.Debug();
 
         presenter.InitializeRendering(displayParameters);
         gfx3D.InitializeRendering(displayParameters);
@@ -476,12 +479,12 @@ public unsafe class GfxCore : IDisposable
 
     void VmaAllocateDeviceMemory(VmaAllocator allocator, uint memoryType, VkDeviceMemory memory, ulong size, nint pUserData)
     {
-        logger.Debug($"{StringUtilities.ByteSizeShortIEC(size)}", "Vma", "Allocate");
+        Interlocked.Add(ref allocatorAllocated, (long)size);
     }
 
     void VmaFreeDeviceMemory(VmaAllocator allocator, uint memoryType, VkDeviceMemory memory, ulong size, nint pUserData)
     {
-        logger.Debug($"{StringUtilities.ByteSizeShortIEC(size)}", "Vma", "Free");
+        Interlocked.Add(ref allocatorAllocated, -(long)size);
     }
 
     internal GfxTimestampPool CreateTimestampPool(int capacity)
@@ -753,6 +756,8 @@ public unsafe class GfxCore : IDisposable
             return;
         }
 
+        logger.Debug($"{memoryBuffer.Buffer}");
+
         // FIXME: Implement proper resource management so we don't have to wait for idle.
         vkDeviceWaitIdle(device);
 
@@ -790,7 +795,7 @@ public unsafe class GfxCore : IDisposable
         VkMemoryProperty memoryProperties;
         vmaGetMemoryTypeProperties(allocator, allocationInfo.MemoryType, &memoryProperties);
 
-        logger.Debug($"{usage} [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
+        logger.Debug($"{buffer} [{usage}] [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
 
         return new MemoryBuffer<T>(length: (uint)length, buffer, allocation);
     }
@@ -871,7 +876,7 @@ public unsafe class GfxCore : IDisposable
         VkMemoryProperty memoryProperties;
         vmaGetMemoryTypeProperties(allocator, allocationInfo.MemoryType, &memoryProperties);
 
-        logger.Debug($"{width}x{height} {format} [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
+        logger.Debug($"{image} [{width}x{height} {format}] [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
 
         VkImageViewCreateInfo imageViewCreateInfo = new(default)
         {
@@ -911,7 +916,7 @@ public unsafe class GfxCore : IDisposable
             decodedDataLength = width * height * 4;
         }
 
-        MemoryBuffer<byte> stagingBuffer = CreateMemoryBuffer<byte>(length: decodedDataLength, GfxMemoryUsage.TransferSrc, GfxMemoryAccess.Write);
+        MemoryBuffer<byte> stagingBuffer = CreateMemoryBuffer<byte>(length: decodedDataLength, GfxMemoryUsage.TRANSFER_SRC, GfxMemoryAccess.Write);
 
         fixed (byte* p_encodedData = encodedData)
         {
@@ -929,8 +934,8 @@ public unsafe class GfxCore : IDisposable
         PixelBuffer pixelBuffer = CreatePixelBuffer(
             width: width,
             height: height,
-            format: GfxFormat.Rgba8,
-            usage: usage | GfxPixelBufferUsage.TransferDst,
+            format: GfxFormat.RGBA8,
+            usage: usage | GfxPixelBufferUsage.TRANSFER_DST,
             aspect: GfxAspect.Color,
             samples: GfxSamples.X1);
 
@@ -980,11 +985,11 @@ public unsafe class GfxCore : IDisposable
             width: width,
             height: height,
             format: format,
-            usage: usage | GfxPixelBufferUsage.TransferDst,
+            usage: usage | GfxPixelBufferUsage.TRANSFER_DST,
             aspect: GfxAspect.Color,
             samples: GfxSamples.X1);
 
-        MemoryBuffer<byte> stagingBuffer = CreateMemoryBuffer<byte>(length: data.Length, GfxMemoryUsage.TransferSrc, GfxMemoryAccess.Write);
+        MemoryBuffer<byte> stagingBuffer = CreateMemoryBuffer<byte>(length: data.Length, GfxMemoryUsage.TRANSFER_SRC, GfxMemoryAccess.Write);
         UpdateDynamicBuffer(stagingBuffer, data);
 
         GfxSingleCommand stagingCommand = BeginSingleCommand();

@@ -24,14 +24,14 @@ public sealed class Log : IDisposable
     /// <param name="Message">Event message.</param>
     /// <param name="Type">Event origin type.</param>
     /// <param name="Method">Event origin method.</param>
-    public readonly record struct Event(Severity Severity, DateTime Timestamp, string Message, string Type, string Method)
+    public readonly record struct Event(Severity Severity, DateTime Timestamp, string Message, string Type, string Method, int Thread)
     {
         /// <summary>
         /// Returns a string with the event origin and message.
         /// </summary>
         public readonly string ToShortString()
         {
-            return $"{OriginString(Type, Method)} {Message}";
+            return $"[{Thread}] {OriginString(Type, Method)} {Message}";
         }
 
         /// <summary>
@@ -39,7 +39,7 @@ public sealed class Log : IDisposable
         /// </summary>
         public override readonly string ToString()
         {
-            return $"[{StringUtilities.DateTimeISO8601(Timestamp)}] [{SeverityString(Severity)}] {OriginString(Type, Method)} {Message}";
+            return $"[{Thread}] [{StringUtilities.DateTimeISO8601(Timestamp)}] [{SeverityString(Severity)}] {OriginString(Type, Method)} {Message}";
         }
 
         static string OriginString(string type, string method) => $"{type}::{method}";
@@ -157,7 +157,7 @@ public sealed class Log : IDisposable
     /// <param name="methodName">Name of the method that the message originated from.</param>
     public void Append(Severity severity, string message, string typeName, string methodName)
     {
-        Event logEvent = new(severity, DateTime.Now, message, typeName, methodName);
+        Event logEvent = new(severity, DateTime.Now, message, typeName, methodName, Environment.CurrentManagedThreadId);
 
         using (listenersIteratorLock.EnterScope())
         {

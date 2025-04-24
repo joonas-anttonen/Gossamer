@@ -251,6 +251,8 @@ public class GuiCore : IDisposable
 
     public void Create(GuiParameters parameters)
     {
+        logger.Debug();
+
         ThrowInvalidOperationIf(isCreated);
         this.parameters = parameters;
 
@@ -314,7 +316,7 @@ public class GuiCore : IDisposable
 
         layoutRequested = false;
 
-        logger.Debug("");
+        logger.Debug();
 
         UpdateParameters();
 
@@ -408,7 +410,9 @@ public class GuiCore : IDisposable
                 var statsText =
                     $"UPTIME: {Core.GetTime()}\n" +
                     $"GC PAUSE: {GC.GetTotalPauseDuration()}\n" +
+                    $"GC ALLOC: {StringUtilities.Count((ulong)GC.GetTotalMemory(false))}\n" +
                     $"GFX FRAME: {StringUtilities.Count(gfxStats.Frame)}\n" +
+                    $"GFX ALLOC: {StringUtilities.Count(gfxStats.AllocatedMemory)}\n" +
                     $"GFX PAUSE: {StringUtilities.TimeShort(gfxStats.CpuPauseDuration)}\n" +
                     $"CPU: {StringUtilities.TimeShort(gfxStats.CpuFrameTime)}\n" +
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +

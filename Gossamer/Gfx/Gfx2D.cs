@@ -124,31 +124,33 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
     void InitializeFont(Font font)
     {
+        // Log font details
+        logger.Debug($"{font.Name} [{font.Size}px]");
+
         Font.Atlas fontAtlas = font.GetAtlas();
 
         PixelBuffer fontTexture = gfx.CreatePixelBuffer(
             fontAtlas.Pixels,
             width: fontAtlas.Size,
             height: fontAtlas.Size,
-            format: GfxFormat.Rgba8,
-            usage: GfxPixelBufferUsage.Sampled);
+            format: GfxFormat.RGBA8,
+            usage: GfxPixelBufferUsage.SAMPLED);
 
         using (fontTexturesLock.EnterScope())
         {
             ArrayUtilities.Append(ref fontTextures, fontTexture);
         }
-
-        // Log font details
-        logger.Debug($"{font.Name} [{font.Size}px]");
     }
 
     public void Create()
     {
+        logger.Debug();
+
         ThrowInvalidOperationIf(vertexBuffer != null);
         ThrowInvalidOperationIf(indexBuffer != null);
 
-        vertexBuffer = gfx.CreateMemoryBuffer<Gfx2DVertex>(length: MaxVertices, GfxMemoryUsage.Vertex, GfxMemoryAccess.Write);
-        indexBuffer = gfx.CreateMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryUsage.Index, GfxMemoryAccess.Write);
+        vertexBuffer = gfx.CreateMemoryBuffer<Gfx2DVertex>(length: MaxVertices, GfxMemoryUsage.VERTEX, GfxMemoryAccess.Write);
+        indexBuffer = gfx.CreateMemoryBuffer<ushort>(length: MaxVertices, GfxMemoryUsage.INDEX, GfxMemoryAccess.Write);
 
         VkSamplerCreateInfo samplerCreateInfo = new(default)
         {
@@ -516,7 +518,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
                 width: displayParameters.DisplayWidth,
                 height: displayParameters.DisplayHeight,
                 format: displayParameters.DisplayFormat,
-                usage: GfxPixelBufferUsage.ColorAttachment | GfxPixelBufferUsage.Sampled | GfxPixelBufferUsage.TransferSrc | GfxPixelBufferUsage.TransferDst,
+                usage: GfxPixelBufferUsage.COLOR_ATTACHMENT | GfxPixelBufferUsage.SAMPLED | GfxPixelBufferUsage.TRANSFER_SRC | GfxPixelBufferUsage.TRANSFER_DST,
                 aspect: GfxAspect.Color,
                 samples: GfxSamples.X1
             );
