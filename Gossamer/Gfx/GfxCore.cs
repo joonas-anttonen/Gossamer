@@ -54,7 +54,7 @@ public unsafe class GfxCore : IDisposable
     float deviceTimestampPeriodInNanoseconds;
 
     VkCommandPool deviceCommandPool;
-    GfxTimestampPool? timestampPool;
+    QueryPool? timestampPool;
 
     readonly GfxApiParameters apiParameters;
     GfxParameters? parameters;
@@ -275,7 +275,7 @@ public unsafe class GfxCore : IDisposable
             }
 
             byte[] screenshotData = ReadMemoryBuffer(screenshotBuffer, screenshotDataLength);
-            DestroyMemoryBuffer(screenshotBuffer);
+            Destroy(screenshotBuffer);
 
             fixed (byte* p_screenshotData = screenshotData)
             {
@@ -388,7 +388,7 @@ public unsafe class GfxCore : IDisposable
 
         if (timestampPool != null)
         {
-            DestroyTimestampPool(timestampPool);
+            Destroy(timestampPool);
             timestampPool = null;
         }
 
@@ -490,39 +490,6 @@ public unsafe class GfxCore : IDisposable
     void VmaFreeDeviceMemory(VmaAllocator allocator, uint memoryType, VkDeviceMemory memory, ulong size, nint pUserData)
     {
         Interlocked.Add(ref allocatorAllocated, -(long)size);
-    }
-
-    internal GfxTimestampPool CreateTimestampPool(int capacity)
-    {
-        ThrowNotSupportedIf(!capabilities.Timestamps, "Timestamps are not supported.");
-
-        VkQueryPoolCreateInfo queryPoolCreateInfo = new(default)
-        {
-            QueryType = VkQueryType.TIMESTAMP,
-            QueryCount = (uint)capacity
-        };
-
-        VkQueryPool queryPool;
-        ThrowVulkanIfFailed(vkCreateQueryPool(device, &queryPoolCreateInfo, default, &queryPool));
-
-        return new GfxTimestampPool(queryPool, capacity, deviceTimestampPeriodInNanoseconds);
-    }
-
-    internal void DestroyTimestampPool(GfxTimestampPool? timestampPool)
-    {
-        if (timestampPool == null)
-        {
-            return;
-        }
-
-        // FIXME: Implement proper resource management so we don't have to wait for idle.
-        // We are required to synchronize access to the device queue
-        using (deviceQueueLock.EnterScope())
-        {
-            vkDeviceWaitIdle(device);
-        }
-
-        vkDestroyQueryPool(device, timestampPool.queryPool, default);
     }
 
     internal GfxSingleCommand BeginSingleCommand()
@@ -699,6 +666,83 @@ public unsafe class GfxCore : IDisposable
         vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
     }
 
+    internal QueryPool CreateQueryPool(int capacity)
+    {
+        ThrowNotSupportedIf(!capabilities.Timestamps, "Timestamps are not supported.");
+
+        VkQueryPoolCreateInfo queryPoolCreateInfo = new(default)
+        {
+            QueryType = VkQueryType.TIMESTAMP,
+            QueryCount = (uint)capacity
+        };
+
+        VkQueryPool queryPool;
+        ThrowVulkanIfFailed(vkCreateQueryPool(device, &queryPoolCreateInfo, default, &queryPool));
+
+        var result = new QueryPool(queryPool, capacity, deviceTimestampPeriodInNanoseconds);
+        logger.Debug($"{result}");
+        return result;
+    }
+
+    /// <summary>
+    /// Destroys the specified resource.
+    /// <para>Safe to call with null.</para>
+    /// </summary>
+    /// <param name="resource"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    internal void Destroy(Resource? resource)
+    {
+        if (resource == null)
+        {
+            return;
+        }
+
+        // FIXME: Implement proper resource management so we don't have to wait for idle.
+        // We are required to synchronize access to the device queue
+        using (deviceQueueLock.EnterScope())
+        {
+            vkDeviceWaitIdle(device);
+        }
+
+        switch (resource)
+        {
+            case MemoryBuffer memoryBuffer:
+                logger.Debug($"{nameof(MemoryBuffer)} {memoryBuffer}");
+                vmaDestroyBuffer(allocator, memoryBuffer.Buffer, memoryBuffer.Allocation);
+                break;
+            case PixelSampler pixelSampler:
+                logger.Debug($"{nameof(PixelSampler)} {pixelSampler}");
+                vkDestroySampler(device, pixelSampler.Sampler, default);
+                break;
+            case PixelBuffer pixelBuffer:
+                logger.Debug($"{nameof(PixelBuffer)} {pixelBuffer}");
+                vkDestroyImageView(device, pixelBuffer.View, default);
+                vmaDestroyImage(allocator, pixelBuffer.Image, pixelBuffer.Allocation);
+                break;
+            case QueryPool timestampPool:
+                logger.Debug($"{nameof(QueryPool)} {timestampPool}");
+                vkDestroyQueryPool(device, timestampPool.queryPool, default);
+                break;
+            case Pipeline pipeline:
+                logger.Debug($"{nameof(Pipeline)} {pipeline}");
+                if (pipeline.VPipeline.HasValue)
+                {
+                    vkDestroyPipeline(device, pipeline.VPipeline, default);
+                }
+                if (pipeline.Layout.HasValue)
+                {
+                    vkDestroyPipelineLayout(device, pipeline.Layout, default);
+                }
+                if (pipeline.DescriptorLayout.HasValue)
+                {
+                    vkDestroyDescriptorSetLayout(device, pipeline.DescriptorLayout, default);
+                }
+                break;
+            default:
+                throw new NotImplementedException($"Unsupported resource type: {resource.GetType()}");
+        }
+    }
+
     byte[] ReadMemoryBuffer(MemoryBuffer<byte> memoryBuffer, int size)
     {
         byte[] data = new byte[size];
@@ -753,30 +797,6 @@ public unsafe class GfxCore : IDisposable
         }
     }
 
-    /// <summary>
-    /// Destroys a memory buffer. Safe to call with null.
-    /// </summary>
-    /// <typeparam name="T"></typeparam>
-    /// <param name="memoryBuffer"></param>
-    internal void DestroyMemoryBuffer<T>(MemoryBuffer<T>? memoryBuffer)
-    {
-        if (memoryBuffer == null)
-        {
-            return;
-        }
-
-        logger.Debug($"{memoryBuffer.Buffer}");
-
-        // FIXME: Implement proper resource management so we don't have to wait for idle.
-        // We are required to synchronize access to the device queue
-        using (deviceQueueLock.EnterScope())
-        {
-            vkDeviceWaitIdle(device);
-        }
-
-        vmaDestroyBuffer(allocator, memoryBuffer.Buffer, memoryBuffer.Allocation);
-    }
-
     internal MemoryBuffer<T> CreateMemoryBuffer<T>(int length, GfxMemoryUsage usage, GfxMemoryAccess access)
     {
         VkBufferCreateInfo bufferCreateInfo = new(default)
@@ -808,55 +828,19 @@ public unsafe class GfxCore : IDisposable
         VkMemoryProperty memoryProperties;
         vmaGetMemoryTypeProperties(allocator, allocationInfo.MemoryType, &memoryProperties);
 
-        logger.Debug($"{buffer} [{usage}] [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
-
-        return new MemoryBuffer<T>(length: (uint)length, buffer, allocation);
+        MemoryBuffer<T> memoryBuffer = new(length: (uint)length, buffer, allocation);
+        logger.Debug($"{memoryBuffer} [{usage}] [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
+        return memoryBuffer;
     }
 
-    internal void DestroySampler(VkSampler sampler)
-    {
-        if (!sampler.HasValue)
-        {
-            return;
-        }
-
-        // FIXME: Implement proper resource management so we don't have to wait for idle.
-        // We are required to synchronize access to the device queue
-        using (deviceQueueLock.EnterScope())
-        {
-            vkDeviceWaitIdle(device);
-        }
-
-        vkDestroySampler(device, sampler, default);
-    }
-
-    internal VkSampler CreateSampler(VkSamplerCreateInfo samplerCreateInfo)
+    internal PixelSampler CreateSampler(VkSamplerCreateInfo samplerCreateInfo)
     {
         VkSampler sampler;
         ThrowVulkanIfFailed(vkCreateSampler(device, &samplerCreateInfo, default, &sampler));
-        return sampler;
-    }
 
-    /// <summary>
-    /// Destroys a pixel buffer. Safe to call with null.
-    /// </summary>
-    /// <param name="pixelBuffer"></param>
-    internal void DestroyPixelBuffer(PixelBuffer? pixelBuffer)
-    {
-        if (pixelBuffer == null)
-        {
-            return;
-        }
-
-        // FIXME: Implement proper resource management so we don't have to wait for idle.
-        // We are required to synchronize access to the device queue
-        using (deviceQueueLock.EnterScope())
-        {
-            vkDeviceWaitIdle(device);
-        }
-
-        vkDestroyImageView(device, pixelBuffer.View, default);
-        vmaDestroyImage(allocator, pixelBuffer.Image, pixelBuffer.Allocation);
+        PixelSampler pixelSampler = new(sampler);
+        logger.Debug($"{pixelSampler}");
+        return pixelSampler;
     }
 
     internal PixelBuffer CreatePixelBuffer(
@@ -897,8 +881,6 @@ public unsafe class GfxCore : IDisposable
         VkMemoryProperty memoryProperties;
         vmaGetMemoryTypeProperties(allocator, allocationInfo.MemoryType, &memoryProperties);
 
-        logger.Debug($"{image} [{width}x{height} {format}] [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
-
         VkImageViewCreateInfo imageViewCreateInfo = new(default)
         {
             ViewType = VkImageViewType.TYPE_2D,
@@ -917,7 +899,9 @@ public unsafe class GfxCore : IDisposable
         VkImageView view;
         ThrowVulkanIfFailed(vkCreateImageView(device, &imageViewCreateInfo, default, &view));
 
-        return new PixelBuffer(format, aspect, samples, width, height, image, view, allocation);
+        PixelBuffer pixelBuffer = new(format, aspect, samples, width, height, image, view, allocation);
+        logger.Debug($"{pixelBuffer} [{width}x{height} {format}] [{StringUtilities.ByteSizeShortIEC(allocationInfo.Size)}] [{memoryProperties}]");
+        return pixelBuffer;
     }
 
     internal PixelBuffer CreatePixelBufferFromFile(string path, GfxPixelBufferUsage usage)
@@ -995,7 +979,7 @@ public unsafe class GfxCore : IDisposable
         SubmitSingleCommand(stagingCommand);
         EndSingleCommand(stagingCommand);
 
-        DestroyMemoryBuffer(stagingBuffer);
+        Destroy(stagingBuffer);
 
         return pixelBuffer;
     }
@@ -1048,7 +1032,7 @@ public unsafe class GfxCore : IDisposable
         SubmitSingleCommand(stagingCommand);
         EndSingleCommand(stagingCommand);
 
-        DestroyMemoryBuffer(stagingBuffer);
+        Destroy(stagingBuffer);
 
         return pixelBuffer;
     }
@@ -1116,32 +1100,7 @@ public unsafe class GfxCore : IDisposable
         return shaderProgram;
     }
 
-    /// <summary>
-    /// Destroys a pipeline. Safe to call with null.
-    /// </summary>
-    /// <param name="pipeline"></param>
-    internal void DestroyPipeline(GfxPipeline? pipeline)
-    {
-        if (pipeline == null)
-        {
-            return;
-        }
-
-        if (pipeline.Pipeline.HasValue)
-        {
-            vkDestroyPipeline(device, pipeline.Pipeline, default);
-        }
-        if (pipeline.Layout.HasValue)
-        {
-            vkDestroyPipelineLayout(device, pipeline.Layout, default);
-        }
-        if (pipeline.DescriptorLayout.HasValue)
-        {
-            vkDestroyDescriptorSetLayout(device, pipeline.DescriptorLayout, default);
-        }
-    }
-
-    internal GfxPipeline CreatePipeline(GfxPipelineParameters parameters)
+    internal Pipeline CreatePipeline(GfxPipelineParameters parameters)
     {
         VkDescriptorSetLayout descriptorSetLayout = CreateDescriptorLayout(parameters.Layout);
         VkPipelineLayout pipelineLayout = CreatePipelineLayout([descriptorSetLayout], parameters.PushConstants);
@@ -1291,7 +1250,7 @@ public unsafe class GfxCore : IDisposable
 
         ThrowVulkanIfFailed(result, "Failed to create graphics pipeline.");
 
-        return new GfxPipeline(pPipeline, pipelineLayout, descriptorSetLayout);
+        return new Pipeline(pPipeline, pipelineLayout, descriptorSetLayout);
     }
 
     void CreateInstance()
@@ -1682,7 +1641,7 @@ public unsafe class GfxCore : IDisposable
 
         if (capabilities.Debugging && capabilities.Timestamps)
         {
-            timestampPool = CreateTimestampPool(8);
+            timestampPool = CreateQueryPool(8);
         }
 
         ResolveSampleCount();

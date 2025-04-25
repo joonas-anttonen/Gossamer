@@ -7,7 +7,7 @@ using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer.Gfx;
 
-class GfxTimestampPool
+class QueryPool : Resource
 {
     internal VkQueryPool queryPool;
 
@@ -19,7 +19,7 @@ class GfxTimestampPool
     uint gpuCount;
     uint cpuCount;
 
-    internal GfxTimestampPool(VkQueryPool queryPool, int capacity, float deviceTimestampPeriodInNanoseconds)
+    internal QueryPool(VkQueryPool queryPool, int capacity, float deviceTimestampPeriodInNanoseconds)
     {
         this.queryPool = queryPool;
         this.capacity = capacity;

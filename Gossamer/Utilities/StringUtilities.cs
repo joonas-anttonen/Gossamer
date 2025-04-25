@@ -160,14 +160,4 @@ public static class StringUtilities
         else
             return $"{bytes} B";
     }
-
-    /// <summary>
-    /// Converts the specified <see cref="Guid"/> to string and returns the last 12 characters.
-    /// </summary>
-    /// <param name="guid">The guid.</param>
-    public static string GuidShort(Guid guid)
-    {
-        string str = guid.ToString();
-        return str[^12..];
-    }
 }

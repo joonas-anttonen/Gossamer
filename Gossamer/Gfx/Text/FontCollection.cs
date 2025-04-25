@@ -121,7 +121,7 @@ public unsafe sealed class FontCollection : IDisposable
         }
         fontData.Clear();
 
-        ftDestroy(freetypeReference);
+        ftRelease(freetypeReference);
         freetypeReference = default;
     }
 

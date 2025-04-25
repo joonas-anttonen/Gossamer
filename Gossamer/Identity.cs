@@ -25,6 +25,16 @@ public class Identity(Guid Id, string Name) : IEquatable<Identity>
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     public override string ToString() => string.IsNullOrEmpty(Name) ? $"{Id}" : $"{Name}";
 
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
+    public string ToShortString()
+    {
+        return Convert.ToBase64String(Id.ToByteArray())
+            .Replace("=", string.Empty)
+            .Replace("/", string.Empty)
+            .Replace("+", string.Empty)
+            .ToLowerInvariant();
+    }
+
     public override bool Equals(object? obj)
     {
         return Equals(obj as Identity);

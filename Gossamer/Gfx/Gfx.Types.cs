@@ -145,7 +145,12 @@ public record DisplayParameters(
 
 readonly record struct GfxSingleCommand(VkCommandBuffer CommandBuffer, VkFence Fence);
 
-record GfxPipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout);
+class Pipeline(VkPipeline Pipeline, VkPipelineLayout Layout, VkDescriptorSetLayout DescriptorLayout) : Resource
+{
+    public VkPipeline VPipeline { get; } = Pipeline;
+    public VkPipelineLayout Layout { get; } = Layout;
+    public VkDescriptorSetLayout DescriptorLayout { get; } = DescriptorLayout;
+}
 
 record GfxPipelineShader(string Name, GfxPipelineShader.Stage[] Stages)
 {
@@ -170,28 +175,57 @@ record GfxPipelineParameters(
 
 record struct GfxPipelineAttachment(VkFormat Format, VkPipelineColorBlendAttachmentState Blend);
 
-public class MemoryBuffer<T>
+public abstract class Resource
+{
+    public Identity Identity { get; } = Identity.Create();
+
+    public override string ToString()
+    {
+        return Identity.ToShortString();
+    }
+}
+
+public abstract class MemoryBuffer : Resource
+{
+    internal VkBuffer Buffer { get; }
+    internal VmaAllocation Allocation { get; }
+
+    internal MemoryBuffer(
+        VkBuffer buffer,
+        VmaAllocation allocation)
+    {
+        Buffer = buffer;
+        Allocation = allocation;
+    }
+}
+
+public class MemoryBuffer<T> : MemoryBuffer
 {
     /// <summary>
     /// The length of the buffer in T's.
     /// </summary>
     public uint Length { get; }
 
-    internal VkBuffer Buffer { get; }
-    internal VmaAllocation Allocation { get; }
-
     internal MemoryBuffer(
         uint length,
         VkBuffer buffer,
-        VmaAllocation allocation)
+        VmaAllocation allocation) : base(buffer, allocation)
     {
         Length = length;
-        Buffer = buffer;
-        Allocation = allocation;
     }
 }
 
-public class PixelBuffer
+public class PixelSampler : Resource
+{
+    internal VkSampler Sampler { get; }
+
+    internal PixelSampler(VkSampler sampler)
+    {
+        Sampler = sampler;
+    }
+}
+
+public class PixelBuffer : Resource
 {
     public GfxFormat Format { get; }
     public GfxAspect Aspect { get; }

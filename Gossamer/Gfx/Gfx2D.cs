@@ -47,11 +47,11 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
     DisplayParameters? displayParameters;
 
-    VkSampler nearestSampler;
-    VkSampler linearSampler;
+    PixelSampler? nearestSampler;
+    PixelSampler? linearSampler;
 
-    GfxPipeline? mainPipeline;
-    GfxPipeline? compositionPipeline;
+    Pipeline? mainPipeline;
+    Pipeline? compositionPipeline;
 
     PixelBuffer? backBuffer;
 
@@ -188,20 +188,22 @@ class Gfx2D(GfxCore gfx) : IDisposable
     {
         DestroyRendering();
 
-        gfx.DestroySampler(nearestSampler);
+        gfx.Destroy(nearestSampler);
         nearestSampler = default;
 
-        gfx.DestroySampler(linearSampler);
+        gfx.Destroy(linearSampler);
         linearSampler = default;
 
         foreach (PixelBuffer fontTexture in fontTextures)
-            gfx.DestroyPixelBuffer(fontTexture);
+            gfx.Destroy(fontTexture);
         fontTextures = [];
 
-        gfx.DestroyMemoryBuffer(vertexBuffer);
+        fontCache.Dispose();
+        
+        gfx.Destroy(vertexBuffer);
         vertexBuffer = default;
 
-        gfx.DestroyMemoryBuffer(indexBuffer);
+        gfx.Destroy(indexBuffer);
         indexBuffer = default;
     }
 
@@ -275,7 +277,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
         vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
         ThrowInvalidOperationIfNull(compositionPipeline);
-        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.Pipeline);
+        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, compositionPipeline.VPipeline);
 
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
@@ -297,7 +299,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
         VkDescriptorImageInfo descriptorImageInfo2 = new()
         {
-            Sampler = nearestSampler,
+            Sampler = ThrowInvalidOperationIfNull(nearestSampler).Sampler,
         };
         descriptorWrites[1] = new(default)
         {
@@ -384,8 +386,10 @@ class Gfx2D(GfxCore gfx) : IDisposable
         ThrowInvalidOperationIfNull(mainPipeline);
         ThrowInvalidOperationIfNull(vertexBuffer);
         ThrowInvalidOperationIfNull(indexBuffer);
+        ThrowInvalidOperationIfNull(nearestSampler);
+        ThrowInvalidOperationIfNull(linearSampler);
 
-        GfxPipeline activePipeline = mainPipeline;
+        Pipeline activePipeline = mainPipeline;
 
         VkRenderingAttachmentInfo colorAttachment = new(default)
         {
@@ -409,7 +413,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
         VkRect2D scissor = new(new(0, 0), new((uint)renderBuffer.Width, (uint)renderBuffer.Height));
 
         vkCmdBeginRendering(commandBuffer, &renderingInfo);
-        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.Pipeline);
+        vkCmdBindPipeline(commandBuffer, VkPipelineBindPoint.GRAPHICS, activePipeline.VPipeline);
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
@@ -434,18 +438,18 @@ class Gfx2D(GfxCore gfx) : IDisposable
                 if (command.Texture != null)
                 {
                     commandTexture = command.Texture;
-                    commandSampler = linearSampler;
+                    commandSampler = linearSampler.Sampler;
                 }
                 else if (command.Font > 0)
                 {
                     commandTexture = fontTextures[command.Font];
-                    commandSampler = nearestSampler;
+                    commandSampler = nearestSampler.Sampler;
                 }
                 else
                 {
                     useFontSmoothing = false;
                     commandTexture = fontTextures[0];
-                    commandSampler = nearestSampler;
+                    commandSampler = nearestSampler.Sampler;
                 }
             }
 
@@ -504,13 +508,13 @@ class Gfx2D(GfxCore gfx) : IDisposable
 
     void DestroyRendering()
     {
-        gfx.DestroyPixelBuffer(backBuffer);
+        gfx.Destroy(backBuffer);
         backBuffer = null;
 
-        gfx.DestroyPipeline(mainPipeline);
+        gfx.Destroy(mainPipeline);
         mainPipeline = null;
 
-        gfx.DestroyPipeline(compositionPipeline);
+        gfx.Destroy(compositionPipeline);
         compositionPipeline = null;
     }
 

@@ -50,7 +50,7 @@ unsafe class Api
     public static extern FreeTypeStatus ftCreate(nint* out_library);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
-    public static extern FreeTypeStatus ftDestroy(nint library);
+    public static extern FreeTypeStatus ftRelease(nint library);
 
     [DllImport(BinaryName, CallingConvention = CallConvention)]
     public static extern FreeTypeStatus ftCreateFace(nint in_library, nint in_data, ulong in_data_size, int in_width, int in_height, FreeTypeFaceData* out_face);
