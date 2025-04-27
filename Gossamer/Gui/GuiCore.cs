@@ -391,7 +391,7 @@ public class GuiCore : IDisposable
                 cmdBuffer.FillRectangle(controlsMaximizeIconRect, Color.White);
                 cmdBuffer.FillRectangle(controlsMinimizeIconRect, Color.White);
 
-                var font = gfx2D.GetFont("ProggyClean", 32);
+                var font = gfx2D.GetBuiltInFont();
                 var shaper = font.GetShaper();
 
                 var titleTextLayout = shaper.CreateTextLayout(
@@ -418,7 +418,7 @@ public class GuiCore : IDisposable
                     $"GPU: {StringUtilities.TimeShort(gfxStats.GpuFrameTime)}\n" +
                     $"GFX2D Batches: {gfx2DStats.Batches} Commands: {gfx2DStats.Commands} Triangles: {gfx2DStats.Triangles}";
 
-                var font = gfx2D.GetFont("ProggyClean", 32);
+                var font = gfx2D.GetBuiltInFont();
                 var shaper = font.GetShaper();
 
                 var textLayout = shaper.CreateTextLayout(

@@ -95,8 +95,8 @@ public unsafe sealed class FontCollection : IDisposable
     {
         // Load the default embedded font
         defaultFont = LoadFontFromBytes(
-            "ProggyClean",
-            Utilities.ReflectionUtilities.LoadEmbeddedResourceAsBytes("Gossamer.Gfx.Text.ProggyClean.ttf"),
+            "ProggyTiny",
+            Utilities.ReflectionUtilities.LoadEmbeddedResourceAsBytes("Gossamer.Gfx.Text.ProggyTiny.ttf"),
             32, 32);
     }
 

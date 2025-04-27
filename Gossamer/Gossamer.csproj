@@ -33,7 +33,7 @@
 
   <!-- Embedded -->
   <ItemGroup>
-    <EmbeddedResource Include="Gfx/Text/ProggyClean.ttf" />
+    <EmbeddedResource Include="Gfx/Text/ProggyTiny.ttf" />
     <EmbeddedResource Include="Gfx/Shaders/built-in.shaders" />
   </ItemGroup>
 

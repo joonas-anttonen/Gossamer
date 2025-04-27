@@ -160,9 +160,9 @@ class Gfx2D(GfxCore gfx) : IDisposable
             AddressModeV = VkSamplerAddressMode.CLAMP_TO_BORDER,
             AddressModeW = VkSamplerAddressMode.CLAMP_TO_BORDER,
 
-            MinFilter = VkFilter.LINEAR,
-            MagFilter = VkFilter.LINEAR,
-            MipmapMode = VkSamplerMipmapMode.LINEAR,
+            MinFilter = VkFilter.NEAREST,
+            MagFilter = VkFilter.NEAREST,
+            MipmapMode = VkSamplerMipmapMode.NEAREST,
 
             BorderColor = VkBorderColor.FLOAT_OPAQUE_WHITE,
 
