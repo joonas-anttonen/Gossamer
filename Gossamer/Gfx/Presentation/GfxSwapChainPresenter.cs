@@ -561,7 +561,7 @@ internal unsafe sealed class GfxSwapChainPresenter : GfxPresenter
 
         if (surface.HasValue)
         {
-            ThrowVulkanIfFailed(vkDestroySurfaceKhr(instance, surface, default));
+            vkDestroySurfaceKhr(instance, surface, default);
             surface = default;
         }
     }

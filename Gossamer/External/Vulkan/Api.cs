@@ -173,7 +173,7 @@ unsafe static class Api
     #endregion
 
     [DllImport(BinaryName, CallingConvention = CallConvention, EntryPoint = "vkDestroySurfaceKHR")]
-    public static extern VkResult vkDestroySurfaceKhr(VkInstance instance, VkSurfaceKhr surface, VkAllocationCallbacks* pAllocator);
+    public static extern void vkDestroySurfaceKhr(VkInstance instance, VkSurfaceKhr surface, VkAllocationCallbacks* pAllocator);
 
     [DllImport(BinaryName, CallingConvention = CallConvention, EntryPoint = "vkGetPhysicalDeviceSurfaceSupportKHR")]
     public static extern VkResult vkGetPhysicalDeviceSurfaceSupportKhr(VkPhysicalDevice physicalDevice, uint queueFamilyIndex, VkSurfaceKhr surface, uint* pSupported);
