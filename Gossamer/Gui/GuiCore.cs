@@ -504,6 +504,8 @@ public class GuiCore : IDisposable
         {
             elementThatHasMouse?.LostMouseFocus();
             elementThatHasMouse = rootElement;
+
+            mouseOnClose = mouseOnMaximize = mouseOnMinimize = mouseOnFrameControls = false;
         }
     }
 
@@ -580,7 +582,7 @@ public class GuiCore : IDisposable
 
         glfwGetWindowSize(glfwWindow, out int ww, out int wh);
 
-        return mode == FrameMode.Full && (position.X <= sizeOfFrame.X || position.X >= (ww - sizeOfFrame.Z) || position.Y <= sizeOfFrame.Y || position.Y >= (wh - sizeOfFrame.W));
+        return mode == FrameMode.Full && !mouseOnFrameControls && (position.X <= sizeOfFrame.X || position.X >= (ww - sizeOfFrame.Z) || position.Y <= sizeOfFrame.Y || position.Y >= (wh - sizeOfFrame.W));
     }
 
     void Callback_MouseButton(GlfwWindow window, int button, int action, int mods)
