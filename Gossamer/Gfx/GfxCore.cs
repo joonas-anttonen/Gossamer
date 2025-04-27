@@ -1250,7 +1250,9 @@ public unsafe class GfxCore : IDisposable
 
         ThrowVulkanIfFailed(result, "Failed to create graphics pipeline.");
 
-        return new Pipeline(pPipeline, pipelineLayout, descriptorSetLayout);
+        var pipeline = new Pipeline(pPipeline, pipelineLayout, descriptorSetLayout);
+        logger.Debug($"{pipeline}");
+        return pipeline;
     }
 
     void CreateInstance()
