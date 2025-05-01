@@ -4,10 +4,8 @@ using System.Runtime.InteropServices;
 
 using Gossamer.Collections;
 using Gossamer.Gfx;
-using Gossamer.Gfx.Presentation;
 using Gossamer.Gui;
 using Gossamer.Logging;
-using Gossamer.Utilities;
 
 using static Gossamer.Utilities.ExceptionUtilities;
 
@@ -277,10 +275,17 @@ public sealed class Core : SynchronizationContext, IDisposable
         ThrowInvalidOperationIfNull(gui, "Gui is null.");
         this.gui = gui;
 
+        TimeSpan lastFrameTime = GetTime();
+
         while (true)
         {
             GuiDispatchSyncQueue();
-            GuiFrame();
+
+            TimeSpan currentFrameTime = GetTime();
+            TimeSpan deltaTime = currentFrameTime - lastFrameTime;
+            lastFrameTime = currentFrameTime;
+
+            GuiFrame((float)currentFrameTime.TotalSeconds, (float)deltaTime.TotalSeconds);
 
             if (gui.IsClosing)
             {
@@ -305,12 +310,12 @@ public sealed class Core : SynchronizationContext, IDisposable
         }
     }
 
-    void GuiFrame()
+    void GuiFrame(float t, float dt)
     {
         ThrowInvalidOperationIfNull(gui);
 
         gui.WaitForEvents(0.1);
-        gui.Render();
+        gui.Render(t, dt);
     }
 
     void GuiWakeUp()
@@ -323,6 +328,8 @@ public sealed class Core : SynchronizationContext, IDisposable
     void RunGfx()
     {
         GfxCore localGfx = ThrowInvalidOperationIfNull(gfx);
+
+        TimeSpan lastFrameTime = GetTime();
 
         bool keepRunning = true;
         while (keepRunning)
@@ -348,7 +355,11 @@ public sealed class Core : SynchronizationContext, IDisposable
                 gfxMessageQueue.Return(message);
             }
 
-            localGfx.Render();
+            TimeSpan currentFrameTime = GetTime();
+            TimeSpan deltaTime = currentFrameTime - lastFrameTime;
+            lastFrameTime = currentFrameTime;
+
+            localGfx.Render((float)currentFrameTime.TotalSeconds, (float)deltaTime.TotalSeconds);
 
             gfxMessageQueue.WaitForMessage(1);
         }

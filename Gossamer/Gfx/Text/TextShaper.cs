@@ -13,6 +13,8 @@ public readonly record struct ShapedGlyph(float XAdvance, float YAdvance, float 
 
 public sealed class TextShaper : IDisposable
 {
+    const uint spaceCodepoint = 32;
+
     // OPTIMIZATION: Assumption is that text layouts are created and destroyed very frequently.
     //               Therefore, we use a pool to avoid unnecessary allocations.
     readonly ConcurrentObjectPool<TextLayout> textLayoutPool = new(initialCapacity: 16);
@@ -25,15 +27,32 @@ public sealed class TextShaper : IDisposable
     readonly nint hbBuffer;
     readonly nint hbFont;
 
-    internal TextShaper(FreeTypeFaceData ftFace, Glyph[] glyphs)
+    readonly Font font;
+    readonly float ascender;
+    readonly float lineHeight;
+    readonly float spaceWidth;
+
+    internal TextShaper(Font font, FreeTypeFaceData ftFace, Glyph[] glyphs)
     {
+        this.font = font;
         this.glyphs = glyphs;
+
+        Font.Metrics fontMetrics = font.GetMetrics();
+        ascender = fontMetrics.Ascender;
+        lineHeight = fontMetrics.Height;
 
         hbBuffer = hb_buffer_create();
         hbFont = hb_ft_font_create_referenced(ftFace.face_ptr);
         //hb_ft_font_set_load_flags(hbFont, FT_Load.LOAD_TARGET_LCD);
         hb_ft_font_set_funcs(hbFont);
         hb_ft_font_changed(hbFont);
+
+        char spaceChar = ' ';
+        unsafe
+        {
+            // Measure the width of a space character to use as a separator between words
+            spaceWidth = MeasureTextWidth(new ReadOnlySpan<char>(&spaceChar, 1));
+        }
     }
 
     public void Dispose()
@@ -151,34 +170,45 @@ public sealed class TextShaper : IDisposable
         return new ShapeEnumerator(glyphs, shapedGlyphInfos, shapedGlyphPositions, shapedGlyphCount);
     }
 
+    float MeasureTextWidth(ReadOnlySpan<char> text)
+    {
+        float width = 0;
+
+        foreach (var shapedGlyph in ShapeText(text))
+        {
+            Glyph glyph = shapedGlyph.Glyph;
+            width += shapedGlyph.XAdvance + glyph.BearingX;
+        }
+
+        return width;
+    }
+
     /// <summary>
     /// Computes the layout of a text string using the specified font and available size. Layouts are returned from a pool to avoid unnecessary allocations.
     /// <para>This is NOT thread safe.</para>
     /// </summary>
-    /// <param name="font"></param>
     /// <param name="text"></param>
+    /// <param name="scale"></param>
     /// <param name="availableSize"></param>
     /// <param name="wordWrap"></param>
-    public TextLayout CreateTextLayout(ReadOnlySpan<char> text, Font font, Vector2 availableSize, bool wordWrap)
+    public TextLayout CreateTextLayout(ReadOnlySpan<char> text, float scale, Vector2 availableSize, bool wordWrap)
     {
-        const uint spaceCodepoint = 32;
-
         TextLayout layout = textLayoutPool.Rent();
         layout.Font = font;
 
-        Font.Metrics fontMetrics = font.GetMetrics();
-        float fontLineHeight = fontMetrics.Height;
-        float spaceWidth = 2;
-        float cursorY = fontMetrics.Ascender;
+        availableSize *= 1 / scale;
+
+        float cursorY = ascender;
         float totalWidth = 0;
         float totalHeight = 0;
         int wordCountOnLine = 0;
         int scratchRunesCount = 0;
+        float availableWidth = availableSize.X;
 
         // 1. Split the text into lines
         foreach (ReadOnlySpan<char> line in text.EnumerateLines())
         {
-            float remainingWidth = availableSize.X;
+            float remainingWidth = availableWidth;
 
             // 2. Split the line into "words" (ranges of characters separated by spaces)
             int wordCount = line.Split(scratchWordRanges.AsSpan(), ' ', StringSplitOptions.None);
@@ -192,31 +222,28 @@ public sealed class TextShaper : IDisposable
                 bool spaceAfterWord = i > 0;
 
                 ReadOnlySpan<char> word = line[scratchWordRanges[i]];
-                Vector2 wordSize = EstimateWordSize(word);
+                float wordWidth = MeasureTextWidth(word);
 
                 if (spaceAfterWord)
                 {
-                    wordSize.X += spaceWidth;
+                    wordWidth += spaceWidth;
                 }
 
-                bool wordOverflowsLine = remainingWidth < wordSize.X;
+                bool wordOverflowsLine = remainingWidth < wordWidth;
                 if (wordOverflowsLine && wordWrap)
                 {
                     // 3.1 Word overflows the line, start a new line and place the word there
                     if (wordCountOnLine > 0)
                     {
-                        ConsumeRunes(layout, cursorY);
+                        OutputGlyphs();
 
-                        remainingWidth = availableSize.X;
-                        cursorY += fontLineHeight;
+                        remainingWidth = availableWidth;
+                        cursorY += lineHeight;
 
-                        foreach (Rune rune in word.EnumerateRunes())
-                        {
-                            scratchRunes[scratchRunesCount++] = (uint)rune.Value;
-                        }
+                        AppendWord(word);
 
+                        remainingWidth -= wordWidth;
                         wordCountOnLine = 1;
-                        remainingWidth -= wordSize.X;
                     }
                     // 3.2 Word is too long to fit on a single line, place it on the current line anyway
                     //     Maybe in the future we can split the word into multiple lines
@@ -224,17 +251,14 @@ public sealed class TextShaper : IDisposable
                     {
                         if (spaceAfterWord)
                         {
-                            scratchRunes[scratchRunesCount++] = spaceCodepoint;
+                            AppendSpace();
                         }
 
-                        foreach (Rune rune in word.EnumerateRunes())
-                        {
-                            scratchRunes[scratchRunesCount++] = (uint)rune.Value;
-                        }
-                        ConsumeRunes(layout, cursorY);
+                        AppendWord(word);
+                        OutputGlyphs();
 
-                        remainingWidth = availableSize.X;
-                        cursorY += fontLineHeight;
+                        remainingWidth = availableWidth;
+                        cursorY += lineHeight;
                         wordCountOnLine = 0;
                     }
                 }
@@ -243,57 +267,38 @@ public sealed class TextShaper : IDisposable
                     // 3.3 Word fits on the line or no word wrapping, append to current line
                     if (spaceAfterWord)
                     {
-                        scratchRunes[scratchRunesCount++] = spaceCodepoint;
+                        AppendSpace();
                     }
 
-                    foreach (Rune rune in word.EnumerateRunes())
-                    {
-                        scratchRunes[scratchRunesCount++] = (uint)rune.Value;
-                    }
+                    AppendWord(word);
 
-                    remainingWidth -= wordSize.X;
+                    remainingWidth -= wordWidth;
                     wordCountOnLine++;
                 }
             }
 
-            if (scratchRunesCount > 0)
-            {
-                ConsumeRunes(layout, cursorY);
-            }
-
-            cursorY += fontLineHeight;
+            OutputGlyphs();
+            cursorY += lineHeight;
         }
 
         layout.Size = new(totalWidth, totalHeight);
+        layout.Size *= scale;
         return layout;
 
-        Vector2 EstimateWordSize(ReadOnlySpan<char> word)
+        void AppendSpace()
         {
-            //const float glyphHorizontalPadding = 4;
-
-            float width = 0;
-            float height = fontLineHeight;
-
-            /*foreach (var rune in word.EnumerateRunes())
-            {
-                Glyph glyph = font.GetGlyphByCodepoint(rune.Value);
-
-                width += glyph.Width + glyphHorizontalPadding;
-            }*/
-
-           // float previousXAdvance = 0;
-
-            foreach (var shapedGlyph in ShapeText(word))
-            {
-                Glyph glyph = shapedGlyph.Glyph;
-
-                width += shapedGlyph.XOffset + glyph.BearingX + shapedGlyph.XAdvance;
-            }
-
-            return new(width, height);
+            scratchRunes[scratchRunesCount++] = spaceCodepoint;
         }
 
-        void ConsumeRunes(TextLayout layout, float cursorY)
+        void AppendWord(ReadOnlySpan<char> word)
+        {
+            foreach (Rune rune in word.EnumerateRunes())
+            {
+                scratchRunes[scratchRunesCount++] = (uint)rune.Value;
+            }
+        }
+
+        void OutputGlyphs()
         {
             float cursorX = 0;
 
@@ -316,7 +321,7 @@ public sealed class TextShaper : IDisposable
                 bool isWithinBounds = x <= availableSize.X && y <= availableSize.Y;
                 if (isWithinBounds)
                 {
-                    layout.Append(new(x, y), glyph);
+                    layout.Append(new Vector2(x, y), glyph, scale);
                 }
             }
 

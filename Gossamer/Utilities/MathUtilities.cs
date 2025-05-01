@@ -6,6 +6,48 @@ namespace Gossamer.Utilities;
 
 public static class MathUtilities
 {
+    /// <summary>
+    /// Generates a triangle wave in the range [-1, +1] for the given input.
+    /// The wave repeats every 2 units.
+    /// </summary>
+    /// <param name="x">Input value.</param>
+    /// <returns>Triangle wave output in [-1, +1].</returns>
+    public static float Triangle(float x)
+    {
+        // Shift and scale x to [0, 2)
+        float t = x - Floor(x / 2f) * 2f;
+        // Map [0, 2) to triangle wave [-1, 1]
+        return 1f - Abs(t - 1f) * 2f;
+    }
+
+    /// <summary>
+    /// Generates a sawtooth wave in the range [-1, +1] for the given input.
+    /// The wave repeats every 2 units.
+    /// </summary>
+    /// <param name="x">Input value.</param>
+    /// <returns>Sawtooth wave output in [-1, +1].</returns>
+    public static float Sawtooth(float x)
+    {
+        // Map x to [0, 2)
+        float t = x - Floor(x / 2f) * 2f;
+        // Map [0, 2) to [-1, +1)
+        return t - 1f;
+    }
+
+    /// <summary>
+    /// Linearly maps a value from one range to another.
+    /// </summary>
+    /// <param name="value">The input value.</param>
+    /// <param name="fromMin">The minimum of the input range.</param>
+    /// <param name="fromMax">The maximum of the input range.</param>
+    /// <param name="toMin">The minimum of the output range.</param>
+    /// <param name="toMax">The maximum of the output range.</param>
+    /// <returns>The value mapped to the output range.</returns>
+    public static float Map(float value, float fromMin, float fromMax, float toMin, float toMax)
+    {
+        return toMin + (toMax - toMin) * ((value - fromMin) / (fromMax - fromMin));
+    }
+
     /// <inheritdoc cref="Vector3.Dot(Vector3, Vector3)"/>
     public static float Dot(Vector3 a, Vector3 b)
         => Vector3.Dot(a, b);

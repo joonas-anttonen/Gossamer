@@ -164,7 +164,7 @@ public unsafe class GfxCore : IDisposable
         CreateInstance();
     }
 
-    public void Render()
+    public void Render(float t, float dt)
     {
         ThrowInvalidOperationIfNull(gfx2D);
         ThrowInvalidOperationIfNull(gfx3D);

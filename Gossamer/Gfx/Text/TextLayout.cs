@@ -39,15 +39,17 @@ public class TextLayout
     /// <summary>
     /// Appends a glyph to the text layout.
     /// </summary>
+    /// <param name="position"></param>
     /// <param name="glyph"></param>
-    public void Append(Vector2 position, Glyph glyph)
+    /// <param name="scale"></param>
+    public void Append(Vector2 position, Glyph glyph, float scale)
     {
         ArrayUtilities.Reserve(ref glyphs, glyphCount + 1);
         glyphs[glyphCount++] = new TextLayoutGlyph(
-            position,
-            new(glyph.Width, glyph.Height),
-            new(glyph.U0, glyph.V0),
-            new(glyph.U1, glyph.V1));
+            position * scale,
+            new Vector2(glyph.Width, glyph.Height) * scale,
+            new Vector2(glyph.U0, glyph.V0),
+            new Vector2(glyph.U1, glyph.V1));
     }
 
     /// <summary>

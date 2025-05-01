@@ -275,7 +275,7 @@ public class GuiCore : IDisposable
         glfwWindow = glfwCreateWindow((int)windowSize.X, (int)windowSize.Y, parameters.Name);
         ThrowInvalidOperationIf(!glfwWindow.HasValue, "Failed to create GLFW window.");
 
-        glfwSetWindowSizeLimits(glfwWindow, 256, 144, -1, -1);
+        glfwSetWindowSizeLimits(glfwWindow, (int)(256 * 0.5f), (int)(144 * 0.5f), -1, -1);
         if (isWindowPositionable)
         {
             glfwSetWindowPos(glfwWindow, (int)windowPosition.X, (int)windowPosition.Y);
@@ -332,7 +332,7 @@ public class GuiCore : IDisposable
         return true;
     }
 
-    public void Render()
+    public void Render(double t, float dt)
     {
         ThrowInvalidOperationIfNot(isCreated);
 
@@ -396,7 +396,7 @@ public class GuiCore : IDisposable
 
                 var titleTextLayout = shaper.CreateTextLayout(
                     parameters.Name,
-                    font,
+                    scale: 1,
                     new Vector2(ww - sizeOfFrame.X - ControlButtonWidth - ControlsOffFromFrameSide - ControlsButtonSeparation * 2, sizeOfFrame.Y * 2),
                     wordWrap: false);
                 cmdBuffer.DrawText(titleTextLayout, new Vector2(3, 0), Color.White);
@@ -423,7 +423,7 @@ public class GuiCore : IDisposable
 
                 var textLayout = shaper.CreateTextLayout(
                     statsText,
-                    font,
+                    scale: 1,
                     windowRect.Size,
                     wordWrap: true);
 

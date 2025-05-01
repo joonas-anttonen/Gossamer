@@ -170,13 +170,15 @@ public class Gfx2DCommandBuffer
         ThrowInvalidOperationIfNot(batchInProgress);
         ThrowInvalidOperationIfNull(layout.Font);
 
+        Matrix3x2 tf = Matrix3x2.CreateScale(1f);
+
         ref Command newCommand = ref BeginCommand();
         newCommand.Font = layout.Font.Index;
         for (int i = 0; i < layout.GlyphCount; i++)
         {
             var glyph = layout.Glyphs[i];
-            Vector2 a = position + glyph.Position;
-            Vector2 c = a + glyph.Size;
+            Vector2 a = position + Vector2.Transform(glyph.Position, tf);
+            Vector2 c = a + Vector2.Transform(glyph.Size, tf);
 
             PushQuadUV(a, c, glyph.UV0, glyph.UV1, color);
         }

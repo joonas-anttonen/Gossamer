@@ -443,7 +443,7 @@ class Gfx2D(GfxCore gfx) : IDisposable
                 else if (command.Font > 0)
                 {
                     commandTexture = fontTextures[command.Font];
-                    commandSampler = nearestSampler.Sampler;
+                    commandSampler = linearSampler.Sampler;
                 }
                 else
                 {

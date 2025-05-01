@@ -121,7 +121,7 @@ public sealed class Font : IDisposable
 
         unknownGlyph = glyphMap[0];
 
-        shaper = new TextShaper(ftFace, glyphMap);
+        shaper = new TextShaper(this, ftFace, glyphMap);
     }
 
     ~Font()
