@@ -1,3 +1,4 @@
+using Gossamer.Collections;
 using Gossamer.Utilities;
 
 namespace Gossamer.Gfx.Text;

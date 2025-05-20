@@ -198,11 +198,15 @@ public class GuiCore : IDisposable
         };
         frameElement.AttachTo(rootElement);
 
-        var testElement = new GuiElement(this, Identity.Create("TEST"))
+        var testElement = new TextInput(this, Identity.Create("TEST"))
         {
             gridPlacement = new(0, 0, 1, 1),
             Style = new Style()
             {
+                Background = Color.Palettes.Nord.Nord9_LightBlue,
+                Visibility = Visibility.Visible,
+                Width = Measure.Px(128),
+                Height = Measure.Px(32),
                 Margin = Spacing.Create(Measure.Px(0)),
                 Padding = Spacing.Create(Measure.Px(0)),
                 Outline = new Outline(
@@ -220,7 +224,8 @@ public class GuiCore : IDisposable
                 Background = Color.Palettes.Nord.Nord11_Red,
             },
         };
-        //testElement.AttachTo(rootElement);
+        testElement.AttachTo(rootElement);
+
     }
 
     public void Dispose()
@@ -379,7 +384,7 @@ public class GuiCore : IDisposable
 
             Color colorOfFrame = parameters.ColorOfFrame;
 
-            rootElement.RenderCore(cmdBuffer);
+            rootElement.RenderCore(gfx2D, cmdBuffer);
 
             if (mode != FrameMode.None)
             {
@@ -399,7 +404,7 @@ public class GuiCore : IDisposable
                     scale: 1,
                     new Vector2(ww - sizeOfFrame.X - ControlButtonWidth - ControlsOffFromFrameSide - ControlsButtonSeparation * 2, sizeOfFrame.Y * 2),
                     wordWrap: false);
-                cmdBuffer.DrawText(titleTextLayout, new Vector2(3, 0), Color.White);
+                //cmdBuffer.DrawText(titleTextLayout, new Vector2(3, 0), Color.White);
 
                 shaper.ReleaseTextLayout(titleTextLayout);
             }
@@ -666,11 +671,29 @@ public class GuiCore : IDisposable
     void Callback_KeyboardKey(GlfwWindow window, int key, int code, int action, int mods)
     {
         messageQueue.PostKeyboardKey(GetInputKey(key), code, GetInputAction(action), GetInputMods(mods));
+
+        InputKey iKey = GetInputKey(key);
+        InputAction iAction = GetInputAction(action);
+        InputMods iMods = GetInputMods(mods);
+
+        if (iKey == InputKey.ESCAPE && iAction == InputAction.Press)
+        {
+            SetElementThatHasKeyboard(null);
+        }
+        else if (elementThatHasKeyboard != null)
+        {
+            elementThatHasKeyboard.OnKey(iKey, iAction, iMods);
+        }
     }
 
     void Callback_KeyboardChar(GlfwWindow window, uint c)
     {
         messageQueue.PostKeyboardChar((int)c, 0);
+
+        if (elementThatHasKeyboard != null)
+        {
+            elementThatHasKeyboard.OnCharacter((char)c);
+        }
     }
 
     void CommitMaximize()
@@ -755,7 +778,7 @@ public class GuiCore : IDisposable
         }
     }
 
-    void SetElementThatHasKeyboard(GuiElement element)
+    void SetElementThatHasKeyboard(GuiElement? element)
     {
         if (elementThatHasKeyboard == element)
             return;

@@ -65,7 +65,7 @@ public sealed class Core : SynchronizationContext, IDisposable
     readonly Thread gfxThread;
 
     int guiSyncOperationCount;
-    readonly ConcurrentObjectPool<SyncEntry> guiSyncEntryPool = new(16);
+    readonly ConcurrentObjectPool<SyncEntry> guiSyncEntryPool = new(initialCapacity: 16);
     readonly ConcurrentQueue<SyncEntry> guiSyncQueue = [];
 
     readonly ManualResetEventSlim guiSyncEvent = new(initialState: false);
@@ -106,6 +106,9 @@ public sealed class Core : SynchronizationContext, IDisposable
     {
         var parameters = Parameters.FromArgs(args);
         using var gossamer = new Core(parameters);
+
+        CommandManager commandParser = new();
+        commandParser.Parse("console load file://path/to/file.webp");
 
         return gossamer.Run();
     }

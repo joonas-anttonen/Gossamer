@@ -85,6 +85,8 @@ public sealed class Font : IDisposable
         return shaper;
     }
 
+    
+
     /// <summary>
     /// Retrieves a glyph by its index.
     /// </summary>

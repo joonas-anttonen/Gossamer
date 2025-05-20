@@ -191,9 +191,20 @@ public sealed class TextShaper : IDisposable
     /// <param name="scale"></param>
     /// <param name="availableSize"></param>
     /// <param name="wordWrap"></param>
-    public TextLayout CreateTextLayout(ReadOnlySpan<char> text, float scale, Vector2 availableSize, bool wordWrap)
+    /// <param name="existingLayout"></param>
+    public TextLayout CreateTextLayout(ReadOnlySpan<char> text, float scale, Vector2 availableSize, bool wordWrap, TextLayout? existingLayout = null)
     {
-        TextLayout layout = textLayoutPool.Rent();
+        TextLayout layout;
+        if (existingLayout is not null)
+        {
+            layout = existingLayout;
+            layout.Reset();
+        }
+        else
+        {
+            layout = textLayoutPool.Rent();
+        }
+
         layout.Font = font;
 
         availableSize *= 1 / scale;
@@ -318,7 +329,10 @@ public sealed class TextShaper : IDisposable
                 totalHeight = Math.Max(totalHeight, farY);
 
                 // OPTIMIZATION: Only append the glyph if it is within the available size
-                bool isWithinBounds = x <= availableSize.X && y <= availableSize.Y;
+                bool isWithinBounds = x <= availableSize.X &&
+                                      y <= availableSize.Y &&
+                                     (x + glyph.Width * 0.5f) <= availableSize.X &&
+                                     (y + glyph.Height * 0.5f) <= availableSize.Y;
                 if (isWithinBounds)
                 {
                     layout.Append(new Vector2(x, y), glyph, scale);
@@ -331,10 +345,16 @@ public sealed class TextShaper : IDisposable
 
     /// <summary>
     /// Releases a <see cref="TextLayout"/> back to the pool.
+    /// <para>Safe to call even if the layout is null.</para>
     /// </summary>
     /// <param name="layout"></param>
-    public void ReleaseTextLayout(TextLayout layout)
+    public void ReleaseTextLayout(TextLayout? layout)
     {
+        if (layout is null)
+        {
+            return;
+        }
+
         layout.Reset();
         textLayoutPool.Return(layout);
     }

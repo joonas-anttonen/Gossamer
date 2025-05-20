@@ -1,4 +1,5 @@
 using Gossamer.Gfx;
+using Gossamer.Gfx.Text;
 using Gossamer.Utilities;
 
 namespace Gossamer.Gui;
@@ -115,6 +116,13 @@ class StyleComputer
             partialStyle.Margin_Top ?? style.Margin.Top,
             partialStyle.Margin_Right ?? style.Margin.Right,
             partialStyle.Margin_Bottom ?? style.Margin.Bottom);
+
+        style.Width = partialStyle.Width ?? style.Width;
+        style.Height = partialStyle.Height ?? style.Height;
+        style.MinWidth = partialStyle.MinWidth ?? style.MinWidth;
+        style.MinHeight = partialStyle.MinHeight ?? style.MinHeight;
+        style.MaxWidth = partialStyle.MaxWidth ?? style.MaxWidth;
+        style.MaxHeight = partialStyle.MaxHeight ?? style.MaxHeight;
     }
 }
 
@@ -224,6 +232,13 @@ public record PartialStyle
     /// </summary>
     public Measure? Padding_Bottom { get; init; }
 
+    public Measure? Width { get; init; }
+    public Measure? Height { get; init; }
+    public Measure? MinWidth { get; init; }
+    public Measure? MinHeight { get; init; }
+    public Measure? MaxWidth { get; init; }
+    public Measure? MaxHeight { get; init; }
+
     public static PartialStyle FromStyle(IReadOnlyStyle style)
     {
         return new()
@@ -251,7 +266,13 @@ public record PartialStyle
             Padding_Left = style.Padding.Left,
             Padding_Top = style.Padding.Top,
             Padding_Right = style.Padding.Right,
-            Padding_Bottom = style.Padding.Bottom
+            Padding_Bottom = style.Padding.Bottom,
+            Width = style.Width,
+            Height = style.Height,
+            MinWidth = style.MinWidth,
+            MinHeight = style.MinHeight,
+            MaxWidth = style.MaxWidth,
+            MaxHeight = style.MaxHeight,
         };
     }
 }
@@ -586,6 +607,14 @@ public class GuiElement : IGridControllable
         spaceRequired.X += CalculateDistance(currentStyle.Margin.Left, sizeAvailable.X, emSize);
         spaceRequired.X += CalculateDistance(currentStyle.Border.Spacing.Left, sizeAvailable.X, emSize);
         spaceRequired.X += CalculateDistance(currentStyle.Padding.Left, sizeAvailable.X, emSize);
+        if (currentStyle.Width != null)
+        {
+            spaceRequired.X += CalculateDistance(currentStyle.Width.Value, sizeAvailable.X, emSize);
+        }
+        else if (currentStyle.MinWidth != null)
+        {
+            spaceRequired.X += CalculateDistance(currentStyle.MinWidth.Value, sizeAvailable.X, emSize);
+        }
 
         spaceRequired.X += CalculateDistance(currentStyle.Margin.Right, sizeAvailable.X, emSize);
         spaceRequired.X += CalculateDistance(currentStyle.Border.Spacing.Right, sizeAvailable.X, emSize);
@@ -594,135 +623,20 @@ public class GuiElement : IGridControllable
         spaceRequired.Y += CalculateDistance(currentStyle.Margin.Top, sizeAvailable.Y, emSize);
         spaceRequired.Y += CalculateDistance(currentStyle.Border.Spacing.Top, sizeAvailable.Y, emSize);
         spaceRequired.Y += CalculateDistance(currentStyle.Padding.Top, sizeAvailable.Y, emSize);
+        if (currentStyle.Height != null)
+        {
+            spaceRequired.Y += CalculateDistance(currentStyle.Height.Value, sizeAvailable.Y, emSize);
+        }
+        else if (currentStyle.MinHeight != null)
+        {
+            spaceRequired.Y += CalculateDistance(currentStyle.MinHeight.Value, sizeAvailable.Y, emSize);
+        }
 
         spaceRequired.Y += CalculateDistance(currentStyle.Margin.Bottom, sizeAvailable.Y, emSize);
         spaceRequired.Y += CalculateDistance(currentStyle.Border.Spacing.Bottom, sizeAvailable.Y, emSize);
         spaceRequired.Y += CalculateDistance(currentStyle.Padding.Bottom, sizeAvailable.Y, emSize);
 
         sizeAvailable -= spaceRequired;
-
-        if (isGrid)
-        {
-            // 1. Find the total space taken by non-fractional columns and rows.
-            float totalFixedWidth = 0;
-            float totalFixedHeight = 0;
-
-            for (int i = 0; i < gridDefinition.Columns.Length; i++)
-            {
-                Measure column = gridDefinition.Columns[i];
-                if (column.Unit != Unit.Fr || column.Unit != Unit.Auto)
-                {
-                    totalFixedWidth += CalculateDistance(column, sizeAvailable.X, emSize);
-                }
-                else if (column.Unit == Unit.Auto)
-                {
-                    // We have to ask the elements in this column for their size.
-                    float maximumElementWidth = 0;
-
-                    for (int iD = 0; iD < descendants.Length; iD++)
-                    {
-                        GuiElement descendant = descendants[iD];
-
-                        // Figure out if the descendant is a factor for this column. It could span multiple columns.
-                        int spanStart = descendant.gridPlacement.Column;
-                        int spanEnd = descendant.gridPlacement.Column + descendant.gridPlacement.ColumnSpan;
-
-                        if (spanStart <= i && i < spanEnd)
-                        {
-                            // This descendant is a factor for this column.
-                            Vector2 descendantSize = descendant.MeasureCore(sizeAvailable, emSize);
-
-                            maximumElementWidth = Math.Max(maximumElementWidth, descendantSize.X);
-                        }
-
-                    }
-                }
-            }
-
-            for (int i = 0; i < gridDefinition.Rows.Length; i++)
-            {
-                Measure row = gridDefinition.Rows[i];
-                if (row.Unit != Unit.Fr)
-                {
-                    totalFixedHeight += CalculateDistance(row, sizeAvailable.Y, emSize);
-                }
-            }
-
-            float totalFrWidth = sizeAvailable.X - totalFixedWidth;
-            float totalFrHeight = sizeAvailable.Y - totalFixedHeight;
-
-            // 2. Find the total number of fractional columns and rows.
-            int totalFrColumns = 0;
-            int totalFrRows = 0;
-
-            for (int i = 0; i < gridDefinition.Columns.Length; i++)
-            {
-                Measure column = gridDefinition.Columns[i];
-                if (column.Unit == Unit.Fr)
-                {
-                    totalFrColumns++;
-                }
-            }
-
-            for (int i = 0; i < gridDefinition.Rows.Length; i++)
-            {
-                Measure row = gridDefinition.Rows[i];
-                if (row.Unit == Unit.Fr)
-                {
-                    totalFrRows++;
-                }
-            }
-
-            // 3. Find the width and height of each cell.
-            float[] cellWidths = new float[gridDefinition.Columns.Length];
-            float[] cellHeights = new float[gridDefinition.Rows.Length];
-
-            for (int i = 0; i < gridDefinition.Columns.Length; i++)
-            {
-                Measure column = gridDefinition.Columns[i];
-                if (column.Unit == Unit.Fr)
-                {
-                    cellWidths[i] = totalFrWidth * column.Value;
-                }
-                else
-                {
-                    cellWidths[i] = CalculateDistance(column, sizeAvailable.X, emSize);
-                }
-            }
-
-            for (int i = 0; i < gridDefinition.Rows.Length; i++)
-            {
-                Measure row = gridDefinition.Rows[i];
-                if (row.Unit == Unit.Fr)
-                {
-                    cellHeights[i] = totalFrHeight * row.Value;
-                }
-                else
-                {
-                    cellHeights[i] = CalculateDistance(row, sizeAvailable.Y, emSize);
-                }
-            }
-
-            // 4. Find the total width and height of the grid.
-            float totalWidth = 0;
-            float totalHeight = 0;
-
-            for (int i = 0; i < cellWidths.Length; i++)
-            {
-                totalWidth += cellWidths[i];
-            }
-
-            for (int i = 0; i < cellHeights.Length; i++)
-            {
-                totalHeight += cellHeights[i];
-            }
-
-            spaceRequired = new(totalWidth, totalHeight);
-
-
-        }
-
-        //logger.Debug($"Size required: {spaceRequired}");
 
         //Vector2 sizeWanted = Measure(sizeAvailable);
         Vector2 sizeWanted = spaceRequired;
@@ -746,17 +660,35 @@ public class GuiElement : IGridControllable
 
         totalLayoutRectangle = layoutRectangle;
 
+        if (currentStyle.Width != null)
+        {
+            totalLayoutRectangle = Rectangle.FromXYWH(
+                totalLayoutRectangle.Left,
+                totalLayoutRectangle.Top,
+                CalculateDistance(currentStyle.Width.Value, totalLayoutRectangle.Width, emSize),
+                totalLayoutRectangle.Height);
+        }
+
+        if (currentStyle.Height != null)
+        {
+            totalLayoutRectangle = Rectangle.FromXYWH(
+                totalLayoutRectangle.Left,
+                totalLayoutRectangle.Top,
+                totalLayoutRectangle.Width,
+                CalculateDistance(currentStyle.Height.Value, totalLayoutRectangle.Height, emSize));
+        }
+
         // 1. Outline is drawn outside of the total layout rectangle so it doesn't affect the layout.
         actualOutline = new(
-            CalculateDistance(currentStyle.Outline.Width, layoutRectangle.Width, emSize),
-            CalculateDistance(currentStyle.Outline.Offset, layoutRectangle.Width, emSize));
+            CalculateDistance(currentStyle.Outline.Width, totalLayoutRectangle.Width, emSize),
+            CalculateDistance(currentStyle.Outline.Offset, totalLayoutRectangle.Width, emSize));
 
         // 2. Margin goes between the total layout rectangle and the outer layout rectangle.
         actualMargin = new(
-            CalculateDistance(currentStyle.Margin.Left, layoutRectangle.Width, emSize),
-            CalculateDistance(currentStyle.Margin.Top, layoutRectangle.Height, emSize),
-            CalculateDistance(currentStyle.Margin.Right, layoutRectangle.Width, emSize),
-            CalculateDistance(currentStyle.Margin.Bottom, layoutRectangle.Height, emSize));
+            CalculateDistance(currentStyle.Margin.Left, totalLayoutRectangle.Width, emSize),
+            CalculateDistance(currentStyle.Margin.Top, totalLayoutRectangle.Height, emSize),
+            CalculateDistance(currentStyle.Margin.Right, totalLayoutRectangle.Width, emSize),
+            CalculateDistance(currentStyle.Margin.Bottom, totalLayoutRectangle.Height, emSize));
         outerLayoutRectangle = totalLayoutRectangle
             .Crop(actualMargin.X, actualMargin.Y, actualMargin.Z, actualMargin.W);
 
@@ -797,7 +729,7 @@ public class GuiElement : IGridControllable
         };
     }
 
-    internal void RenderCore(Gfx2DCommandBuffer cmdBuffer)
+    internal void RenderCore(Gfx2D gfx2D, Gfx2DCommandBuffer cmdBuffer)
     {
         if (currentStyle.Visibility != Visibility.Visible)
         {
@@ -876,15 +808,15 @@ public class GuiElement : IGridControllable
         //    cmdBuffer.FillRectangle(innerLayoutRectangle, currentStyle.Foreground);
         //}
 
-        Render(cmdBuffer);
+        Render(gfx2D, cmdBuffer);
 
         for (int i = 0; i < descendants.Length; i++)
         {
-            descendants[i].RenderCore(cmdBuffer);
+            descendants[i].RenderCore(gfx2D, cmdBuffer);
         }
     }
 
-    protected virtual void Render(Gfx2DCommandBuffer cmdBuffer)
+    internal virtual void Render(Gfx2D gfx2D, Gfx2DCommandBuffer cmdBuffer)
     {
     }
 
@@ -899,7 +831,7 @@ public class GuiElement : IGridControllable
 
     internal bool Contains(Vector2 mouseOnWindow, out GuiElement? element)
     {
-        bool isTestable = (currentStyle.Visibility != Visibility.Visible) && enabled;
+        bool isTestable = (currentStyle.Visibility == Visibility.Visible) && enabled;
         if (isTestable)
         {
             if (outerLayoutRectangle.Contains(mouseOnWindow))
@@ -927,6 +859,8 @@ public class GuiElement : IGridControllable
 
     internal void GotMouseFocus()
     {
+        logger.Debug($"{Id}");
+
         HasMouseFocus = true;
         OnMouseFocusedChanged(HasMouseFocus);
 
@@ -938,6 +872,8 @@ public class GuiElement : IGridControllable
 
     internal void LostMouseFocus()
     {
+        logger.Debug($"{Id}");
+
         HasMouseFocus = false;
         OnMouseFocusedChanged(HasMouseFocus);
 
@@ -949,6 +885,8 @@ public class GuiElement : IGridControllable
 
     internal void GotKeyboardFocus()
     {
+        logger.Debug($"{Id}");
+
         HasKeyboardFocus = true;
         OnKeyboardFocusedChanged(HasKeyboardFocus);
 
@@ -960,6 +898,8 @@ public class GuiElement : IGridControllable
 
     internal void LostKeyboardFocus()
     {
+        logger.Debug($"{Id}");
+
         HasKeyboardFocus = false;
         OnKeyboardFocusedChanged(HasKeyboardFocus);
 
@@ -981,4 +921,84 @@ public class GuiElement : IGridControllable
     internal protected virtual void OnVisibleChanged(bool visible) { }
     internal protected virtual void OnMouseButton(Vector2 mouseOnElement, InputButton button, InputAction action, InputMods mod) { }
     internal protected virtual void OnMouseMove(Vector2 mouseOnElement) { }
+}
+
+public class TextInput : GuiElement
+{
+    TextLayout? textLayout = null;
+
+    bool textModified = true;
+
+    string text = string.Empty;
+    public string Text
+    {
+        get => text;
+        set
+        {
+            text = value;
+            gui.ScheduleLayout();
+        }
+    }
+
+    public TextInput(GuiCore gui, Identity id) : base(gui, id)
+    {
+    }
+
+    protected internal override void OnCharacter(char c)
+    {
+        text += c;
+        textModified = true;
+        gui.ScheduleLayout();
+    }
+
+    protected internal override void OnKey(InputKey button, InputAction action, InputMods mod)
+    {
+        switch (button)
+        {
+            case InputKey.BACKSPACE:
+                if ((action == InputAction.Press || action == InputAction.Repeat) && text.Length > 0)
+                {
+                    text = text[0..^1];
+                }
+                break;
+            case InputKey.DELETE:
+                if ((action == InputAction.Press || action == InputAction.Repeat) && text.Length > 0)
+                {
+                    text = text[1..];
+                }
+                break;
+            default:
+                return;
+        }
+
+        textModified = true;
+        gui.ScheduleLayout();
+    }
+
+    internal override void Render(Gfx2D gfx2D, Gfx2DCommandBuffer cmdBuffer)
+    {
+        if (textModified)
+        {
+            var font = gfx2D.GetBuiltInFont();
+            var shaper = font.GetShaper();
+
+            if (!string.IsNullOrEmpty(text))
+            {
+                textLayout = shaper.CreateTextLayout(
+                    text: text,
+                    scale: 1,
+                    availableSize: ActualArea.Size,
+                    wordWrap: false,
+                    existingLayout: textLayout);
+            }
+
+            textModified = false;
+        }
+
+        if (textLayout != null)
+        {
+            cmdBuffer.DrawText(textLayout, ActualArea.Position, Style.Foreground);
+            cmdBuffer.DrawRectangle(ActualArea, Color.White, 1.0f);
+        }
+    }
 }
