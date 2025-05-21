@@ -107,6 +107,8 @@ public sealed class Core : SynchronizationContext, IDisposable
         var parameters = Parameters.FromArgs(args);
         using var gossamer = new Core(parameters);
 
+        External.Lua.Api.luaRun("io.write(\"Hello from Lua\\n\");");
+
         CommandManager commandParser = new();
         commandParser.Parse("console load file://path/to/file.webp");
 

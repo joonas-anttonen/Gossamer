@@ -62,6 +62,10 @@
     <None Update="External/Gossamer.WebP.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Lua -->
+    <None Update="External/Gossamer.Lua.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!-- Dependency binaries for Linux -->
@@ -84,6 +88,10 @@
     </None>
     <!-- WebP -->
     <None Update="External/Gossamer.WebP.so">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Lua -->
+    <None Update="External/Gossamer.Lua.so">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
