@@ -1,12 +1,15 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Gossamer.Collections;
+using Gossamer.External.Lua;
 using Gossamer.Gfx;
 using Gossamer.Gui;
 using Gossamer.Logging;
 
+using static Gossamer.External.Lua.Api;
 using static Gossamer.Utilities.ExceptionUtilities;
 
 namespace Gossamer;
@@ -102,12 +105,36 @@ public sealed class Core : SynchronizationContext, IDisposable
         get => ThrowInvalidOperationIfNull(instance, $"{nameof(Core)} has not been initialized.");
     }
 
-    static int Main(string[] args)
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    static unsafe int luaLog(nint in_state)
+    {
+        LuaState luaState = *(LuaState*)&in_state;
+
+        var stackCount = luaGetStackCount(luaState);
+
+        ThrowInvalidOperationIf(stackCount == 0, "Stack is empty.");
+
+        Log.Severity severity = Log.Severity.Information;
+        if (stackCount > 1)
+        {
+            severity = (Log.Severity)luaPopInteger(luaState);
+        }
+
+        string? message = luaPopString(luaState);
+
+        Instance.logger.Message(severity, message ?? string.Empty);
+        return 0;
+    }
+
+    static unsafe int Main(string[] args)
     {
         var parameters = Parameters.FromArgs(args);
         using var gossamer = new Core(parameters);
 
-        External.Lua.Api.luaRun("io.write(\"Hello from Lua\\n\");");
+        LuaState luaState = luaOpen();
+        luaRegisterApiFunction(luaState, "core", "log", &luaLog);
+        luaRun(luaState, "core.log('Hello, World!')");
+        luaClose(luaState);
 
         CommandManager commandParser = new();
         commandParser.Parse("console load file://path/to/file.webp");

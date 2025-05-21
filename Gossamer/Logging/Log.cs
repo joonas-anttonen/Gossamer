@@ -14,7 +14,13 @@ public sealed class Log : IDisposable
     /// <summary>
     /// Log event severity.
     /// </summary>
-    public enum Severity { Error, Warning, Information, Debug }
+    public enum Severity
+    {
+        Debug = -1,
+        Information = 0,
+        Warning = 1,
+        Error = 2
+    }
 
     /// <summary>
     /// Log event.
@@ -181,6 +187,20 @@ public record Logger(Log log, string name)
     public string Name { get; } = name;
 
     string ResolveTypeName(string typeName) => string.IsNullOrEmpty(typeName) ? Name : typeName;
+
+    /// <summary>
+    /// Logs a message.
+    /// <para> If <paramref name="typeName"/> is null or empty, the logger's name is used. </para>
+    /// <para> This is thread-safe. </para>
+    /// </summary>
+    /// <param name="severity">Severity of the event.</param>
+    /// <param name="message">Message describing the event.</param>
+    /// <param name="typeName">Name of the type that the message originated from.</param>
+    /// <param name="callerName">Name of the method that the message originated from.</param>
+    public void Message(Log.Severity severity, string message, string typeName = "", [CallerMemberName] string callerName = "")
+    {
+        log.Append(severity, message, ResolveTypeName(typeName), callerName);
+    }
 
     /// <summary>
     /// Logs an error message.
