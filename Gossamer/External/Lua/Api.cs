@@ -70,7 +70,7 @@ unsafe static class Api
         }
     }
 
-    public static void luaRegisterApiFunction(LuaState state, string module, string name, delegate* unmanaged[Cdecl]<nint, int> function)
+    public static void luaRegisterApiFunction(LuaState state, string module, string name, delegate* unmanaged[Cdecl]<LuaState, int> function)
     {
         Span<byte> moduleAsUtf8 = stackalloc byte[module.Length * 4];
         int moduleLen = Encoding.UTF8.GetBytes(module, moduleAsUtf8);

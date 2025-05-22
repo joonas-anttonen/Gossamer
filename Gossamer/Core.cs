@@ -106,23 +106,21 @@ public sealed class Core : SynchronizationContext, IDisposable
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    static unsafe int luaLog(nint in_state)
+    static unsafe int LuaLog(LuaState state)
     {
-        LuaState luaState = *(LuaState*)&in_state;
-
-        var stackCount = luaGetStackCount(luaState);
+        var stackCount = luaGetStackCount(state);
 
         ThrowInvalidOperationIf(stackCount == 0, "Stack is empty.");
 
         Log.Severity severity = Log.Severity.Information;
         if (stackCount > 1)
         {
-            severity = (Log.Severity)luaPopInteger(luaState);
+            severity = (Log.Severity)luaPopInteger(state);
         }
 
-        string? message = luaPopString(luaState);
+        string? message = luaPopString(state);
 
-        Instance.logger.Message(severity, message ?? string.Empty);
+        Instance.logger.Message(severity, message ?? string.Empty, "Core", "Lua");
         return 0;
     }
 
@@ -132,8 +130,18 @@ public sealed class Core : SynchronizationContext, IDisposable
         using var gossamer = new Core(parameters);
 
         LuaState luaState = luaOpen();
-        luaRegisterApiFunction(luaState, "core", "log", &luaLog);
-        luaRun(luaState, "core.log('Hello, World!')");
+        luaRegisterApiFunction(luaState, "core", "log", &LuaLog);
+        luaRun(luaState, """
+            function log(message)
+                core.log(message)
+            end
+
+            function sqr(x)
+                return x * x
+            end
+
+            log(sqr(4))
+        """);
         luaClose(luaState);
 
         CommandManager commandParser = new();
@@ -197,6 +205,8 @@ public sealed class Core : SynchronizationContext, IDisposable
                 return Load(External.HarfBuzz.Api.BinaryName, assembly);
             case External.FreeType.Api.BinaryName:
                 return Load(External.FreeType.Api.BinaryName, assembly);
+            case External.Lua.Api.BinaryName:
+                return Load(External.Lua.Api.BinaryName, assembly);
             case External.Vulkan.Vma.Api.BinaryName:
                 return Load(External.Vulkan.Vma.Api.BinaryName, assembly);
             case External.Webp.Api.BinaryName:
